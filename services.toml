@@ -1,0 +1,5 @@
+[web]
+run = "pnpm dev -- --host 0.0.0.0"
+restart = true
+ports = [5273]
+env = { BLOG_CONTENT_BASE_DIR = "~/dev/blog" }
