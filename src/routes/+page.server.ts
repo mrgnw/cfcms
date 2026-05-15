@@ -22,9 +22,7 @@ export const actions = {
 		if (!title) return fail(400, { message: 'Title is required' });
 
 		const post = await createPost(title);
-		const commit = await commitPost(post.path, 'create');
-
-		if (!commit.ok) return fail(500, { message: commit.output || 'Git commit failed' });
+		await commitPost(post.path, 'create');
 
 		throw redirect(303, `/?post=${encodeURIComponent(post.path)}`);
 	},
@@ -39,9 +37,15 @@ export const actions = {
 		await savePost(postPath, frontmatter, body);
 		const commit = await commitPost(postPath, 'save');
 
-		if (!commit.ok) return fail(500, { message: commit.output || 'Git commit failed' });
-
-		return { message: commit.committed ? 'Saved and committed' : 'Saved; no git changes', savedPath: postPath };
+		return {
+			message: commit.ok
+				? commit.committed
+					? 'Saved and committed'
+					: 'Saved; no git changes'
+				: 'Saved; git backup failed',
+			savedPath: postPath,
+			backup: commit
+		};
 	},
 	publish: async () => {
 		try {

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { Crepe } from '@milkdown/crepe';
+	import { Crepe, CrepeFeature } from '@milkdown/crepe';
 	import '@milkdown/crepe/theme/common/style.css';
 	import '@milkdown/crepe/theme/frame.css';
 
@@ -15,7 +15,16 @@
 	let crepe: Crepe | null = null;
 
 	onMount(async () => {
-		crepe = new Crepe({ root: host, defaultValue: value });
+		crepe = new Crepe({
+			root: host,
+			defaultValue: value,
+			featureConfigs: {
+				[CrepeFeature.Placeholder]: {
+					text: 'Write the post...',
+					mode: 'doc'
+				}
+			}
+		});
 		crepe.on((listener) => {
 			listener.markdownUpdated((_, md) => {
 				onChange?.(md);

@@ -4,21 +4,34 @@ export type StandardFields = {
 	tags: string[];
 	publish: boolean;
 	pin: boolean;
+	deleteRequested: boolean;
 };
 
 export type ParsedFrontmatter = StandardFields & {
 	custom: string;
 };
 
-const STANDARD_KEYS = new Set(['title', 'date', 'tags', 'publish', 'pin', 'pinned']);
+const STANDARD_KEYS = new Set(['title', 'date', 'tags', 'publish', 'pin', 'pinned', 'delete', 'deleted']);
 
-const stripQuotes = (value: string) => value.replace(/^['"]|['"]$/g, '');
+export const parseYamlScalar = (value: string) => {
+	const trimmed = value.trim();
+	const quote = trimmed.at(0);
+
+	if ((quote === "'" || quote === '"') && trimmed.at(-1) === quote) {
+		const inner = trimmed.slice(1, -1);
+
+		if (quote === "'") return inner.replaceAll("''", "'");
+		return inner.replaceAll('\\"', '"').replaceAll('\\\\', '\\');
+	}
+
+	return trimmed;
+};
 
 const parseTags = (raw: string): string[] => {
 	const value = raw.startsWith('[') && raw.endsWith(']') ? raw.slice(1, -1) : raw;
 	return value
 		.split(',')
-		.map((t) => stripQuotes(t.trim()))
+		.map((t) => parseYamlScalar(t))
 		.filter(Boolean);
 };
 
@@ -41,11 +54,12 @@ export const parseFrontmatter = (raw: string): ParsedFrontmatter => {
 			continue;
 		}
 
-		if (key === 'title') fields.title = stripQuotes(value);
-		else if (key === 'date') fields.date = stripQuotes(value);
+		if (key === 'title') fields.title = parseYamlScalar(value);
+		else if (key === 'date') fields.date = parseYamlScalar(value);
 		else if (key === 'tags') fields.tags = parseTags(value);
 		else if (key === 'publish') fields.publish = value === 'true';
 		else if (key === 'pin' || key === 'pinned') fields.pin = value === 'true';
+		else if (key === 'delete' || key === 'deleted') fields.deleteRequested = value === 'true';
 	}
 
 	return {
@@ -54,11 +68,12 @@ export const parseFrontmatter = (raw: string): ParsedFrontmatter => {
 		tags: fields.tags ?? [],
 		publish: fields.publish ?? false,
 		pin: fields.pin ?? false,
+		deleteRequested: fields.deleteRequested ?? false,
 		custom: customLines.join('\n')
 	};
 };
 
-const yamlQuote = (value: string) => {
+export const formatYamlScalar = (value: string) => {
 	if (value === '') return "''";
 	if (/^[A-Za-z0-9 _.\-/]+$/.test(value)) return value;
 	return `'${value.replaceAll("'", "''")}'`;
@@ -66,17 +81,18 @@ const yamlQuote = (value: string) => {
 
 const yamlTags = (tags: string[]) => {
 	if (!tags.length) return '[]';
-	return `[${tags.map(yamlQuote).join(', ')}]`;
+	return `[${tags.map(formatYamlScalar).join(', ')}]`;
 };
 
 export const serializeFrontmatter = (fields: ParsedFrontmatter): string => {
 	const lines = [
-		`title: ${yamlQuote(fields.title)}`,
+		`title: ${formatYamlScalar(fields.title)}`,
 		`date: ${fields.date || '1970-01-01'}`,
 		`tags: ${yamlTags(fields.tags)}`,
 		`publish: ${fields.publish ? 'true' : 'false'}`
 	];
 	if (fields.pin) lines.push('pin: true');
+	if (fields.deleteRequested) lines.push('delete: true');
 	const custom = fields.custom.trim();
 	if (custom) lines.push(custom);
 	return lines.join('\n');

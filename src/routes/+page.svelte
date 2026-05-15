@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import PostEditor from '$lib/components/PostEditor.svelte';
+
+	type DeployStatus = 'draft' | 'ready' | 'live' | 'changed' | 'unpublish' | 'delete' | 'deleted';
 
 	type PostListItem = {
 		path: string;
@@ -9,9 +12,12 @@
 		tags?: string[];
 		publish?: boolean;
 		pin?: boolean;
+		deleteRequested?: boolean;
 		slug?: string;
 		excerpt?: string;
 		updatedAt?: string;
+		deployStatus?: DeployStatus;
+		deployedAt?: string;
 	};
 
 	type Post = PostListItem & {
@@ -21,8 +27,6 @@
 
 	type PublishResult = {
 		name: string;
-		cwd: string;
-		command: string;
 		ok: boolean;
 		status: number | null;
 		durationMs: number;
@@ -32,6 +36,8 @@
 	type PublishData = {
 		ok: boolean;
 		readyCount: number;
+		liveCount: number;
+		lastPublishedAt: string | null;
 		runAt: string;
 		push: { ok: boolean; status: number | null; output: string };
 		results: PublishResult[];
@@ -42,22 +48,24 @@
 	let { data }: { data: PageData } = $props();
 
 	let sidebarOpen = $state(true);
-	let newPostOpen = $state(false);
 	let newTitle = $state('');
 	let query = $state('');
 	let filter = $state<'all' | 'ready' | 'drafts'>('all');
 
-	let readyCount = $derived(data.posts.filter((p) => p.publish).length);
-	let draftCount = $derived(data.posts.length - readyCount);
+	const pendingStatuses = new Set<DeployStatus>(['ready', 'changed', 'unpublish', 'delete']);
+
+	let readyCount = $derived(data.posts.filter((p) => pendingStatuses.has(p.deployStatus ?? 'draft')).length);
+	let draftCount = $derived(data.posts.filter((p) => (p.deployStatus ?? 'draft') === 'draft').length);
 	let totalCount = $derived(data.posts.length);
 
 	let filteredPosts = $derived.by(() => {
 		const term = query.trim().toLowerCase();
 		return data.posts.filter((post) => {
-			if (filter === 'ready' && !post.publish) return false;
-			if (filter === 'drafts' && post.publish) return false;
+			const status = post.deployStatus ?? 'draft';
+			if (filter === 'ready' && !pendingStatuses.has(status)) return false;
+			if (filter === 'drafts' && status !== 'draft') return false;
 			if (!term) return true;
-			return [post.title, post.path, post.slug, post.excerpt, ...(post.tags ?? [])]
+			return [post.title, post.path, post.slug, post.excerpt, statusLabel(status), ...(post.tags ?? [])]
 				.filter(Boolean)
 				.join(' ')
 				.toLowerCase()
@@ -72,16 +80,15 @@
 	async function runPublish() {
 		publishing = true;
 		publishError = null;
+		publishResult = null;
 		try {
-			const res = await fetch('?/publish', { method: 'POST', body: new FormData() });
-			const text = await res.text();
-			const parsed = JSON.parse(text);
-			const data = parsed.data ? JSON.parse(parsed.data) : null;
-			if (parsed.type === 'success' && data?.publish) {
-				publishResult = data.publish;
-			} else {
-				publishError = data?.message ?? 'Publish failed';
+			const res = await fetch('/publish', { method: 'POST' });
+			const result = await res.json();
+			if (!res.ok) {
+				if (Array.isArray(result.results)) publishResult = result;
+				throw new Error(result.message ?? 'Publish failed');
 			}
+			publishResult = result;
 		} catch (err) {
 			publishError = err instanceof Error ? err.message : String(err);
 		} finally {
@@ -97,6 +104,16 @@
 				) ?? []
 			)
 		);
+	}
+
+	function statusLabel(status: DeployStatus = 'draft') {
+		if (status === 'ready') return 'ready';
+		if (status === 'live') return 'live';
+		if (status === 'changed') return 'changed';
+		if (status === 'unpublish') return 'unpublish';
+		if (status === 'delete') return 'delete';
+		if (status === 'deleted') return 'deleted';
+		return 'draft';
 	}
 </script>
 
@@ -119,30 +136,21 @@
 				</svg>
 			</button>
 			<h1>Posts</h1>
-			<button
-				class="icon-btn"
-				type="button"
-				onclick={() => (newPostOpen = !newPostOpen)}
-				aria-label="New post"
-				title="New post"
-			>
-				<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+		</header>
+
+		<form class="new-post" method="POST" action="?/create">
+			<input
+				name="title"
+				bind:value={newTitle}
+				placeholder="New post title..."
+				autocomplete="off"
+			/>
+			<button disabled={!newTitle.trim()} aria-label="Create post" title="Create post">
+				<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
 					<path d="M8 3v10M3 8h10" stroke-linecap="round" />
 				</svg>
 			</button>
-		</header>
-
-		{#if newPostOpen}
-			<form class="new-post" method="POST" action="?/create">
-				<input
-					name="title"
-					bind:value={newTitle}
-					placeholder="Post title…"
-					autocomplete="off"
-				/>
-				<button disabled={!newTitle.trim()}>Create</button>
-			</form>
-		{/if}
+		</form>
 
 		<div class="filters" aria-label="Filters">
 			<button
@@ -153,24 +161,22 @@
 				All <em>{totalCount}</em>
 			</button>
 			<button
-				class:active={filter === 'ready'}
-				onclick={() => (filter = 'ready')}
-				type="button"
-			>
-				Ready <em>{readyCount}</em>
-			</button>
-			<button
 				class:active={filter === 'drafts'}
 				onclick={() => (filter = 'drafts')}
 				type="button"
 			>
 				Drafts <em>{draftCount}</em>
 			</button>
-			{#if filter === 'ready'}
-				<button class="publish-btn" type="button" onclick={runPublish} disabled={publishing || !readyCount}>
-					{publishing ? 'Publishing…' : `Publish ${readyCount}`}
-				</button>
-			{/if}
+			<button
+				class:active={filter === 'ready'}
+				onclick={() => (filter = 'ready')}
+				type="button"
+			>
+				Ready <em>{readyCount}</em>
+			</button>
+			<button class="publish-btn" type="button" onclick={runPublish} disabled={publishing || !readyCount}>
+				{publishing ? 'Publishing...' : 'Publish'}
+			</button>
 		</div>
 
 		<input class="search" type="search" bind:value={query} placeholder="Search…" aria-label="Search posts" />
@@ -179,13 +185,13 @@
 			{#each filteredPosts as item (item.path)}
 				<a
 					class:selected={item.path === data.post?.path}
-					href={`/?post=${encodeURIComponent(item.path)}`}
+					href={resolve(`/?post=${encodeURIComponent(item.path)}`)}
 				>
 					<strong>{item.title}</strong>
-					<span>
-						{item.date || 'undated'}
-						{#if !item.publish} · draft{/if}
-						{#if item.pin} · pinned{/if}
+					<span class="post-meta">
+						<em class={`deploy-badge ${item.deployStatus ?? 'draft'}`}>{statusLabel(item.deployStatus)}</em>
+						<span>{item.date || 'undated'}</span>
+						{#if item.pin}<span>pinned</span>{/if}
 					</span>
 					{#if item.tags?.length}
 						<small>{item.tags.join(' · ')}</small>
@@ -199,7 +205,7 @@
 		{#if publishResult}
 			<section class="publish-result" class:ok={publishResult.ok}>
 				<h3>{publishResult.ok ? 'Published' : 'Publish errored'}</h3>
-				<p>{publishResult.readyCount} posts · {new Date(publishResult.runAt).toLocaleTimeString()}</p>
+				<p>{publishResult.readyCount} pending · {publishResult.liveCount} live · {new Date(publishResult.runAt).toLocaleTimeString()}</p>
 				{#each publishResult.results as r (r.name)}
 					<details open={!r.ok}>
 						<summary>
@@ -274,8 +280,7 @@
 		display: none;
 	}
 
-	.shell.sidebar-closed .sidebar-head h1,
-	.shell.sidebar-closed .sidebar-head .icon-btn:last-child {
+	.shell.sidebar-closed .sidebar-head h1 {
 		display: none;
 	}
 
@@ -314,17 +319,18 @@
 	}
 
 	.new-post {
-		display: flex;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 34px;
 		gap: 6px;
 	}
 
 	.new-post input {
-		flex: 1;
 		border: 1px solid #d8d0c2;
 		border-radius: 8px;
 		padding: 8px 10px;
 		background: #fffdf8;
 		font: inherit;
+		min-width: 0;
 	}
 
 	.new-post button {
@@ -332,9 +338,9 @@
 		color: #fffaf0;
 		border: 1px solid #27211b;
 		border-radius: 8px;
-		padding: 6px 12px;
 		cursor: pointer;
-		font: inherit;
+		display: inline-grid;
+		place-items: center;
 	}
 
 	.new-post button:disabled {
@@ -343,9 +349,9 @@
 	}
 
 	.filters {
-		display: flex;
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
 		gap: 4px;
-		flex-wrap: wrap;
 	}
 
 	.filters button {
@@ -360,6 +366,7 @@
 		display: inline-flex;
 		gap: 5px;
 		align-items: center;
+		justify-content: center;
 	}
 
 	.filters button em {
@@ -382,10 +389,10 @@
 	}
 
 	.publish-btn {
-		margin-left: auto;
 		background: #3c7a44 !important;
 		color: #fffaf0 !important;
 		border-color: #3c7a44 !important;
+		text-transform: uppercase;
 	}
 
 	.publish-btn:disabled {
@@ -428,10 +435,50 @@
 		background: #ede5d6;
 	}
 
-	.post-list span,
+	.post-meta,
 	.post-list small {
 		color: #8a7f70;
 		font-size: 11px;
+	}
+
+	.post-meta {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+	}
+
+	.deploy-badge {
+		border-radius: 999px;
+		font-style: normal;
+		font-size: 10px;
+		font-weight: 650;
+		line-height: 1;
+		padding: 3px 6px;
+		text-transform: uppercase;
+	}
+
+	.deploy-badge.draft,
+	.deploy-badge.deleted {
+		background: #eee8dc;
+		color: #766b5e;
+	}
+
+	.deploy-badge.ready,
+	.deploy-badge.changed {
+		background: #f4e6b8;
+		color: #7b5a10;
+	}
+
+	.deploy-badge.live {
+		background: #e7f0df;
+		color: #3c7a44;
+	}
+
+	.deploy-badge.unpublish,
+	.deploy-badge.delete {
+		background: #fbe9e6;
+		color: #8a463c;
 	}
 
 	.empty {

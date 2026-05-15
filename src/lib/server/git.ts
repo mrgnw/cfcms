@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { contentBaseDirectory, getPostGitPath } from './content';
+import { getPostGitPath } from './content';
+import { contentBaseDirectory } from './paths';
 
 type GitResult = {
 	ok: boolean;

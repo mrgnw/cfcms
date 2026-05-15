@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
+	import { browser } from '$app/environment';
 	import { TextareaAutosize } from 'runed';
 	import MilkdownEditor from './MilkdownEditor.svelte';
 	import { parseFrontmatter, serializeFrontmatter } from '$lib/frontmatter';
@@ -10,6 +11,7 @@
 		frontmatter: string;
 		body: string;
 		publish?: boolean;
+		deleteRequested?: boolean;
 	};
 
 	type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error';
@@ -23,22 +25,25 @@
 	let tagsText = $state(initial.tags.join(', '));
 	let publishField = $state(initial.publish);
 	let pinField = $state(initial.pin);
+	let deleteField = $state(initial.deleteRequested);
 	let customField = $state(initial.custom);
 	let bodyField = $state(untrack(() => post.body));
 	let tagsInput = $state<HTMLTextAreaElement | undefined>();
 	let customInput = $state<HTMLTextAreaElement | undefined>();
 
-	new TextareaAutosize({
-		element: () => tagsInput,
-		input: () => tagsText,
-		styleProp: 'minHeight'
-	});
+	if (browser) {
+		new TextareaAutosize({
+			element: () => tagsInput,
+			input: () => tagsText,
+			styleProp: 'minHeight'
+		});
 
-	new TextareaAutosize({
-		element: () => customInput,
-		input: () => customField,
-		styleProp: 'minHeight'
-	});
+		new TextareaAutosize({
+			element: () => customInput,
+			input: () => customField,
+			styleProp: 'minHeight'
+		});
+	}
 
 	let status = $state<SaveStatus>('saved');
 	let autosaveOn = $state(true);
@@ -78,6 +83,7 @@
 			tags: currentTags,
 			publish: publishField,
 			pin: pinField,
+			deleteRequested: deleteField,
 			custom: customField
 		});
 
@@ -104,13 +110,27 @@
 			saveTimer = setTimeout(save, 400);
 		}
 	}
+
+	function togglePublish() {
+		if (publishField) deleteField = false;
+		markDirty();
+	}
+
+	function toggleDelete() {
+		if (deleteField) publishField = false;
+		markDirty();
+	}
+
+	onDestroy(() => {
+		if (saveTimer) clearTimeout(saveTimer);
+	});
 </script>
 
 <header class="post-head">
 	<div class="path">{post.path}</div>
 	<div class="status-row">
 		<button
-			class="status-icon"
+			class="status-button"
 			type="button"
 			onclick={() => (autosaveOn ? (status === 'dirty' ? save() : null) : save())}
 			disabled={status === 'saving' || (autosaveOn && status !== 'dirty')}
@@ -120,17 +140,8 @@
 			class:saving={status === 'saving'}
 			class:error={status === 'error'}
 		>
-			{#if status === 'saving'}
-				<svg width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="10 30"><animateTransform attributeName="transform" type="rotate" from="0 8 8" to="360 8 8" dur="0.8s" repeatCount="indefinite" /></circle></svg>
-			{:else if status === 'error'}
-				<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1 1 14h14L8 1zm0 5v4M8 12v.5" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" /></svg>
-			{:else if status === 'dirty'}
-				<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="3.5" /></svg>
-			{:else}
-				<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8.5l3 3 7-7" stroke-linecap="round" stroke-linejoin="round" /></svg>
-			{/if}
 			<span>
-				{status === 'saved' ? 'Saved' : status === 'dirty' ? (autosaveOn ? 'Saving soon' : 'Save') : status === 'saving' ? 'Saving' : 'Error'}
+				{status === 'saved' ? 'Saved' : 'Save'}
 			</span>
 		</button>
 		<label class="autosave-toggle" title="Autosave">
@@ -145,57 +156,75 @@
 {/if}
 
 <section class="frontmatter">
-	<div class="field">
-		<label for="title">Title</label>
-		<input id="title" bind:value={titleField} oninput={markDirty} />
-	</div>
+	<div class="meta-line">
+		<input
+			id="title"
+			aria-label="Title"
+			bind:value={titleField}
+			oninput={markDirty}
+			placeholder="Untitled"
+		/>
+		<input
+			id="date"
+			aria-label="Date"
+			bind:value={dateField}
+			oninput={markDirty}
+			placeholder="YYYY-MM-DD"
+			inputmode="numeric"
+			pattern="[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]"
+			maxlength="10"
+		/>
 
-	<div class="row">
-		<div class="field">
-			<label for="date">Date</label>
-			<input id="date" type="date" bind:value={dateField} oninput={markDirty} />
-		</div>
-
-		<label class="check">
-			<input type="checkbox" bind:checked={publishField} onchange={markDirty} />
-			<span>Publish</span>
+		<label class="icon-toggle" title="Publish">
+			<input aria-label="Publish" type="checkbox" bind:checked={publishField} onchange={togglePublish} />
+			<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M5 12.5 9.2 17 19 7" />
+			</svg>
 		</label>
 
-		<label class="check">
-			<input type="checkbox" bind:checked={pinField} onchange={markDirty} />
-			<span>Pin</span>
+		<label class="icon-toggle" title="Pin">
+			<input aria-label="Pin" type="checkbox" bind:checked={pinField} onchange={markDirty} />
+			<svg class="pin-outline" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+				<path d="m3 21 4.63-4.631m.005-.005-2.78-2.78c-.954-.953.006-2.996 1.31-3.078 1.178-.075 3.905.352 4.812-.555l2.49-2.49c.617-.618.225-2 .185-2.762-.058-1.016 1.558-2.271 2.415-1.414l4.647 4.648c.86.858-.4 2.469-1.413 2.415-.762-.04-2.145-.432-2.763.185l-2.49 2.49c-.906.907-.48 3.633-.554 4.811-.082 1.305-2.125 2.265-3.08 1.31z" />
+			</svg>
+			<svg class="pin-solid" width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+				<path d="M14.102 2.664c.628-.416 1.692-.713 2.495.09l4.647 4.648c.806.804.508 1.868.091 2.495a2.95 2.95 0 0 1-.863.85c-.334.213-.756.374-1.211.35a9 9 0 0 1-.658-.071l-.068-.01a9 9 0 0 0-.707-.073c-.504-.025-.698.06-.76.12l-2.49 2.491c-.08.08-.18.258-.256.6-.073.33-.105.736-.113 1.186-.007.432.008.874.024 1.3l.001.047c.015.423.03.855.009 1.194-.065 1.031-.868 1.79-1.658 2.141-.79.35-1.917.437-2.7-.347l-2.25-2.25L3.53 21.53a.75.75 0 1 1-1.06-1.06l4.104-4.105-2.25-2.25c-.783-.784-.697-1.91-.346-2.7.35-.79 1.11-1.593 2.14-1.658.34-.021.772-.006 1.195.009l.047.001c.426.015.868.031 1.3.024.45-.008.856-.04 1.186-.113.342-.076.52-.177.6-.257l2.49-2.49c.061-.061.146-.256.12-.76a9 9 0 0 0-.073-.707l-.009-.068a9 9 0 0 1-.071-.658c-.025-.455.136-.877.348-1.211.216-.34.515-.64.851-.863" />
+			</svg>
+		</label>
+
+		<label class="icon-toggle delete-toggle" title="Delete">
+			<input aria-label="Delete" type="checkbox" bind:checked={deleteField} onchange={toggleDelete} />
+			<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M4 7h16" />
+				<path d="M10 11v6" />
+				<path d="M14 11v6" />
+				<path d="M6 7l1 14h10l1-14" />
+				<path d="M9 7V4h6v3" />
+			</svg>
 		</label>
 	</div>
 
-	<div class="field">
-		<label for="tags">Tags</label>
+	<div class="tags-line">
 		<textarea
 			id="tags"
 			bind:this={tagsInput}
 			bind:value={tagsText}
 			oninput={markDirty}
-			placeholder="comma, separated, tags"
+			placeholder="comma-separated tags"
 			rows="1"
 		></textarea>
-		{#if currentTags.length}
-			<div class="chips">
-				{#each currentTags as tag (tag)}
-					<span class="chip">{tag}</span>
-				{/each}
-			</div>
-		{/if}
 	</div>
 
-	<details>
-		<summary>Custom frontmatter</summary>
+	<div class="custom-field">
 		<textarea
+			id="custom"
 			bind:this={customInput}
 			bind:value={customField}
 			oninput={markDirty}
 			placeholder="key: value"
 			spellcheck="false"
 		></textarea>
-	</details>
+	</div>
 </section>
 
 <section class="editor-body">
@@ -225,7 +254,7 @@
 		align-items: center;
 	}
 
-	.status-icon {
+	.status-button {
 		background: transparent;
 		border: 1px solid #d8d0c2;
 		border-radius: 999px;
@@ -233,35 +262,36 @@
 		cursor: pointer;
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
 		font: inherit;
 		font-size: 12px;
-		padding: 5px 10px;
+		min-width: 64px;
+		justify-content: center;
+		padding: 6px 12px;
 	}
 
-	.status-icon.saved {
+	.status-button.saved {
 		color: #3c7a44;
 	}
 
-	.status-icon.dirty {
+	.status-button.dirty {
 		color: #a47a1a;
 		border-color: #d6c089;
 	}
 
-	.status-icon.saving {
+	.status-button.saving {
 		color: #5a5148;
 	}
 
-	.status-icon.error {
+	.status-button.error {
 		color: #a43b2f;
 		border-color: #d8a89e;
 	}
 
-	.status-icon:disabled {
+	.status-button:disabled {
 		cursor: default;
 	}
 
-	.status-icon:not(:disabled):hover {
+	.status-button:not(:disabled):hover {
 		background: #f0ebe1;
 	}
 
@@ -287,115 +317,139 @@
 
 	.frontmatter {
 		display: grid;
-		gap: 12px;
-		margin-bottom: 24px;
-		padding: 14px;
-		background: #fffdf8;
-		border: 1px solid #e8e1d6;
-		border-radius: 10px;
+		gap: 8px;
+		margin-bottom: 18px;
+		padding-bottom: 14px;
+		border-bottom: 1px solid #e8e1d6;
 	}
 
-	.field {
+	.meta-line {
 		display: grid;
-		gap: 4px;
+		grid-template-columns: minmax(220px, 1fr) 112px 32px 32px 32px;
+		gap: 8px;
+		align-items: center;
 	}
 
-	.field label {
-		color: #8a7f70;
-		font-size: 11px;
-		font-weight: 700;
-		letter-spacing: 0.05em;
-		text-transform: uppercase;
-	}
-
-	.field input,
-	.field textarea {
+	.meta-line input,
+	.tags-line textarea,
+	.custom-field textarea {
 		background: transparent;
 		border: 1px solid transparent;
-		border-bottom: 1px solid #e8e1d6;
-		border-radius: 0;
+		border-radius: 6px;
 		color: inherit;
 		font: inherit;
-		padding: 6px 2px;
-		width: 100%;
+		min-width: 0;
 		resize: none;
 	}
 
-	.field input:focus,
-	.field textarea:focus {
+	.meta-line input:focus,
+	.tags-line textarea:focus,
+	.custom-field textarea:focus {
+		background: #fffdf8;
+		border-color: #d8d0c2;
 		outline: none;
-		border-bottom-color: #27211b;
 	}
 
 	#title {
 		font-size: 22px;
-		font-weight: 600;
-		letter-spacing: -0.02em;
-	}
-
-	.row {
-		display: flex;
-		gap: 18px;
-		align-items: end;
-		flex-wrap: wrap;
-	}
-
-	.row .field {
-		flex: 0 0 auto;
+		font-weight: 650;
+		line-height: 1.2;
+		padding: 5px 6px;
 	}
 
 	#date {
-		width: 150px;
-	}
-
-	.check {
-		display: inline-flex;
-		gap: 5px;
-		align-items: center;
+		color: #5a5148;
+		font-family: 'SFMono-Regular', Consolas, monospace;
 		font-size: 13px;
-		color: #5a5148;
-		cursor: pointer;
-		padding-bottom: 8px;
+		padding: 6px;
 	}
 
-	.chips {
-		display: flex;
-		gap: 5px;
-		flex-wrap: wrap;
-		margin-top: 6px;
-	}
-
-	.chip {
-		background: #f0ebe1;
-		border-radius: 999px;
-		color: #5a5148;
-		font-size: 11px;
-		padding: 2px 9px;
-	}
-
-	details summary {
+	.icon-toggle {
+		border: 1px solid transparent;
+		border-radius: 7px;
 		color: #8a7f70;
 		cursor: pointer;
-		font-size: 11px;
-		font-weight: 700;
-		letter-spacing: 0.05em;
-		text-transform: uppercase;
-		padding: 4px 0;
+		display: inline-grid;
+		height: 30px;
+		place-items: center;
+		width: 30px;
 	}
 
-	details textarea {
-		background: #f4f1eb;
-		border: 1px solid #e8e1d6;
-		border-radius: 6px;
+	.icon-toggle:hover {
+		background: #f0ebe1;
+		border-color: #d8d0c2;
+	}
+
+	.icon-toggle input {
+		position: absolute;
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	.icon-toggle:has(input:checked) {
+		background: #e7f0df;
+		border-color: #b8cfa6;
+		color: #3c7a44;
+	}
+
+	.delete-toggle:has(input:checked) {
+		background: #fbe9e6;
+		border-color: #d8a89e;
+		color: #a43b2f;
+	}
+
+	.pin-solid,
+	.icon-toggle:has(input:checked) .pin-outline {
+		display: none;
+	}
+
+	.icon-toggle:has(input:checked) .pin-solid {
+		display: block;
+	}
+
+	.tags-line,
+	.custom-field {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.tags-line textarea {
+		padding: 6px;
+	}
+
+	.custom-field textarea {
 		font-family: 'SFMono-Regular', Consolas, monospace;
 		font-size: 12px;
-		margin-top: 6px;
-		padding: 8px;
-		width: 100%;
-		resize: none;
+		min-height: 31px;
+		padding: 7px 8px;
 	}
 
 	.editor-body {
-		min-height: 60vh;
+		background: #fffdf8;
+		border: 1px solid #e8e1d6;
+		border-radius: 8px;
+		min-height: 62vh;
+		padding: 16px;
+	}
+
+	@media (max-width: 820px) {
+		.meta-line {
+			grid-template-columns: minmax(0, 1fr) 112px 32px 32px 32px;
+		}
+	}
+
+	@media (max-width: 620px) {
+		.meta-line {
+			grid-template-columns: 1fr 1fr 32px 32px 32px;
+		}
+
+		#title {
+			grid-column: 1 / -1;
+		}
+
+		.tags-line,
+		.custom-field {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>

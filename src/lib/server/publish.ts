@@ -1,8 +1,8 @@
 import { env } from '$env/dynamic/private';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { listPosts } from './content';
+import { recordPublishedState } from './deploy-state';
 import { pushContent } from './git';
 
 type PublishTarget = {
@@ -24,12 +24,12 @@ const getTargets = () =>
 	[
 		{
 			name: 'svelte',
-			cwd: env.SVELTE_BLOG_DIR ?? env.BLOG_CONTENT_BASE_DIR ?? resolve(process.cwd(), '..', '..'),
+			cwd: env.SVELTE_BLOG_DIR ?? '~/dev/blog-loke',
 			command: env.SVELTE_BLOG_DEPLOY_COMMAND ?? 'bun run build && bunx wrangler deploy'
 		},
 		{
 			name: 'astro',
-			cwd: env.ASTRO_BLOG_DIR ?? '~/dev/emm',
+			cwd: env.ASTRO_BLOG_DIR ?? '~/dev/blog-astro',
 			command: env.ASTRO_BLOG_DEPLOY_COMMAND ?? 'pnpm build && pnpm deploy'
 		}
 	].filter((target) => existsSync(target.cwd));
@@ -80,25 +80,18 @@ export const runPublish = async () => {
 	}
 
 	const posts = await listPosts();
-	const readyPosts = posts.filter((post) => post.publish);
-	const push = await pushContent();
-
-	if (!push.ok) {
-		return {
-			ok: false,
-			readyCount: readyPosts.length,
-			runAt: new Date().toISOString(),
-			push,
-			results: []
-		};
-	}
-
-	const results = await Promise.all(targets.map(runTarget));
+	const pendingPosts = posts.filter((post) =>
+		['ready', 'changed', 'unpublish', 'delete'].includes(post.deployStatus)
+	);
+	const [push, results] = await Promise.all([pushContent(), Promise.all(targets.map(runTarget))]);
 	const ok = results.every((result) => result.ok);
+	const deployment = ok ? await recordPublishedState(posts) : null;
 
 	return {
 		ok,
-		readyCount: readyPosts.length,
+		readyCount: pendingPosts.length,
+		liveCount: posts.filter((post) => post.deployStatus === 'live').length,
+		lastPublishedAt: deployment?.lastPublishedAt ?? null,
 		runAt: new Date().toISOString(),
 		push,
 		results
