@@ -141,7 +141,13 @@
 			class:error={status === 'error'}
 		>
 			<span>
-				{status === 'saved' ? 'Saved' : 'Save'}
+				{status === 'saved'
+					? 'Saved'
+					: status === 'saving'
+						? 'Saving…'
+						: status === 'error'
+							? 'Retry save'
+							: 'Unsaved'}
 			</span>
 		</button>
 		<label class="autosave-toggle" title="Autosave">
@@ -237,54 +243,54 @@
 		justify-content: space-between;
 		align-items: center;
 		gap: 12px;
-		margin-bottom: 16px;
-		padding-bottom: 10px;
-		border-bottom: 1px solid #e8e1d6;
+		margin-bottom: 24px;
 	}
 
 	.path {
-		color: #8a7f70;
+		color: var(--ink-3);
 		font-size: 12px;
-		font-family: 'SFMono-Regular', Consolas, monospace;
+		font-family: var(--font-mono);
 	}
 
 	.status-row {
 		display: flex;
-		gap: 8px;
+		gap: 10px;
 		align-items: center;
 	}
 
 	.status-button {
 		background: transparent;
-		border: 1px solid #d8d0c2;
-		border-radius: 999px;
-		color: #5a5148;
+		border: none;
+		color: var(--ink-3);
 		cursor: pointer;
 		display: inline-flex;
 		align-items: center;
 		font: inherit;
 		font-size: 12px;
-		min-width: 64px;
-		justify-content: center;
-		padding: 6px 12px;
-	}
-
-	.status-button.saved {
-		color: #3c7a44;
-	}
-
-	.status-button.dirty {
-		color: #a47a1a;
-		border-color: #d6c089;
+		padding: 4px 0;
 	}
 
 	.status-button.saving {
-		color: #5a5148;
+		color: var(--ink-2);
+	}
+
+	.status-button.dirty {
+		color: var(--ink-2);
+	}
+
+	.status-button.dirty span::before {
+		content: '';
+		display: inline-block;
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--warn);
+		margin-right: 6px;
+		vertical-align: 1px;
 	}
 
 	.status-button.error {
-		color: #a43b2f;
-		border-color: #d8a89e;
+		color: var(--danger);
 	}
 
 	.status-button:disabled {
@@ -292,35 +298,35 @@
 	}
 
 	.status-button:not(:disabled):hover {
-		background: #f0ebe1;
+		color: var(--ink);
 	}
 
 	.autosave-toggle {
 		display: inline-flex;
 		gap: 5px;
 		align-items: center;
-		font-size: 12px;
-		color: #5a5148;
+		font-size: 11px;
+		color: var(--ink-3);
 		cursor: pointer;
 		user-select: none;
 	}
 
 	.error-banner {
-		background: #fbe9e6;
-		border: 1px solid #d8a89e;
-		border-radius: 8px;
-		color: #8a463c;
+		background: color-mix(in srgb, var(--danger) 10%, transparent);
+		border-radius: var(--radius);
+		color: var(--danger);
 		font-size: 13px;
-		margin: 0 0 14px;
-		padding: 8px 10px;
+		margin: 0 auto 14px;
+		max-width: 68ch;
+		padding: 8px 12px;
 	}
 
 	.frontmatter {
 		display: grid;
 		gap: 8px;
-		margin-bottom: 18px;
-		padding-bottom: 14px;
-		border-bottom: 1px solid #e8e1d6;
+		margin: 0 auto 28px;
+		max-width: 68ch;
+		width: 100%;
 	}
 
 	.meta-line {
@@ -334,7 +340,7 @@
 	.tags-line textarea,
 	.custom-field textarea {
 		background: transparent;
-		border: 1px solid transparent;
+		border: none;
 		border-radius: 6px;
 		color: inherit;
 		font: inherit;
@@ -345,29 +351,29 @@
 	.meta-line input:focus,
 	.tags-line textarea:focus,
 	.custom-field textarea:focus {
-		background: #fffdf8;
-		border-color: #d8d0c2;
+		background: var(--bg);
 		outline: none;
 	}
 
 	#title {
-		font-size: 22px;
-		font-weight: 650;
-		line-height: 1.2;
+		font-family: var(--font-display);
+		font-size: 36px;
+		font-weight: 600;
+		line-height: 1.15;
+		letter-spacing: -0.01em;
 		padding: 5px 6px;
 	}
 
 	#date {
-		color: #5a5148;
-		font-family: 'SFMono-Regular', Consolas, monospace;
+		color: var(--ink-2);
+		font-family: var(--font-mono);
 		font-size: 13px;
 		padding: 6px;
 	}
 
 	.icon-toggle {
-		border: 1px solid transparent;
 		border-radius: 7px;
-		color: #8a7f70;
+		color: var(--ink-3);
 		cursor: pointer;
 		display: inline-grid;
 		height: 30px;
@@ -376,8 +382,7 @@
 	}
 
 	.icon-toggle:hover {
-		background: #f0ebe1;
-		border-color: #d8d0c2;
+		background: var(--hover);
 	}
 
 	.icon-toggle input {
@@ -387,15 +392,13 @@
 	}
 
 	.icon-toggle:has(input:checked) {
-		background: #e7f0df;
-		border-color: #b8cfa6;
-		color: #3c7a44;
+		background: color-mix(in srgb, var(--ok) 12%, transparent);
+		color: var(--ok);
 	}
 
 	.delete-toggle:has(input:checked) {
-		background: #fbe9e6;
-		border-color: #d8a89e;
-		color: #a43b2f;
+		background: color-mix(in srgb, var(--danger) 10%, transparent);
+		color: var(--danger);
 	}
 
 	.pin-solid,
@@ -418,18 +421,14 @@
 	}
 
 	.custom-field textarea {
-		font-family: 'SFMono-Regular', Consolas, monospace;
+		font-family: var(--font-mono);
 		font-size: 12px;
 		min-height: 31px;
 		padding: 7px 8px;
 	}
 
 	.editor-body {
-		background: #fffdf8;
-		border: 1px solid #e8e1d6;
-		border-radius: 8px;
 		min-height: 62vh;
-		padding: 16px;
 	}
 
 	@media (max-width: 820px) {
