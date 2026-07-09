@@ -118,7 +118,7 @@
 </script>
 
 <svelte:head>
-	<title>cms.xcc.es</title>
+	<title>{data.post?.title ?? 'Posts'} · cms.xcc.es</title>
 </svelte:head>
 
 <main class="shell" class:sidebar-closed={!sidebarOpen}>
@@ -135,22 +135,20 @@
 					<path d="M3 4h10M3 8h10M3 12h10" stroke-linecap="round" />
 				</svg>
 			</button>
-			<h1>Posts</h1>
+			<form class="new-post" method="POST" action="?/create">
+				<input
+					name="title"
+					bind:value={newTitle}
+					placeholder="New post title..."
+					autocomplete="off"
+				/>
+				<button disabled={!newTitle.trim()} aria-label="Create post" title="Create post">
+					<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+						<path d="M8 3v10M3 8h10" stroke-linecap="round" />
+					</svg>
+				</button>
+			</form>
 		</header>
-
-		<form class="new-post" method="POST" action="?/create">
-			<input
-				name="title"
-				bind:value={newTitle}
-				placeholder="New post title..."
-				autocomplete="off"
-			/>
-			<button disabled={!newTitle.trim()} aria-label="Create post" title="Create post">
-				<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
-					<path d="M8 3v10M3 8h10" stroke-linecap="round" />
-				</svg>
-			</button>
-		</form>
 
 		<div class="filters" aria-label="Filters">
 			<button
@@ -174,9 +172,6 @@
 			>
 				Ready <em>{readyCount}</em>
 			</button>
-			<button class="publish-btn" type="button" onclick={runPublish} disabled={publishing || !readyCount}>
-				{publishing ? 'Publishing...' : 'Publish'}
-			</button>
 		</div>
 
 		<input class="search" type="search" bind:value={query} placeholder="Search…" aria-label="Search posts" />
@@ -189,7 +184,9 @@
 				>
 					<strong>{item.title}</strong>
 					<span class="post-meta">
-						<em class={`deploy-badge ${item.deployStatus ?? 'draft'}`}>{statusLabel(item.deployStatus)}</em>
+						{#if (item.deployStatus ?? 'draft') !== 'draft'}
+							<em class={`deploy-badge ${item.deployStatus}`}>{statusLabel(item.deployStatus)}</em>
+						{/if}
 						<span>{item.date || 'undated'}</span>
 						{#if item.pin}<span>pinned</span>{/if}
 					</span>
@@ -198,9 +195,13 @@
 					{/if}
 				</a>
 			{:else}
-				<p class="empty">No posts match.</p>
+				<p class="empty">No posts match — try fewer letters.</p>
 			{/each}
 		</nav>
+
+		<button class="publish-btn" type="button" onclick={runPublish} disabled={publishing || !readyCount}>
+			{publishing ? 'Publishing…' : readyCount ? `Publish ${readyCount}` : 'Publish'}
+		</button>
 
 		{#if publishResult}
 			<section class="publish-result" class:ok={publishResult.ok}>
@@ -230,30 +231,20 @@
 	<section class="workbench" aria-label="Editor">
 		{#if data.post}
 			{#key data.post.path}
-				<PostEditor post={data.post} onSaved={() => invalidateAll()} />
+				<div class="post-enter">
+					<PostEditor post={data.post} onSaved={() => invalidateAll()} />
+				</div>
 			{/key}
 		{:else}
 			<div class="no-selection">
-				<h2>No post selected</h2>
-				<p>Create one in the sidebar to begin.</p>
+				<h2>Nothing open.</h2>
+				<p>Pick a post, or name a new one in the sidebar.</p>
 			</div>
 		{/if}
 	</section>
 </main>
 
 <style>
-	:global(body) {
-		margin: 0;
-		background: #f4f1eb;
-		color: #241f1a;
-		font-family:
-			Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-	}
-
-	:global(*) {
-		box-sizing: border-box;
-	}
-
 	.shell {
 		display: grid;
 		grid-template-columns: minmax(260px, 320px) 1fr;
@@ -266,8 +257,8 @@
 	}
 
 	.sidebar {
-		background: #fbfaf7;
-		border-right: 1px solid #ded7ca;
+		background: var(--bg);
+		border-right: 1px solid var(--line);
 		padding: 14px;
 		overflow: hidden;
 		display: flex;
@@ -280,7 +271,7 @@
 		display: none;
 	}
 
-	.shell.sidebar-closed .sidebar-head h1 {
+	.shell.sidebar-closed .new-post {
 		display: none;
 	}
 
@@ -294,18 +285,11 @@
 		gap: 8px;
 	}
 
-	.sidebar-head h1 {
-		font-size: 22px;
-		letter-spacing: -0.03em;
-		margin: 0;
-		flex: 1;
-	}
-
 	.icon-btn {
 		background: transparent;
-		border: 1px solid transparent;
+		border: none;
 		border-radius: 8px;
-		color: #5a5148;
+		color: var(--ink-2);
 		cursor: pointer;
 		display: inline-flex;
 		align-items: center;
@@ -314,29 +298,30 @@
 	}
 
 	.icon-btn:hover {
-		background: #f0ebe1;
-		border-color: #d8d0c2;
+		background: var(--hover);
 	}
 
 	.new-post {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) 34px;
 		gap: 6px;
+		flex: 1;
 	}
 
 	.new-post input {
-		border: 1px solid #d8d0c2;
+		border: 1px solid var(--line);
 		border-radius: 8px;
 		padding: 8px 10px;
-		background: #fffdf8;
+		background: var(--paper);
 		font: inherit;
+		font-size: 13px;
 		min-width: 0;
 	}
 
 	.new-post button {
-		background: #27211b;
-		color: #fffaf0;
-		border: 1px solid #27211b;
+		background: var(--ink);
+		color: var(--paper);
+		border: none;
 		border-radius: 8px;
 		cursor: pointer;
 		display: inline-grid;
@@ -350,15 +335,15 @@
 
 	.filters {
 		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 4px;
 	}
 
 	.filters button {
 		background: transparent;
-		border: 1px solid transparent;
+		border: none;
 		border-radius: 7px;
-		color: #5a5148;
+		color: var(--ink-2);
 		cursor: pointer;
 		font: inherit;
 		font-size: 12px;
@@ -371,41 +356,47 @@
 
 	.filters button em {
 		font-style: normal;
-		color: #a89e8d;
+		color: var(--ink-3);
 		font-size: 11px;
 	}
 
 	.filters button.active {
-		background: #27211b;
-		color: #fffaf0;
-	}
-
-	.filters button.active em {
-		color: #c9bda9;
+		background: var(--hover);
+		color: var(--ink);
 	}
 
 	.filters button:hover:not(.active) {
-		background: #f0ebe1;
+		background: var(--hover);
 	}
 
 	.publish-btn {
-		background: #3c7a44 !important;
-		color: #fffaf0 !important;
-		border-color: #3c7a44 !important;
-		text-transform: uppercase;
+		background: var(--accent);
+		border: none;
+		border-radius: var(--radius);
+		color: #fff;
+		cursor: pointer;
+		font: inherit;
+		font-size: 13px;
+		font-weight: 600;
+		padding: 10px;
+	}
+
+	.publish-btn:hover:not(:disabled) {
+		background: var(--accent-ink);
 	}
 
 	.publish-btn:disabled {
-		opacity: 0.5;
+		opacity: 0.4;
 		cursor: not-allowed;
 	}
 
 	.search {
-		border: 1px solid #d8d0c2;
+		border: 1px solid var(--line);
 		border-radius: 8px;
 		padding: 8px 10px;
 		font: inherit;
-		background: #fffdf8;
+		font-size: 13px;
+		background: var(--paper);
 	}
 
 	.post-list {
@@ -428,16 +419,17 @@
 	}
 
 	.post-list a:hover {
-		background: #f0ebe1;
+		background: var(--hover);
 	}
 
 	.post-list a.selected {
-		background: #ede5d6;
+		background: var(--hover);
+		box-shadow: inset 2px 0 0 var(--accent);
 	}
 
 	.post-meta,
 	.post-list small {
-		color: #8a7f70;
+		color: var(--ink-3);
 		font-size: 11px;
 	}
 
@@ -458,52 +450,76 @@
 		text-transform: uppercase;
 	}
 
-	.deploy-badge.draft,
 	.deploy-badge.deleted {
-		background: #eee8dc;
-		color: #766b5e;
+		background: var(--hover);
+		color: var(--ink-2);
 	}
 
 	.deploy-badge.ready,
 	.deploy-badge.changed {
-		background: #f4e6b8;
-		color: #7b5a10;
+		background: color-mix(in srgb, var(--warn) 16%, transparent);
+		color: var(--warn);
 	}
 
 	.deploy-badge.live {
-		background: #e7f0df;
-		color: #3c7a44;
+		background: color-mix(in srgb, var(--ok) 14%, transparent);
+		color: var(--ok);
 	}
 
 	.deploy-badge.unpublish,
 	.deploy-badge.delete {
-		background: #fbe9e6;
-		color: #8a463c;
+		background: color-mix(in srgb, var(--danger) 12%, transparent);
+		color: var(--danger);
 	}
 
 	.empty {
-		color: #8a7f70;
+		color: var(--ink-3);
 		font-size: 13px;
 		text-align: center;
 		padding: 14px;
 	}
 
 	.workbench {
+		background: var(--paper);
 		min-width: 0;
-		padding: 20px 24px;
+		padding: 28px 40px;
 		overflow-y: auto;
+	}
+
+	.post-enter {
+		animation: enter 180ms ease-out;
+	}
+
+	@keyframes enter {
+		from {
+			opacity: 0;
+			transform: translateY(6px);
+		}
 	}
 
 	.no-selection {
 		display: grid;
 		place-items: center;
+		align-content: center;
 		min-height: 70vh;
 		text-align: center;
-		color: #8a7f70;
+	}
+
+	.no-selection h2 {
+		font-family: var(--font-display);
+		font-size: 32px;
+		font-weight: 600;
+		margin: 0 0 8px;
+		color: var(--ink-2);
+	}
+
+	.no-selection p {
+		margin: 0;
+		color: var(--ink-3);
 	}
 
 	.publish-result {
-		border-left: 3px solid #a43b2f;
+		border-left: 3px solid var(--danger);
 		display: grid;
 		gap: 8px;
 		padding-left: 10px;
@@ -511,7 +527,7 @@
 	}
 
 	.publish-result.ok {
-		border-color: #3c7a44;
+		border-color: var(--ok);
 	}
 
 	.publish-result h3 {
@@ -520,8 +536,8 @@
 	}
 
 	.publish-result details {
-		background: #fffdf8;
-		border: 1px solid #d8d0c2;
+		background: var(--paper);
+		border: 1px solid var(--line);
 		border-radius: 8px;
 		padding: 6px 8px;
 	}
@@ -535,11 +551,11 @@
 
 	.publish-result summary em {
 		font-style: normal;
-		color: #8a463c;
+		color: var(--danger);
 	}
 
 	.publish-result.ok summary em {
-		color: #3c7a44;
+		color: var(--ok);
 	}
 
 	.links {
@@ -549,14 +565,18 @@
 	}
 
 	.links a {
-		color: #7c3f31;
+		color: var(--accent-ink);
 		font-size: 11px;
 		word-break: break-all;
 	}
 
 	.error {
-		color: #8a463c;
+		background: color-mix(in srgb, var(--danger) 10%, transparent);
+		border-radius: var(--radius);
+		color: var(--danger);
 		font-size: 12px;
+		margin: 0;
+		padding: 8px 12px;
 	}
 
 	@media (max-width: 720px) {
@@ -565,6 +585,9 @@
 		}
 		.shell.sidebar-closed .sidebar {
 			display: none;
+		}
+		.workbench {
+			padding: 20px 16px;
 		}
 	}
 </style>

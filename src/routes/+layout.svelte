@@ -41,7 +41,7 @@
 		box-sizing: border-box;
 	}
 
-	:global(:focus-visible) {
+	:global(:is(a, button, summary):focus-visible) {
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;
 	}
