@@ -145,6 +145,30 @@ export const listPosts = async () => {
 
 export const getPost = async (postPath: string) => parsePost(getPostFilePath(postPath), await readDeployState());
 
+export const createUserVersion = async (llmPath: string) => {
+	if (!llmPath.endsWith('.llm.md')) throw new Error('Can only fork .llm.md drafts');
+
+	const userPath = llmPath.replace(/\.llm\.md$/, '.md');
+	const userFilePath = getPostFilePath(userPath);
+
+	try {
+		await stat(userFilePath);
+		return userPath;
+	} catch {
+		// sibling missing — create it below
+	}
+
+	const raw = await readFile(getPostFilePath(llmPath), 'utf8');
+	const frontmatter = (raw.match(frontmatterPattern)?.[1] ?? '')
+		.split(/\r?\n/)
+		.filter((line) => !line.match(/^publish:/))
+		.join('\n')
+		.trim();
+
+	await writeFile(userFilePath, frontmatter ? `---\n${frontmatter}\n---\n\n` : '', 'utf8');
+	return userPath;
+};
+
 export const getLlmDraft = async (postPath: string) => {
 	if (postPath.endsWith('.llm.md')) return null;
 

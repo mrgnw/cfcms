@@ -1,5 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { createPost, getLlmDraft, getPost, listPosts, savePost } from '$lib/server/content';
+import { createPost, createUserVersion, getLlmDraft, getPost, listPosts, savePost } from '$lib/server/content';
 import { commitPost } from '$lib/server/git';
 import { runPublish } from '$lib/server/publish';
 
@@ -48,6 +48,17 @@ export const actions = {
 			savedPath: postPath,
 			backup: commit
 		};
+	},
+	fork: async ({ request }) => {
+		const form = await request.formData();
+		const llmPath = String(form.get('path') ?? '');
+
+		if (!llmPath.endsWith('.llm.md')) return fail(400, { message: 'Not an .llm.md draft' });
+
+		const userPath = await createUserVersion(llmPath);
+		await commitPost(userPath, 'create');
+
+		throw redirect(303, `/?post=${encodeURIComponent(userPath)}`);
 	},
 	publish: async () => {
 		try {
