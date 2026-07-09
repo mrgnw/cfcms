@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { Crepe, CrepeFeature } from '@milkdown/crepe';
+	import { replaceAll } from '@milkdown/kit/utils';
 	import '@milkdown/crepe/theme/common/style.css';
 	import '@milkdown/crepe/theme/frame.css';
 
@@ -36,6 +37,10 @@
 	onDestroy(() => {
 		crepe?.destroy();
 	});
+
+	export function setContent(markdown: string) {
+		crepe?.editor.action(replaceAll(markdown, true));
+	}
 </script>
 
 <div class="milkdown-host" bind:this={host}></div>

@@ -43,7 +43,11 @@
 		results: PublishResult[];
 	};
 
-	type PageData = { posts: PostListItem[]; post: Post | null };
+	type PageData = {
+		posts: PostListItem[];
+		post: Post | null;
+		llmDraft: { path: string; body: string } | null;
+	};
 
 	let { data }: { data: PageData } = $props();
 
@@ -232,7 +236,7 @@
 		{#if data.post}
 			{#key data.post.path}
 				<div class="post-enter">
-					<PostEditor post={data.post} onSaved={() => invalidateAll()} />
+					<PostEditor post={data.post} llmDraft={data.llmDraft} onSaved={() => invalidateAll()} />
 				</div>
 			{/key}
 		{:else}

@@ -129,7 +129,11 @@ const slugify = (value: string) =>
 
 export const listPosts = async () => {
 	const [files, deployState] = await Promise.all([listMarkdownFiles(contentDirectory), readDeployState()]);
-	const posts = await Promise.all(files.map((file) => parsePost(file, deployState)));
+	const fileSet = new Set(files);
+	const postFiles = files.filter(
+		(file) => !(file.endsWith('.llm.md') && fileSet.has(file.replace(/\.llm\.md$/, '.md')))
+	);
+	const posts = await Promise.all(postFiles.map((file) => parsePost(file, deployState)));
 
 	return posts.sort((first, second) => {
 		const firstDate = first.date || first.updatedAt;
@@ -140,6 +144,24 @@ export const listPosts = async () => {
 };
 
 export const getPost = async (postPath: string) => parsePost(getPostFilePath(postPath), await readDeployState());
+
+export const getLlmDraft = async (postPath: string) => {
+	if (postPath.endsWith('.llm.md')) return null;
+
+	const companionPath = postPath.replace(/\.md$/, '.llm.md');
+
+	try {
+		const raw = await readFile(getPostFilePath(companionPath), 'utf8');
+		const match = raw.match(frontmatterPattern);
+
+		return {
+			path: companionPath,
+			body: match ? raw.slice(match[0].length) : raw
+		};
+	} catch {
+		return null;
+	}
+};
 
 export const savePost = async (postPath: string, frontmatter: string, body: string) => {
 	const filePath = getPostFilePath(postPath);

@@ -1,5 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { createPost, getPost, listPosts, savePost } from '$lib/server/content';
+import { createPost, getLlmDraft, getPost, listPosts, savePost } from '$lib/server/content';
 import { commitPost } from '$lib/server/git';
 import { runPublish } from '$lib/server/publish';
 
@@ -7,10 +7,12 @@ export const load = async ({ url }) => {
 	const posts = await listPosts();
 	const selectedPath = url.searchParams.get('post') ?? posts[0]?.path ?? '';
 	const post = selectedPath ? await getPost(selectedPath) : null;
+	const llmDraft = post ? await getLlmDraft(post.path) : null;
 
 	return {
 		posts,
-		post
+		post,
+		llmDraft
 	};
 };
 

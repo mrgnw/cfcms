@@ -3,6 +3,8 @@
 	import { browser } from '$app/environment';
 	import { TextareaAutosize } from 'runed';
 	import MilkdownEditor from './MilkdownEditor.svelte';
+	import ReferencePane from './ReferencePane.svelte';
+	import { insertBlock, splitBlocks } from '$lib/blocks';
 	import { parseFrontmatter, serializeFrontmatter } from '$lib/frontmatter';
 
 	type Post = {
@@ -14,9 +16,15 @@
 		deleteRequested?: boolean;
 	};
 
+	type LlmDraft = {
+		path: string;
+		body: string;
+	};
+
 	type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error';
 
-	let { post, onSaved }: { post: Post; onSaved?: () => void } = $props();
+	let { post, llmDraft = null, onSaved }: { post: Post; llmDraft?: LlmDraft | null; onSaved?: () => void } =
+		$props();
 
 	const initial = untrack(() => parseFrontmatter(post.frontmatter));
 
@@ -30,6 +38,16 @@
 	let bodyField = $state(untrack(() => post.body));
 	let tagsInput = $state<HTMLTextAreaElement | undefined>();
 	let customInput = $state<HTMLTextAreaElement | undefined>();
+	let milkdown = $state<{ setContent: (markdown: string) => void } | undefined>();
+	let referenceOpen = $state(untrack(() => Boolean(llmDraft)));
+
+	const llmBlocks = $derived(llmDraft ? splitBlocks(llmDraft.body) : []);
+
+	function copyBlock(index: number) {
+		bodyField = insertBlock(bodyField, llmBlocks, index);
+		milkdown?.setContent(bodyField);
+		markDirty();
+	}
 
 	if (browser) {
 		new TextareaAutosize({
@@ -129,6 +147,16 @@
 <header class="post-head">
 	<div class="path">{post.path}</div>
 	<div class="status-row">
+		{#if llmDraft}
+			<button
+				class="reference-toggle"
+				type="button"
+				aria-pressed={referenceOpen}
+				onclick={() => (referenceOpen = !referenceOpen)}
+			>
+				Reference
+			</button>
+		{/if}
 		<button
 			class="status-button"
 			type="button"
@@ -161,6 +189,12 @@
 	<p class="error-banner">{lastError}</p>
 {/if}
 
+<div class="workspace" class:split={referenceOpen && llmDraft}>
+	{#if referenceOpen && llmDraft}
+		<ReferencePane path={llmDraft.path} body={llmDraft.body} userBody={bodyField} onCopy={copyBlock} />
+	{/if}
+
+	<div class="draft">
 <section class="frontmatter">
 	<div class="meta-line">
 		<input
@@ -233,9 +267,11 @@
 	</div>
 </section>
 
-<section class="editor-body">
-	<MilkdownEditor value={bodyField} onChange={onBodyChange} />
-</section>
+		<section class="editor-body">
+			<MilkdownEditor bind:this={milkdown} value={bodyField} onChange={onBodyChange} />
+		</section>
+	</div>
+</div>
 
 <style>
 	.post-head {
@@ -256,6 +292,39 @@
 		display: flex;
 		gap: 10px;
 		align-items: center;
+	}
+
+	.reference-toggle {
+		background: transparent;
+		border: none;
+		border-radius: 6px;
+		color: var(--ink-3);
+		cursor: pointer;
+		font: inherit;
+		font-size: 12px;
+		padding: 4px 8px;
+	}
+
+	.reference-toggle:hover {
+		background: var(--hover);
+		color: var(--ink);
+	}
+
+	.reference-toggle[aria-pressed='true'] {
+		background: var(--hover);
+		color: var(--accent-ink);
+	}
+
+	.workspace.split {
+		display: grid;
+		grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+		gap: 36px;
+	}
+
+	@media (max-width: 960px) {
+		.workspace.split {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	.status-button {
