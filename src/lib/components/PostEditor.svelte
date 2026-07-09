@@ -330,10 +330,14 @@
 	}
 
 	.meta-line {
-		display: grid;
-		grid-template-columns: minmax(220px, 1fr) 112px 32px 32px 32px;
+		display: flex;
+		flex-wrap: wrap;
 		gap: 8px;
 		align-items: center;
+	}
+
+	#date {
+		width: 124px;
 	}
 
 	.meta-line input,
@@ -356,6 +360,7 @@
 	}
 
 	#title {
+		flex: 1 0 100%;
 		font-family: var(--font-display);
 		font-size: 36px;
 		font-weight: 600;
@@ -431,24 +436,4 @@
 		min-height: 62vh;
 	}
 
-	@media (max-width: 820px) {
-		.meta-line {
-			grid-template-columns: minmax(0, 1fr) 112px 32px 32px 32px;
-		}
-	}
-
-	@media (max-width: 620px) {
-		.meta-line {
-			grid-template-columns: 1fr 1fr 32px 32px 32px;
-		}
-
-		#title {
-			grid-column: 1 / -1;
-		}
-
-		.tags-line,
-		.custom-field {
-			grid-template-columns: 1fr;
-		}
-	}
 </style>

@@ -248,7 +248,7 @@
 	.shell {
 		display: grid;
 		grid-template-columns: minmax(260px, 320px) 1fr;
-		min-height: 100vh;
+		height: 100vh;
 		transition: grid-template-columns 200ms ease;
 	}
 
@@ -582,6 +582,8 @@
 	@media (max-width: 720px) {
 		.shell {
 			grid-template-columns: 1fr;
+			height: auto;
+			min-height: 100vh;
 		}
 		.shell.sidebar-closed .sidebar {
 			display: none;

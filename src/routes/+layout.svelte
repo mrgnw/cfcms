@@ -35,6 +35,7 @@
 		background: var(--bg);
 		color: var(--ink);
 		font-family: var(--font-ui);
+		accent-color: var(--accent);
 	}
 
 	:global(*) {
