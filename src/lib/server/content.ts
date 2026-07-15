@@ -11,6 +11,7 @@ export type PostSummary = {
 	tags: string[];
 	publish: boolean;
 	pin: boolean;
+	editRequested: boolean;
 	deleteRequested: boolean;
 	slug: string;
 	excerpt: string;
@@ -94,6 +95,7 @@ const parsePost = async (filePath: string, deployState: DeployState): Promise<Po
 		tags: readTags(frontmatter),
 		publish,
 		pin: readBoolean(frontmatter, 'pin') || readBoolean(frontmatter, 'pinned'),
+		editRequested: readBoolean(frontmatter, 'edit'),
 		deleteRequested,
 		slug: readFrontmatterValue(frontmatter, 'slug') || postPath.replace(/\.md$/, ''),
 		excerpt: getExcerpt(body),

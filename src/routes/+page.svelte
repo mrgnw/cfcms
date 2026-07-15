@@ -12,6 +12,7 @@
 		tags?: string[];
 		publish?: boolean;
 		pin?: boolean;
+		editRequested?: boolean;
 		deleteRequested?: boolean;
 		slug?: string;
 		excerpt?: string;
@@ -54,12 +55,13 @@
 	let sidebarOpen = $state(true);
 	let newTitle = $state('');
 	let query = $state('');
-	let filter = $state<'all' | 'ready' | 'drafts'>('all');
+	let filter = $state<'all' | 'ready' | 'drafts' | 'edit'>('all');
 
 	const pendingStatuses = new Set<DeployStatus>(['ready', 'changed', 'unpublish', 'delete']);
 
 	let readyCount = $derived(data.posts.filter((p) => pendingStatuses.has(p.deployStatus ?? 'draft')).length);
 	let draftCount = $derived(data.posts.filter((p) => (p.deployStatus ?? 'draft') === 'draft').length);
+	let editCount = $derived(data.posts.filter((p) => p.editRequested).length);
 	let totalCount = $derived(data.posts.length);
 
 	let filteredPosts = $derived.by(() => {
@@ -68,6 +70,7 @@
 			const status = post.deployStatus ?? 'draft';
 			if (filter === 'ready' && !pendingStatuses.has(status)) return false;
 			if (filter === 'drafts' && status !== 'draft') return false;
+			if (filter === 'edit' && !post.editRequested) return false;
 			if (!term) return true;
 			return [post.title, post.path, post.slug, post.excerpt, statusLabel(status), ...(post.tags ?? [])]
 				.filter(Boolean)
@@ -176,6 +179,13 @@
 			>
 				Ready <em>{readyCount}</em>
 			</button>
+			<button
+				class:active={filter === 'edit'}
+				onclick={() => (filter = 'edit')}
+				type="button"
+			>
+				Edit <em>{editCount}</em>
+			</button>
 		</div>
 
 		<input class="search" type="search" bind:value={query} placeholder="Search…" aria-label="Search posts" />
@@ -188,6 +198,9 @@
 				>
 					<strong>{item.title}</strong>
 					<span class="post-meta">
+						{#if item.editRequested}
+							<em class="deploy-badge edit">edit</em>
+						{/if}
 						{#if (item.deployStatus ?? 'draft') !== 'draft'}
 							<em class={`deploy-badge ${item.deployStatus}`}>{statusLabel(item.deployStatus)}</em>
 						{/if}
@@ -339,7 +352,7 @@
 
 	.filters {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-columns: repeat(4, minmax(0, 1fr));
 		gap: 4px;
 	}
 
@@ -463,6 +476,11 @@
 	.deploy-badge.changed {
 		background: color-mix(in srgb, var(--warn) 16%, transparent);
 		color: var(--warn);
+	}
+
+	.deploy-badge.edit {
+		background: color-mix(in srgb, var(--accent) 14%, transparent);
+		color: var(--accent-ink);
 	}
 
 	.deploy-badge.live {
