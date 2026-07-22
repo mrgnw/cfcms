@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { Crepe, CrepeFeature } from '@milkdown/crepe';
-	import { replaceAll } from '@milkdown/kit/utils';
+	import { replaceAll, insert } from '@milkdown/kit/utils';
+	import { editorViewCtx } from '@milkdown/kit/core';
 	import '@milkdown/crepe/theme/common/style.css';
 	import '@milkdown/crepe/theme/frame.css';
 
@@ -40,6 +41,12 @@
 
 	export function setContent(markdown: string) {
 		crepe?.editor.action(replaceAll(markdown, true));
+	}
+
+	export function insertMarkdown(markdown: string, inline = false) {
+		if (!crepe) return;
+		crepe.editor.action(insert(markdown, inline));
+		crepe.editor.action((ctx) => ctx.get(editorViewCtx).focus());
 	}
 </script>
 
