@@ -128,7 +128,7 @@
 	<title>{data.post?.title ?? 'Posts'} · cms.xcc.es</title>
 </svelte:head>
 
-<main class="shell" class:sidebar-closed={!sidebarOpen}>
+<main class="shell" class:sidebar-closed={!sidebarOpen} class:has-post={Boolean(data.post)}>
 	<aside class="sidebar" aria-label="Posts">
 		<header class="sidebar-head">
 			<button
@@ -247,6 +247,12 @@
 
 	<section class="workbench" aria-label="Editor">
 		{#if data.post}
+			<a class="mobile-back" href={resolve('/')} aria-label="Back to post list">
+				<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7">
+					<path d="M10 3 5 8l5 5" stroke-linecap="round" stroke-linejoin="round" />
+				</svg>
+				Posts
+			</a>
 			{#key data.post.path}
 				<div class="post-enter">
 					<PostEditor post={data.post} llmDraft={data.llmDraft} onSaved={() => invalidateAll()} />
@@ -284,16 +290,18 @@
 		min-width: 0;
 	}
 
-	.shell.sidebar-closed .sidebar > :not(.sidebar-head) {
-		display: none;
-	}
+	@media (min-width: 721px) {
+		.shell.sidebar-closed .sidebar > :not(.sidebar-head) {
+			display: none;
+		}
 
-	.shell.sidebar-closed .new-post {
-		display: none;
-	}
+		.shell.sidebar-closed .new-post {
+			display: none;
+		}
 
-	.shell.sidebar-closed .sidebar {
-		padding: 14px 6px;
+		.shell.sidebar-closed .sidebar {
+			padding: 14px 6px;
+		}
 	}
 
 	.sidebar-head {
@@ -601,17 +609,42 @@
 		padding: 8px 12px;
 	}
 
+	.mobile-back {
+		display: none;
+	}
+
 	@media (max-width: 720px) {
-		.shell {
+		.shell,
+		.shell.sidebar-closed {
 			grid-template-columns: 1fr;
-			height: auto;
-			min-height: 100vh;
+			height: 100vh;
 		}
-		.shell.sidebar-closed .sidebar {
+		.sidebar {
+			border-right: none;
+		}
+		/* master–detail: show the list OR the editor, never stacked */
+		.shell:not(.has-post) .workbench {
+			display: none;
+		}
+		.shell.has-post .sidebar {
 			display: none;
 		}
 		.workbench {
-			padding: 20px 16px;
+			padding: 16px;
+		}
+		.mobile-back {
+			display: inline-flex;
+			align-items: center;
+			gap: 4px;
+			background: var(--bg);
+			border: 1px solid var(--line);
+			border-radius: 999px;
+			color: var(--ink-2);
+			font-size: 13px;
+			padding: 6px 12px 6px 10px;
+			margin-bottom: 16px;
+			text-decoration: none;
+			width: fit-content;
 		}
 	}
 </style>

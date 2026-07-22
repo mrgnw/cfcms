@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { Crepe, CrepeFeature } from '@milkdown/crepe';
-	import { replaceAll } from '@milkdown/kit/utils';
+	import { replaceAll, insert, insertPos } from '@milkdown/kit/utils';
+	import { editorViewCtx } from '@milkdown/kit/core';
+	import type { EditorView } from '@milkdown/kit/prose/view';
 	import '@milkdown/crepe/theme/common/style.css';
 	import '@milkdown/crepe/theme/frame.css';
 
@@ -14,6 +16,7 @@
 
 	let host: HTMLDivElement;
 	let crepe: Crepe | null = null;
+	let view: EditorView | null = null;
 
 	onMount(async () => {
 		crepe = new Crepe({
@@ -32,7 +35,28 @@
 			});
 		});
 		await crepe.create();
+		crepe.editor.action((ctx) => (view = ctx.get(editorViewCtx)));
 	});
+
+	const acceptsDrag = (e: DragEvent) =>
+		Array.from(e.dataTransfer?.types ?? []).includes('application/x-ref-md');
+
+	function onDragOver(e: DragEvent) {
+		if (!acceptsDrag(e)) return;
+		e.preventDefault();
+		if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+	}
+
+	function onDrop(e: DragEvent) {
+		const md = e.dataTransfer?.getData('application/x-ref-md');
+		if (!md || !crepe || !view) return;
+		e.preventDefault();
+		const inline = e.dataTransfer?.getData('application/x-ref-inline') === '1';
+		const at = view.posAtCoords({ left: e.clientX, top: e.clientY });
+		const pos = at ? at.pos : view.state.selection.to;
+		crepe.editor.action(insertPos(md, pos, inline));
+		view.focus();
+	}
 
 	onDestroy(() => {
 		crepe?.destroy();
@@ -41,9 +65,22 @@
 	export function setContent(markdown: string) {
 		crepe?.editor.action(replaceAll(markdown, true));
 	}
+
+	export function insertMarkdown(markdown: string, inline = false) {
+		if (!crepe) return;
+		crepe.editor.action(insert(markdown, inline));
+		crepe.editor.action((ctx) => ctx.get(editorViewCtx).focus());
+	}
 </script>
 
-<div class="milkdown-host" bind:this={host}></div>
+<div
+	class="milkdown-host"
+	bind:this={host}
+	role="group"
+	aria-label="Post body editor"
+	ondragover={onDragOver}
+	ondrop={onDrop}
+></div>
 
 <style>
 	.milkdown-host {

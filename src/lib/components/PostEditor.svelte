@@ -4,7 +4,6 @@
 	import { TextareaAutosize } from 'runed';
 	import MilkdownEditor from './MilkdownEditor.svelte';
 	import ReferencePane from './ReferencePane.svelte';
-	import { insertBlock, splitBlocks } from '$lib/blocks';
 	import { parseFrontmatter, serializeFrontmatter } from '$lib/frontmatter';
 
 	type Post = {
@@ -39,14 +38,14 @@
 	let bodyField = $state(untrack(() => post.body));
 	let tagsInput = $state<HTMLTextAreaElement | undefined>();
 	let customInput = $state<HTMLTextAreaElement | undefined>();
-	let milkdown = $state<{ setContent: (markdown: string) => void } | undefined>();
+	let milkdown = $state<
+		| { setContent: (markdown: string) => void; insertMarkdown: (markdown: string, inline?: boolean) => void }
+		| undefined
+	>();
 	let referenceOpen = $state(untrack(() => Boolean(llmDraft)));
 
-	const llmBlocks = $derived(llmDraft ? splitBlocks(llmDraft.body) : []);
-
-	function copyBlock(index: number) {
-		bodyField = insertBlock(bodyField, llmBlocks, index);
-		milkdown?.setContent(bodyField);
+	function insertFromReference(markdown: string, inline: boolean) {
+		milkdown?.insertMarkdown(markdown, inline);
 		markDirty();
 	}
 
@@ -199,7 +198,7 @@
 
 <div class="workspace" class:split={referenceOpen && llmDraft}>
 	{#if referenceOpen && llmDraft}
-		<ReferencePane path={llmDraft.path} body={llmDraft.body} userBody={bodyField} onCopy={copyBlock} />
+		<ReferencePane path={llmDraft.path} body={llmDraft.body} userBody={bodyField} onInsert={insertFromReference} />
 	{/if}
 
 	<div class="draft">
