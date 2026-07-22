@@ -1,5 +1,5 @@
 [web]
-run = "pnpm dev -- --host 0.0.0.0"
+run = "node build/index.js"
 restart = true
 ports = [5273]
-env = { BLOG_CONTENT_BASE_DIR = "~/dev/blog", SVELTE_BLOG_DIR = "~/dev/blog-loke", ASTRO_BLOG_DIR = "~/dev/blog-astro" }
+env = { HOST = "0.0.0.0", PORT = "5273", ORIGIN = "https://cms.xcc.es", BLOG_CONTENT_BASE_DIR = "~/dev/blog", SVELTE_BLOG_DIR = "~/dev/blog-loke", ASTRO_BLOG_DIR = "~/dev/blog-astro" }
