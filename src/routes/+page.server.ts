@@ -6,7 +6,7 @@ import { runPublish } from '$lib/server/publish';
 export const load = async ({ url }) => {
 	const posts = await listPosts();
 	const selectedPath = url.searchParams.get('post') ?? '';
-	const post = selectedPath ? await getPost(selectedPath) : null;
+	const post = selectedPath ? await getPost(selectedPath).catch(() => null) : null;
 	const llmDraft = post ? await getLlmDraft(post.path) : null;
 
 	return {
