@@ -1,5 +1,10 @@
+[build]
+run = "node_modules/.bin/vite build"
+type = "task"
+
 [web]
 run = "node build/index.js"
 restart = true
 ports = [5273]
+depends_on = "build"
 env = { HOST = "0.0.0.0", PORT = "5273", ORIGIN = "https://cms.xcc.es", BLOG_CONTENT_BASE_DIR = "~/dev/blog", SVELTE_BLOG_DIR = "~/dev/blog-loke", ASTRO_BLOG_DIR = "~/dev/blog-astro" }
