@@ -1,8 +1,17 @@
 ---
 agent: true
+branch: gullible-pony
 ---
 
 # Evaluate svelte-use for xccms
+
+## Outcome (2026-07-28)
+
+Dependency **not** added. `runed` is already installed and ships no clipboard
+utility, so the one candidate site had no in-house replacement either — it stays
+hand-rolled, which is ~8 lines. Item 1 of the recommendation is done: the copy
+button now awaits the write, keeps the green state for real successes only, and
+shows a red state plus a `role="status"` message on failure.
 
 Survey finding from the cross-project [@ariefsn/svelte-use](https://github.com/ariefsn/svelte-use) scan (2026-07-28). Every other Svelte repo got a GitHub issue; this one got a todo instead because the surface is genuinely thin.
 
