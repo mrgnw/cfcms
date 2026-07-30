@@ -8,8 +8,15 @@ mostly structural: the code grew faster than its seams.
 
 ## Now
 
-1. **Split `src/routes/+page.svelte`** — 824 lines holding the sidebar, the home
-   panel, and the editor shell. See [todos/split-page-component.md](todos/split-page-component.md).
+1. **`ky restart blog-cms` races its own build.** The `web` process boots against
+   the current `build/` while the `build` task is still writing it, so node later
+   fails to lazily import a chunk the rebuild renamed:
+   `ERR_MODULE_NOT_FOUND … build/server/chunks/nodes/2.js-<hash>.js`, and every
+   request 500s until web is restarted again. `depends_on = "build"` in
+   `services.toml` does not appear to wait for a `type = "task"` to exit.
+   Workaround today: `ky stop blog-cms && pnpm build && ky start blog-cms`.
+   This is the documented restart path in the README, so it should be fixed or
+   the README should stop promising it.
 
 ## Next
 
