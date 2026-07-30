@@ -5,20 +5,7 @@
 	import MilkdownEditor from './MilkdownEditor.svelte';
 	import ReferencePane from './ReferencePane.svelte';
 	import { parseFrontmatter, serializeFrontmatter } from '$lib/frontmatter';
-
-	type Post = {
-		path: string;
-		title: string;
-		frontmatter: string;
-		body: string;
-		publish?: boolean;
-		deleteRequested?: boolean;
-	};
-
-	type LlmDraft = {
-		path: string;
-		body: string;
-	};
+	import type { LlmDraft, Post } from '$lib/types';
 
 	type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error';
 

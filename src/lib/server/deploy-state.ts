@@ -3,8 +3,9 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { contentBaseDirectory } from './paths';
+import type { DeployStatus } from '$lib/types';
 
-export type DeployStatus = 'draft' | 'ready' | 'live' | 'changed' | 'unpublish' | 'delete' | 'deleted';
+export type { DeployStatus };
 
 export type DeployedPostState = {
 	hash: string;
