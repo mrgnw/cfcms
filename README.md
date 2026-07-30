@@ -63,7 +63,8 @@ Check services:
 ky status
 ```
 
-Restart it after config changes:
+Restart it after config changes. The service builds before it serves, so the port
+takes a few seconds to come up:
 
 ```sh
 ky restart blog-cms
