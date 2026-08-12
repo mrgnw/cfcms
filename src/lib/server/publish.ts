@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { listPosts } from './content';
 import { recordPublishedState } from './deploy-state';
-import { pushContent } from './git';
+import { getHeadCommit, pushContent } from './git';
 
 type PublishTarget = {
 	name: string;
@@ -85,7 +85,7 @@ export const runPublish = async () => {
 	);
 	const [push, results] = await Promise.all([pushContent(), Promise.all(targets.map(runTarget))]);
 	const ok = results.every((result) => result.ok);
-	const deployment = ok ? await recordPublishedState(posts) : null;
+	const deployment = ok ? await recordPublishedState(posts, await getHeadCommit()) : null;
 
 	return {
 		ok,
