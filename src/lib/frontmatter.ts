@@ -4,7 +4,6 @@ export type StandardFields = {
 	tags: string[];
 	publish: boolean;
 	pin: boolean;
-	editRequested: boolean;
 	deleteRequested: boolean;
 };
 
@@ -12,6 +11,7 @@ export type ParsedFrontmatter = StandardFields & {
 	custom: string;
 };
 
+// 'edit' stays a standard key with no field: parse consumes it so saves drop the legacy flag
 const STANDARD_KEYS = new Set(['title', 'date', 'tags', 'publish', 'pin', 'pinned', 'edit', 'delete', 'deleted']);
 
 export const parseYamlScalar = (value: string) => {
@@ -60,7 +60,6 @@ export const parseFrontmatter = (raw: string): ParsedFrontmatter => {
 		else if (key === 'tags') fields.tags = parseTags(value);
 		else if (key === 'publish') fields.publish = value === 'true';
 		else if (key === 'pin' || key === 'pinned') fields.pin = value === 'true';
-		else if (key === 'edit') fields.editRequested = value === 'true';
 		else if (key === 'delete' || key === 'deleted') fields.deleteRequested = value === 'true';
 	}
 
@@ -70,7 +69,6 @@ export const parseFrontmatter = (raw: string): ParsedFrontmatter => {
 		tags: fields.tags ?? [],
 		publish: fields.publish ?? false,
 		pin: fields.pin ?? false,
-		editRequested: fields.editRequested ?? false,
 		deleteRequested: fields.deleteRequested ?? false,
 		custom: customLines.join('\n')
 	};
@@ -95,7 +93,6 @@ export const serializeFrontmatter = (fields: ParsedFrontmatter): string => {
 		`publish: ${fields.publish ? 'true' : 'false'}`
 	];
 	if (fields.pin) lines.push('pin: true');
-	if (fields.editRequested) lines.push('edit: true');
 	if (fields.deleteRequested) lines.push('delete: true');
 	const custom = fields.custom.trim();
 	if (custom) lines.push(custom);

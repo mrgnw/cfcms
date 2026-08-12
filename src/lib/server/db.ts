@@ -185,6 +185,14 @@ export const reorderEditing = (paths: string[]) => {
 	db.exec('COMMIT');
 };
 
+export const seedEditingQueue = (paths: string[]) => {
+	if (getMeta('seededEditingQueue')) return false;
+
+	for (const path of paths) addToEditing(path);
+	setMeta('seededEditingQueue', new Date().toISOString());
+	return paths.length > 0;
+};
+
 export const pruneMissingPosts = (existingPaths: Set<string>) => {
 	const rows = db.prepare('SELECT path FROM posts').all() as { path: string }[];
 	const remove = db.prepare('DELETE FROM posts WHERE path = ?');

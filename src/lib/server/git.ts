@@ -36,7 +36,7 @@ const runGit = (args: string[]): Promise<GitResult> =>
 
 const compactMessage = (value: string) => value.replace(/\s+/g, ' ').trim().slice(0, 120);
 
-export const commitPost = async (postPath: string, action: 'create' | 'save') => {
+export const commitPost = async (postPath: string, action: 'create' | 'save' | 'delete') => {
 	const gitPath = getPostGitPath(postPath);
 	const add = await runGit(['add', '--', gitPath]);
 

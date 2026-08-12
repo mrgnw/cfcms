@@ -1,6 +1,7 @@
-import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 import { formatYamlScalar, parseYamlScalar } from '$lib/frontmatter';
+import { getEditingOrder, pruneMissingPosts, seedEditingQueue } from './db';
 import { getDeployStatus, hashPostContent, readDeployState, type DeployState, type DeployStatus } from './deploy-state';
 import { contentBaseDirectory, contentDirectory } from './paths';
 
@@ -11,7 +12,7 @@ export type PostSummary = {
 	tags: string[];
 	publish: boolean;
 	pin: boolean;
-	editRequested: boolean;
+	editingOrder: number | null;
 	deleteRequested: boolean;
 	slug: string;
 	excerpt: string;
@@ -19,6 +20,7 @@ export type PostSummary = {
 	contentHash: string;
 	deployStatus: DeployStatus;
 	deployedAt?: string;
+	baselineCommit: string | null;
 };
 
 export type Post = PostSummary & {
@@ -75,7 +77,11 @@ const getExcerpt = (body: string) =>
 		.find((line) => line && !line.startsWith('#'))
 		?.slice(0, 160) ?? '';
 
-const parsePost = async (filePath: string, deployState: DeployState): Promise<Post> => {
+const parsePost = async (
+	filePath: string,
+	deployState: DeployState,
+	editingOrder: Map<string, number>
+): Promise<Post> => {
 	const raw = await readFile(filePath, 'utf8');
 	const match = raw.match(frontmatterPattern);
 	const frontmatter = match?.[1] ?? '';
@@ -95,7 +101,7 @@ const parsePost = async (filePath: string, deployState: DeployState): Promise<Po
 		tags: readTags(frontmatter),
 		publish,
 		pin: readBoolean(frontmatter, 'pin') || readBoolean(frontmatter, 'pinned'),
-		editRequested: readBoolean(frontmatter, 'edit'),
+		editingOrder: editingOrder.get(postPath) ?? null,
 		deleteRequested,
 		slug: readFrontmatterValue(frontmatter, 'slug') || postPath.replace(/\.md$/, ''),
 		excerpt: getExcerpt(body),
@@ -103,6 +109,7 @@ const parsePost = async (filePath: string, deployState: DeployState): Promise<Po
 		contentHash,
 		deployStatus: getDeployStatus({ publish, deleteRequested, contentHash }, deployed),
 		deployedAt: deployed?.deployedAt,
+		baselineCommit: deployed?.commit ?? null,
 		frontmatter,
 		body
 	};
@@ -135,7 +142,19 @@ export const listPosts = async () => {
 	const postFiles = files.filter(
 		(file) => !(file.endsWith('.llm.md') && fileSet.has(file.replace(/\.llm\.md$/, '.md')))
 	);
-	const posts = await Promise.all(postFiles.map((file) => parsePost(file, deployState)));
+	let order = getEditingOrder();
+	let posts = await Promise.all(postFiles.map((file) => parsePost(file, deployState, order)));
+
+	pruneMissingPosts(new Set(posts.map((post) => post.path)));
+
+	const legacyEditPaths = posts
+		.filter((post) => readBoolean(post.frontmatter, 'edit'))
+		.map((post) => post.path);
+
+	if (seedEditingQueue(legacyEditPaths)) {
+		order = getEditingOrder();
+		posts = posts.map((post) => ({ ...post, editingOrder: order.get(post.path) ?? null }));
+	}
 
 	return posts.sort((first, second) => {
 		const firstDate = first.date || first.updatedAt;
@@ -145,7 +164,8 @@ export const listPosts = async () => {
 	});
 };
 
-export const getPost = async (postPath: string) => parsePost(getPostFilePath(postPath), await readDeployState());
+export const getPost = async (postPath: string) =>
+	parsePost(getPostFilePath(postPath), await readDeployState(), getEditingOrder());
 
 export const createUserVersion = async (llmPath: string) => {
 	if (!llmPath.endsWith('.llm.md')) throw new Error('Can only fork .llm.md drafts');
@@ -199,6 +219,10 @@ export const savePost = async (postPath: string, frontmatter: string, body: stri
 
 	await writeFile(filePath, content, 'utf8');
 	return getPost(postPath);
+};
+
+export const deletePostFile = async (postPath: string) => {
+	await unlink(getPostFilePath(postPath));
 };
 
 export const createPost = async (title: string) => {

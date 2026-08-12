@@ -7,7 +7,7 @@ export type PostListItem = {
 	tags?: string[];
 	publish?: boolean;
 	pin?: boolean;
-	editRequested?: boolean;
+	editingOrder?: number | null;
 	deleteRequested?: boolean;
 	slug?: string;
 	excerpt?: string;
@@ -44,10 +44,24 @@ export type PublishData = {
 	results: PublishResult[];
 };
 
-export type PostFilter = 'all' | 'ready' | 'drafts' | 'edit';
+export type PostFilter = 'all' | 'ready' | 'drafts' | 'editing';
+
+export type PendingChange = {
+	path: string;
+	title: string;
+	date: string;
+	status: DeployStatus;
+	words: number;
+	added: number | null;
+	deleted: number | null;
+};
+
+export type PostCounts = { all: number; drafts: number; ready: number; editing: number; deleted: number };
 
 export const pendingStatuses = new Set<DeployStatus>(['ready', 'changed', 'unpublish', 'delete']);
 
 export const isPending = (status: DeployStatus = 'draft') => pendingStatuses.has(status);
 
 export const statusOf = (post: Pick<PostListItem, 'deployStatus'>) => post.deployStatus ?? 'draft';
+
+export const isEditing = (post: Pick<PostListItem, 'editingOrder'>) => post.editingOrder != null;
