@@ -135,6 +135,9 @@
 							{/each}
 						</div>
 					{/if}
+					{#if !target.ok && target.output.trim()}
+						<pre class="output-tail">{target.output.slice(-600)}</pre>
+					{/if}
 				</details>
 			{/each}
 		</section>
@@ -368,6 +371,20 @@
 		color: var(--accent-ink);
 		font-size: 11px;
 		word-break: break-all;
+	}
+
+	.output-tail {
+		background: var(--paper);
+		border-radius: 6px;
+		color: var(--ink-2);
+		font-family: var(--font-mono);
+		font-size: 10.5px;
+		margin: 6px 0 0;
+		max-height: 160px;
+		overflow: auto;
+		padding: 6px 8px;
+		white-space: pre-wrap;
+		word-break: break-word;
 	}
 
 	.error {
