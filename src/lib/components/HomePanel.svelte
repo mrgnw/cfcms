@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import DeployBadge from './DeployBadge.svelte';
-	import { type PostFilter, type PostListItem } from '$lib/types';
+	import { type PostCounts, type PostFilter, type PostListItem } from '$lib/types';
 
 	let {
 		recentPosts,
@@ -10,7 +10,7 @@
 		filter = $bindable('all')
 	}: {
 		recentPosts: PostListItem[];
-		counts: { all: number; drafts: number; ready: number; edit: number };
+		counts: PostCounts;
 		newTitle?: string;
 		filter?: PostFilter;
 	} = $props();
@@ -37,8 +37,8 @@
 		<button type="button" class="stat" onclick={() => (filter = 'ready')}>
 			<em>{counts.ready}</em><span>Ready</span>
 		</button>
-		<button type="button" class="stat" onclick={() => (filter = 'edit')}>
-			<em>{counts.edit}</em><span>Edit</span>
+		<button type="button" class="stat" onclick={() => (filter = 'editing')}>
+			<em>{counts.editing}</em><span>Editing</span>
 		</button>
 	</div>
 

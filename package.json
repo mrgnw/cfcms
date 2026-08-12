@@ -25,6 +25,7 @@
 	"dependencies": {
 		"@milkdown/crepe": "^7.21.1",
 		"@milkdown/kit": "^7.21.1",
-		"runed": "^0.37.1"
+		"runed": "^0.37.1",
+		"svelte-dnd-action": "^0.9.78"
 	}
 }

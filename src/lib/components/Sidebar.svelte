@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { dndzone, type DndEvent } from 'svelte-dnd-action';
 	import DeployBadge from './DeployBadge.svelte';
-	import { isPending, statusOf, type PostFilter, type PostListItem, type PublishData } from '$lib/types';
+	import { isEditing, isPending, statusOf, type PostCounts, type PostFilter, type PostListItem } from '$lib/types';
 
 	let {
 		posts,
@@ -13,7 +15,7 @@
 	}: {
 		posts: PostListItem[];
 		selectedPath?: string;
-		counts: { all: number; drafts: number; ready: number; edit: number };
+		counts: PostCounts;
 		open?: boolean;
 		newTitle?: string;
 		filter?: PostFilter;
@@ -21,53 +23,88 @@
 
 	let query = $state('');
 
-	let filteredPosts = $derived.by(() => {
+	let visiblePosts = $derived(posts.filter((post) => !post.deleteRequested));
+
+	type QueueItem = { id: string; post: PostListItem };
+
+	let dragItems = $state<QueueItem[] | null>(null);
+	let baseQueueItems = $derived(
+		visiblePosts
+			.filter(isEditing)
+			.sort((a, b) => (a.editingOrder ?? 0) - (b.editingOrder ?? 0))
+			.map((post) => ({ id: post.path, post }))
+	);
+	let queueItems = $derived(dragItems ?? baseQueueItems);
+
+	let matchesQuery = $derived.by(() => {
 		const term = query.trim().toLowerCase();
-		return posts.filter((post) => {
-			const status = statusOf(post);
-			if (filter === 'ready' && !isPending(status)) return false;
-			if (filter === 'drafts' && status !== 'draft') return false;
-			if (filter === 'edit' && !post.editRequested) return false;
+		return (post: PostListItem) => {
 			if (!term) return true;
-			return [post.title, post.path, post.slug, post.excerpt, status, ...(post.tags ?? [])]
+			return [post.title, post.path, post.slug, post.excerpt, statusOf(post), ...(post.tags ?? [])]
 				.filter(Boolean)
 				.join(' ')
 				.toLowerCase()
 				.includes(term);
-		});
+		};
 	});
 
-	let publishResult = $state<PublishData | null>(null);
-	let publishError = $state<string | null>(null);
-	let publishing = $state(false);
+	let sectioned = $derived(filter === 'all' && !query.trim());
 
-	async function runPublish() {
-		publishing = true;
-		publishError = null;
-		publishResult = null;
-		try {
-			const res = await fetch('/publish', { method: 'POST' });
-			const result = await res.json();
-			if (!res.ok) {
-				if (Array.isArray(result.results)) publishResult = result;
-				throw new Error(result.message ?? 'Publish failed');
-			}
-			publishResult = result;
-		} catch (err) {
-			publishError = err instanceof Error ? err.message : String(err);
-		} finally {
-			publishing = false;
-		}
+	let filteredPosts = $derived(
+		visiblePosts.filter((post) => {
+			const status = statusOf(post);
+			if (filter === 'ready' && !isPending(status)) return false;
+			if (filter === 'drafts' && status !== 'draft') return false;
+			if (filter === 'editing' && !isEditing(post)) return false;
+			return matchesQuery(post);
+		})
+	);
+
+	let recentPosts = $derived(visiblePosts.filter((post) => !isEditing(post)).slice(0, 5));
+	let restPosts = $derived(visiblePosts.filter((post) => !isEditing(post)).slice(5));
+
+	async function postAction(action: string, fields: Record<string, string>) {
+		const fd = new FormData();
+		for (const [key, value] of Object.entries(fields)) fd.set(key, value);
+		await fetch(`?/${action}`, { method: 'POST', body: fd });
+		await invalidateAll();
 	}
 
-	function outputLinks(output: string) {
-		return Array.from(
-			new Set(
-				output.match(/https:\/\/[^\s)]+\.workers\.dev[^\s)]*|https:\/\/[^\s)]+\.pages\.dev[^\s)]*/g) ?? []
-			)
-		);
+	function handleDnd(event: CustomEvent<DndEvent<QueueItem>>) {
+		dragItems = event.detail.items;
+	}
+
+	async function handleDndFinalize(event: CustomEvent<DndEvent<QueueItem>>) {
+		dragItems = event.detail.items;
+		await postAction('queueReorder', { paths: JSON.stringify(event.detail.items.map((item) => item.id)) });
+		dragItems = null;
 	}
 </script>
+
+{#snippet postRow(item: PostListItem)}
+	<div class="row-wrap">
+		<a
+			class="row"
+			class:selected={item.path === selectedPath}
+			href={resolve(`/?post=${encodeURIComponent(item.path)}`)}
+		>
+			<strong>{item.title}</strong>
+			<span class="post-meta">
+				<DeployBadge post={item} />
+				<span>{item.date || 'undated'}</span>
+				{#if item.pin}<span>pinned</span>{/if}
+			</span>
+			{#if item.tags?.length}
+				<small>{item.tags.join(' · ')}</small>
+			{/if}
+		</a>
+		{#if !isEditing(item)}
+			<button class="add-q" type="button" onclick={() => postAction('queueAdd', { path: item.path })}>
+				+ Edit
+			</button>
+		{/if}
+	</div>
+{/snippet}
 
 <aside class="sidebar" class:closed={!open} aria-label="Posts">
 	<header class="sidebar-head">
@@ -96,71 +133,76 @@
 		<button class:active={filter === 'all'} onclick={() => (filter = 'all')} type="button">
 			All <em>{counts.all}</em>
 		</button>
+		<button class:active={filter === 'editing'} onclick={() => (filter = 'editing')} type="button">
+			Editing <em>{counts.editing}</em>
+		</button>
 		<button class:active={filter === 'drafts'} onclick={() => (filter = 'drafts')} type="button">
 			Drafts <em>{counts.drafts}</em>
 		</button>
 		<button class:active={filter === 'ready'} onclick={() => (filter = 'ready')} type="button">
 			Ready <em>{counts.ready}</em>
 		</button>
-		<button class:active={filter === 'edit'} onclick={() => (filter = 'edit')} type="button">
-			Edit <em>{counts.edit}</em>
-		</button>
 	</div>
 
 	<input class="search" type="search" bind:value={query} placeholder="Search…" aria-label="Search posts" />
 
 	<nav class="post-list" aria-label="Post list">
-		{#each filteredPosts as item (item.path)}
-			<a
-				class:selected={item.path === selectedPath}
-				href={resolve(`/?post=${encodeURIComponent(item.path)}`)}
-			>
-				<strong>{item.title}</strong>
-				<span class="post-meta">
-					<DeployBadge post={item} />
-					<span>{item.date || 'undated'}</span>
-					{#if item.pin}<span>pinned</span>{/if}
-				</span>
-				{#if item.tags?.length}
-					<small>{item.tags.join(' · ')}</small>
-				{/if}
-			</a>
+		{#if sectioned}
+			{#if queueItems.length}
+				<h3 class="section-label editing-label">Editing</h3>
+				<div
+					class="queue"
+					use:dndzone={{ items: queueItems, flipDurationMs: 150 }}
+					onconsider={handleDnd}
+					onfinalize={handleDndFinalize}
+				>
+					{#each queueItems as item (item.id)}
+						<div class="qrow" class:selected={item.post.path === selectedPath}>
+							<span class="grip" aria-hidden="true">⋮⋮</span>
+							<a href={resolve(`/?post=${encodeURIComponent(item.post.path)}`)}>
+								<strong>{item.post.title}</strong>
+								<span class="post-meta">
+									<DeployBadge post={item.post} />
+									<span>{item.post.date || 'undated'}</span>
+								</span>
+							</a>
+							<button
+								class="remove-q"
+								type="button"
+								title="Remove from editing queue"
+								onclick={() => postAction('queueRemove', { path: item.post.path })}
+							>
+								×
+							</button>
+						</div>
+					{/each}
+				</div>
+			{/if}
+			{#if recentPosts.length}
+				<h3 class="section-label">Recent</h3>
+				{#each recentPosts as item (item.path)}
+					{@render postRow(item)}
+				{/each}
+			{/if}
+			{#if restPosts.length}
+				<h3 class="section-label">Everything</h3>
+				{#each restPosts as item (item.path)}
+					{@render postRow(item)}
+				{/each}
+			{/if}
 		{:else}
-			<p class="empty">No posts match — try fewer letters.</p>
-		{/each}
+			{#each filteredPosts as item (item.path)}
+				{@render postRow(item)}
+			{:else}
+				<p class="empty">No posts match — try fewer letters.</p>
+			{/each}
+		{/if}
 	</nav>
 
-	<button class="publish-btn" type="button" onclick={runPublish} disabled={publishing || !counts.ready}>
-		{publishing ? 'Publishing…' : counts.ready ? `Publish ${counts.ready}` : 'Publish'}
-	</button>
-
-	{#if publishResult}
-		<section class="publish-result" class:ok={publishResult.ok}>
-			<h3>{publishResult.ok ? 'Published' : 'Publish errored'}</h3>
-			<p>
-				{publishResult.readyCount} pending · {publishResult.liveCount} live · {new Date(
-					publishResult.runAt
-				).toLocaleTimeString()}
-			</p>
-			{#each publishResult.results as r (r.name)}
-				<details open={!r.ok}>
-					<summary>
-						<span>{r.name}</span>
-						<em>{r.ok ? 'ok' : 'failed'}</em>
-					</summary>
-					{#if outputLinks(r.output).length}
-						<div class="links">
-							{#each outputLinks(r.output) as link (link)}
-								<a href={link} target="_blank" rel="noreferrer">{link}</a>
-							{/each}
-						</div>
-					{/if}
-				</details>
-			{/each}
-		</section>
-	{:else if publishError}
-		<p class="error">{publishError}</p>
-	{/if}
+	<footer class="footer-links">
+		<a href={resolve('/?view=deleted')}>Deleted {counts.deleted} ›</a>
+		<a class="publish-link" href={resolve('/?view=publish')}>Publish {counts.ready} ›</a>
+	</footer>
 </aside>
 
 <style>
@@ -254,7 +296,7 @@
 		cursor: pointer;
 		font: inherit;
 		font-size: 12px;
-		padding: 6px 9px;
+		padding: 6px 4px;
 		display: inline-flex;
 		gap: 5px;
 		align-items: center;
@@ -276,27 +318,6 @@
 		background: var(--hover);
 	}
 
-	.publish-btn {
-		background: var(--accent);
-		border: none;
-		border-radius: var(--radius);
-		color: #fff;
-		cursor: pointer;
-		font: inherit;
-		font-size: 13px;
-		font-weight: 600;
-		padding: 10px;
-	}
-
-	.publish-btn:hover:not(:disabled) {
-		background: var(--accent-ink);
-	}
-
-	.publish-btn:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
-	}
-
 	.search {
 		border: 1px solid var(--line);
 		border-radius: 8px;
@@ -315,7 +336,88 @@
 		min-height: 0;
 	}
 
-	.post-list a {
+	.section-label {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		color: var(--ink-3);
+		font-size: 10.5px;
+		font-weight: 600;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		margin: 8px 2px 2px;
+	}
+
+	.section-label::after {
+		content: '';
+		flex: 1;
+		height: 1px;
+		background: var(--line);
+	}
+
+	.editing-label {
+		color: var(--accent-ink);
+	}
+
+	.queue {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.qrow {
+		display: grid;
+		grid-template-columns: 14px minmax(0, 1fr) 20px;
+		gap: 8px;
+		align-items: center;
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 8px;
+		padding: 8px 6px;
+		cursor: grab;
+	}
+
+	.qrow.selected {
+		box-shadow: inset 2px 0 0 var(--accent);
+	}
+
+	.qrow .grip {
+		color: var(--ink-3);
+		font-size: 13px;
+		letter-spacing: -1px;
+		text-align: center;
+	}
+
+	.qrow a {
+		display: grid;
+		gap: 3px;
+		color: inherit;
+		text-decoration: none;
+		font-size: 13px;
+		min-width: 0;
+	}
+
+	.remove-q {
+		background: transparent;
+		border: none;
+		border-radius: 6px;
+		color: var(--ink-3);
+		cursor: pointer;
+		font-size: 14px;
+		line-height: 1;
+		padding: 3px;
+	}
+
+	.remove-q:hover {
+		background: var(--hover);
+		color: var(--danger);
+	}
+
+	.row-wrap {
+		position: relative;
+	}
+
+	.row {
 		display: grid;
 		gap: 3px;
 		border-radius: 8px;
@@ -325,17 +427,39 @@
 		font-size: 13px;
 	}
 
-	.post-list a:hover {
+	.row:hover {
 		background: var(--hover);
 	}
 
-	.post-list a.selected {
+	.row.selected {
 		background: var(--hover);
 		box-shadow: inset 2px 0 0 var(--accent);
 	}
 
+	.add-q {
+		position: absolute;
+		right: 8px;
+		top: 50%;
+		transform: translateY(-50%);
+		border: 1px solid var(--line);
+		background: var(--paper);
+		color: var(--accent-ink);
+		border-radius: 999px;
+		font-size: 11px;
+		padding: 3px 9px;
+		cursor: pointer;
+		opacity: 0;
+		transition: opacity 120ms;
+	}
+
+	.row-wrap:hover .add-q,
+	.add-q:focus-visible {
+		opacity: 1;
+	}
+
 	.post-meta,
-	.post-list small {
+	.row small,
+	.qrow small {
 		color: var(--ink-3);
 		font-size: 11px;
 	}
@@ -354,70 +478,43 @@
 		padding: 14px;
 	}
 
-	.publish-result {
-		border-left: 3px solid var(--danger);
-		display: grid;
-		gap: 8px;
-		padding-left: 10px;
-		font-size: 12px;
-	}
-
-	.publish-result.ok {
-		border-color: var(--ok);
-	}
-
-	.publish-result h3 {
-		margin: 0;
-		font-size: 13px;
-	}
-
-	.publish-result details {
-		background: var(--paper);
-		border: 1px solid var(--line);
-		border-radius: 8px;
-		padding: 6px 8px;
-	}
-
-	.publish-result summary {
-		cursor: pointer;
+	.footer-links {
 		display: flex;
 		justify-content: space-between;
-		font-size: 12px;
+		align-items: center;
+		font-size: 11.5px;
+		padding: 0 2px;
 	}
 
-	.publish-result summary em {
-		font-style: normal;
-		color: var(--danger);
+	.footer-links a {
+		color: var(--ink-3);
+		text-decoration: none;
 	}
 
-	.publish-result.ok summary em {
-		color: var(--ok);
+	.footer-links a:hover {
+		color: var(--ink-2);
 	}
 
-	.links {
-		display: grid;
-		gap: 4px;
-		margin-top: 6px;
-	}
-
-	.links a {
+	.footer-links a.publish-link {
 		color: var(--accent-ink);
-		font-size: 11px;
-		word-break: break-all;
+		font-weight: 600;
+		font-size: 12px;
+		border: 1px solid var(--line);
+		background: var(--paper);
+		border-radius: 999px;
+		padding: 5px 12px;
 	}
 
-	.error {
-		background: color-mix(in srgb, var(--danger) 10%, transparent);
-		border-radius: var(--radius);
-		color: var(--danger);
-		font-size: 12px;
-		margin: 0;
-		padding: 8px 12px;
+	.footer-links a.publish-link:hover {
+		border-color: var(--accent);
 	}
 
 	@media (max-width: 720px) {
 		.sidebar {
 			border-right: none;
+		}
+		.add-q {
+			opacity: 1;
 		}
 	}
 </style>

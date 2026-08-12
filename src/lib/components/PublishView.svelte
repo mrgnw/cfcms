@@ -1,0 +1,381 @@
+<script lang="ts">
+	import { invalidateAll } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import type { DeployStatus, PendingChange, PublishData } from '$lib/types';
+
+	let { changes, lastPublishedAt }: { changes: PendingChange[]; lastPublishedAt: string | null } = $props();
+
+	let publishing = $state(false);
+	let result = $state<PublishData | null>(null);
+	let error = $state<string | null>(null);
+
+	let totals = $derived({
+		added: changes.reduce((sum, change) => sum + (change.added ?? 0), 0),
+		deleted: changes.reduce((sum, change) => sum + (change.deleted ?? 0), 0)
+	});
+
+	const badgeLabel = (status: DeployStatus) =>
+		status === 'ready' ? 'new' : status === 'delete' ? 'remove' : status;
+
+	function scaleWord(change: PendingChange) {
+		if (change.status === 'ready') return 'new';
+		if (change.status === 'unpublish' || change.status === 'delete') return '';
+		if (change.added == null || change.deleted == null) return '';
+		const touched = change.added + change.deleted;
+		if (touched <= 8) return 'typos';
+		return 'reworked';
+	}
+
+	function barSegments(change: PendingChange) {
+		if (change.status === 'ready') return { add: 100, del: 0 };
+		const added = change.added ?? 0;
+		const deleted = change.deleted ?? 0;
+		const touched = added + deleted;
+		if (!touched) return { add: 0, del: 0 };
+		const span = Math.min(100, Math.round((touched / 60) * 100));
+		return {
+			add: Math.round((added / touched) * span),
+			del: Math.round((deleted / touched) * span)
+		};
+	}
+
+	async function runPublish() {
+		publishing = true;
+		error = null;
+		result = null;
+		try {
+			const res = await fetch('/publish', { method: 'POST' });
+			const data = await res.json();
+			if (!res.ok) {
+				if (Array.isArray(data.results)) result = data;
+				throw new Error(data.message ?? 'Publish failed');
+			}
+			result = data;
+			await invalidateAll();
+		} catch (caught) {
+			error = caught instanceof Error ? caught.message : String(caught);
+		} finally {
+			publishing = false;
+		}
+	}
+
+	function outputLinks(output: string) {
+		return Array.from(
+			new Set(
+				output.match(/https:\/\/[^\s)]+\.workers\.dev[^\s)]*|https:\/\/[^\s)]+\.pages\.dev[^\s)]*/g) ?? []
+			)
+		);
+	}
+</script>
+
+<div class="publish-view">
+	<header class="view-head">
+		<a class="back" href={resolve('/')} aria-label="Back to posts">‹</a>
+		<h2>Publish</h2>
+		<span class="summary">
+			{changes.length} pending
+			{#if totals.added || totals.deleted}
+				· <em class="add">+{totals.added}</em> <em class="del">−{totals.deleted}</em>
+			{/if}
+		</span>
+	</header>
+
+	<div class="changes">
+		{#each changes as change (change.path)}
+			{@const bar = barSegments(change)}
+			<a class="change-row" href={resolve(`/?post=${encodeURIComponent(change.path)}`)}>
+				<span class="title">{change.title} <span class="date">{change.date}</span></span>
+				<span class="badge {change.status}">{badgeLabel(change.status)}</span>
+				<span class="delta">
+					{#if change.status === 'ready'}
+						<em class="add">+{change.words} words</em>
+					{:else if change.added != null && change.deleted != null}
+						<em class="add">+{change.added}</em>
+						<em class="del">−{change.deleted}</em>
+						{#if scaleWord(change)}· {scaleWord(change)}{/if}
+					{:else}
+						no baseline to diff
+					{/if}
+				</span>
+				<span class="bar" aria-hidden="true">
+					{#if bar.add}<i class="add" style:width="{bar.add}%"></i>{/if}
+					{#if bar.del}<i class="del" style:width="{bar.del}%"></i>{/if}
+				</span>
+			</a>
+		{:else}
+			<p class="empty">Nothing pending — everything live matches the content files.</p>
+		{/each}
+	</div>
+
+	<button class="publish-btn" type="button" onclick={runPublish} disabled={publishing || !changes.length}>
+		{publishing
+			? 'Publishing…'
+			: changes.length
+				? `Publish ${changes.length} ${changes.length === 1 ? 'change' : 'changes'}`
+				: 'Nothing to publish'}
+	</button>
+
+	{#if lastPublishedAt}
+		<p class="note">last published {new Date(lastPublishedAt).toLocaleString()}</p>
+	{/if}
+
+	{#if result}
+		<section class="result" class:ok={result.ok}>
+			<h3>{result.ok ? 'Published' : 'Publish errored'}</h3>
+			{#each result.results as target (target.name)}
+				<details open={!target.ok}>
+					<summary>
+						<span>{target.name}</span>
+						<em>{target.ok ? `ok · ${(target.durationMs / 1000).toFixed(1)}s` : 'failed'}</em>
+					</summary>
+					{#if outputLinks(target.output).length}
+						<div class="links">
+							{#each outputLinks(target.output) as link (link)}
+								<a href={link} target="_blank" rel="noreferrer">{link}</a>
+							{/each}
+						</div>
+					{/if}
+				</details>
+			{/each}
+		</section>
+	{:else if error}
+		<p class="error">{error}</p>
+	{/if}
+</div>
+
+<style>
+	.publish-view {
+		max-width: 560px;
+		margin: 0 auto;
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+		padding-top: 4vh;
+	}
+
+	.view-head {
+		display: flex;
+		align-items: baseline;
+		gap: 10px;
+	}
+
+	.view-head .back {
+		color: var(--ink-3);
+		font-size: 18px;
+		text-decoration: none;
+	}
+
+	.view-head h2 {
+		font-family: var(--font-display);
+		font-size: 26px;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+		margin: 0;
+	}
+
+	.summary {
+		color: var(--ink-2);
+		font-size: 13px;
+	}
+
+	.summary em,
+	.delta em {
+		font-style: normal;
+	}
+
+	.add {
+		color: var(--ok);
+	}
+
+	.del {
+		color: var(--danger);
+	}
+
+	.changes {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.change-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 4px 10px;
+		background: var(--bg);
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		color: inherit;
+		padding: 10px 12px;
+		font-size: 13px;
+		text-decoration: none;
+	}
+
+	.change-row:hover {
+		border-color: var(--ink-3);
+	}
+
+	.title {
+		font-weight: 600;
+	}
+
+	.date {
+		color: var(--ink-3);
+		font-size: 11px;
+		font-weight: 400;
+	}
+
+	.badge {
+		justify-self: end;
+		font-size: 10px;
+		font-weight: 650;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+		border-radius: 999px;
+		padding: 2px 8px;
+	}
+
+	.badge.ready {
+		background: color-mix(in srgb, var(--ok) 14%, transparent);
+		color: var(--ok);
+	}
+
+	.badge.changed {
+		background: color-mix(in srgb, var(--accent) 14%, transparent);
+		color: var(--accent-ink);
+	}
+
+	.badge.unpublish,
+	.badge.delete {
+		background: color-mix(in srgb, var(--danger) 12%, transparent);
+		color: var(--danger);
+	}
+
+	.delta {
+		color: var(--ink-3);
+		font-size: 11px;
+		display: flex;
+		gap: 5px;
+	}
+
+	.bar {
+		justify-self: end;
+		align-self: center;
+		display: flex;
+		gap: 1px;
+		height: 5px;
+		width: 54px;
+		border-radius: 3px;
+		overflow: hidden;
+		background: var(--hover);
+	}
+
+	.bar i {
+		display: block;
+		height: 100%;
+	}
+
+	.bar i.add {
+		background: var(--ok);
+	}
+
+	.bar i.del {
+		background: var(--danger);
+	}
+
+	.publish-btn {
+		background: var(--accent);
+		border: none;
+		border-radius: var(--radius);
+		color: #fff;
+		cursor: pointer;
+		font: inherit;
+		font-size: 13px;
+		font-weight: 600;
+		padding: 11px;
+	}
+
+	.publish-btn:hover:not(:disabled) {
+		background: var(--accent-ink);
+	}
+
+	.publish-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	.note {
+		color: var(--ink-3);
+		font-size: 11.5px;
+		text-align: center;
+		margin: -6px 0 0;
+	}
+
+	.empty {
+		color: var(--ink-3);
+		font-size: 13px;
+		text-align: center;
+		padding: 18px;
+		margin: 0;
+	}
+
+	.result {
+		border-left: 3px solid var(--danger);
+		display: grid;
+		gap: 8px;
+		padding-left: 10px;
+		font-size: 12px;
+	}
+
+	.result.ok {
+		border-color: var(--ok);
+	}
+
+	.result h3 {
+		margin: 0;
+		font-size: 13px;
+	}
+
+	.result details {
+		background: var(--bg);
+		border: 1px solid var(--line);
+		border-radius: 8px;
+		padding: 6px 8px;
+	}
+
+	.result summary {
+		cursor: pointer;
+		display: flex;
+		justify-content: space-between;
+		font-size: 12px;
+	}
+
+	.result summary em {
+		font-style: normal;
+		color: var(--danger);
+	}
+
+	.result.ok summary em {
+		color: var(--ok);
+	}
+
+	.links {
+		display: grid;
+		gap: 4px;
+		margin-top: 6px;
+	}
+
+	.links a {
+		color: var(--accent-ink);
+		font-size: 11px;
+		word-break: break-all;
+	}
+
+	.error {
+		background: color-mix(in srgb, var(--danger) 10%, transparent);
+		border-radius: var(--radius);
+		color: var(--danger);
+		font-size: 12px;
+		margin: 0;
+		padding: 8px 12px;
+	}
+</style>

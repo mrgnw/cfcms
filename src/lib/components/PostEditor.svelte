@@ -19,7 +19,6 @@
 	let tagsText = $state(initial.tags.join(', '));
 	let publishField = $state(initial.publish);
 	let pinField = $state(initial.pin);
-	let editField = $state(initial.editRequested);
 	let deleteField = $state(initial.deleteRequested);
 	let customField = $state(initial.custom);
 	let bodyField = $state(untrack(() => post.body));
@@ -88,7 +87,6 @@
 			tags: currentTags,
 			publish: publishField,
 			pin: pinField,
-			editRequested: editField,
 			deleteRequested: deleteField,
 			custom: customField
 		});
@@ -226,12 +224,18 @@
 			</svg>
 		</label>
 
-		<label class="icon-toggle edit-toggle" title="Wants edit">
-			<input aria-label="Wants edit" type="checkbox" bind:checked={editField} onchange={markDirty} />
-			<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-				<path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" />
-			</svg>
-		</label>
+		<form class="queue-form" method="POST" action={post.editingOrder != null ? '?/queueRemove' : '?/queueAdd'}>
+			<input type="hidden" name="path" value={post.path} />
+			<button
+				class="icon-toggle edit-toggle"
+				class:queued={post.editingOrder != null}
+				title={post.editingOrder != null ? 'Remove from editing queue' : 'Add to editing queue'}
+			>
+				<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" />
+				</svg>
+			</button>
+		</form>
 
 		<label class="icon-toggle delete-toggle" title="Delete">
 			<input aria-label="Delete" type="checkbox" bind:checked={deleteField} onchange={toggleDelete} />
@@ -492,7 +496,17 @@
 		color: var(--danger);
 	}
 
-	.edit-toggle:has(input:checked) {
+	.queue-form {
+		display: contents;
+	}
+
+	.edit-toggle {
+		background: transparent;
+		border: none;
+		font: inherit;
+	}
+
+	.edit-toggle.queued {
 		background: color-mix(in srgb, var(--accent) 12%, transparent);
 		color: var(--accent-ink);
 	}

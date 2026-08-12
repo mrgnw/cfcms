@@ -1,15 +1,29 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import DeletedView from '$lib/components/DeletedView.svelte';
 	import HomePanel from '$lib/components/HomePanel.svelte';
 	import PostEditor from '$lib/components/PostEditor.svelte';
+	import PublishView from '$lib/components/PublishView.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
-	import { isPending, statusOf, type LlmDraft, type Post, type PostFilter, type PostListItem } from '$lib/types';
+	import {
+		isEditing,
+		isPending,
+		statusOf,
+		type LlmDraft,
+		type PendingChange,
+		type Post,
+		type PostFilter,
+		type PostListItem
+	} from '$lib/types';
 
 	type PageData = {
 		posts: PostListItem[];
 		post: Post | null;
 		llmDraft: LlmDraft | null;
+		view: 'publish' | 'deleted' | null;
+		pendingChanges: PendingChange[] | null;
+		lastPublishedAt: string | null;
 	};
 
 	let { data }: { data: PageData } = $props();
@@ -18,21 +32,25 @@
 	let newTitle = $state('');
 	let filter = $state<PostFilter>('all');
 
+	let deletedPosts = $derived(data.posts.filter((p) => p.deleteRequested));
+	let livePosts = $derived(data.posts.filter((p) => !p.deleteRequested));
+
 	let counts = $derived({
-		all: data.posts.length,
-		drafts: data.posts.filter((p) => statusOf(p) === 'draft').length,
-		ready: data.posts.filter((p) => isPending(statusOf(p))).length,
-		edit: data.posts.filter((p) => p.editRequested).length
+		all: livePosts.length,
+		drafts: livePosts.filter((p) => statusOf(p) === 'draft').length,
+		ready: livePosts.filter((p) => isPending(statusOf(p))).length,
+		editing: livePosts.filter(isEditing).length,
+		deleted: deletedPosts.length
 	});
 
-	let recentPosts = $derived(data.posts.filter((p) => statusOf(p) !== 'deleted').slice(0, 8));
+	let recentPosts = $derived(livePosts.slice(0, 8));
 </script>
 
 <svelte:head>
-	<title>{data.post?.title ?? 'Posts'} · cms.xcc.es</title>
+	<title>{data.view === 'publish' ? 'Publish' : data.view === 'deleted' ? 'Deleted' : (data.post?.title ?? 'Posts')} · cms.xcc.es</title>
 </svelte:head>
 
-<main class="shell" class:sidebar-closed={!sidebarOpen} class:has-post={Boolean(data.post)}>
+<main class="shell" class:sidebar-closed={!sidebarOpen} class:has-post={Boolean(data.post || data.view)}>
 	<Sidebar
 		posts={data.posts}
 		selectedPath={data.post?.path}
@@ -43,7 +61,11 @@
 	/>
 
 	<section class="workbench" aria-label="Editor">
-		{#if data.post}
+		{#if data.view === 'publish'}
+			<PublishView changes={data.pendingChanges ?? []} lastPublishedAt={data.lastPublishedAt} />
+		{:else if data.view === 'deleted'}
+			<DeletedView posts={deletedPosts} />
+		{:else if data.post}
 			<a class="mobile-back" href={resolve('/')} aria-label="Back to post list">
 				<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7">
 					<path d="M10 3 5 8l5 5" stroke-linecap="round" stroke-linejoin="round" />
