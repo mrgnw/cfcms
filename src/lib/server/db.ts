@@ -4,41 +4,46 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { contentBaseDirectory } from './paths';
 
-const databasePath = resolve(env.BLOG_CMS_DB ?? resolve(process.cwd(), '.data/cms.db'));
-const legacyDeployStatePath = resolve(
-	env.BLOG_CMS_DEPLOY_STATE_FILE ?? resolve(contentBaseDirectory, '.cms/deploy-state.json')
-);
+// Lazy init: opening at module load would run during `vite build` with
+// build-time cwd/env and poison the db with a wrong-path legacy import.
+let instance: DatabaseSync | null = null;
 
-mkdirSync(dirname(databasePath), { recursive: true });
+const db = () => {
+	if (instance) return instance;
 
-export const db = new DatabaseSync(databasePath);
+	const databasePath = resolve(env.BLOG_CMS_DB ?? resolve(process.cwd(), '.data/cms.db'));
+	mkdirSync(dirname(databasePath), { recursive: true });
 
-db.exec(`
-	PRAGMA journal_mode = WAL;
+	instance = new DatabaseSync(databasePath);
+	instance.exec(`
+		PRAGMA journal_mode = WAL;
 
-	CREATE TABLE IF NOT EXISTS posts (
-		path TEXT PRIMARY KEY,
-		editing_order INTEGER,
-		published_hash TEXT,
-		published_title TEXT,
-		published_slug TEXT,
-		published_commit TEXT,
-		published_at TEXT
-	);
+		CREATE TABLE IF NOT EXISTS posts (
+			path TEXT PRIMARY KEY,
+			editing_order INTEGER,
+			published_hash TEXT,
+			published_title TEXT,
+			published_slug TEXT,
+			published_commit TEXT,
+			published_at TEXT
+		);
 
-	CREATE TABLE IF NOT EXISTS meta (
-		key TEXT PRIMARY KEY,
-		value TEXT
-	);
-`);
+		CREATE TABLE IF NOT EXISTS meta (
+			key TEXT PRIMARY KEY,
+			value TEXT
+		);
+	`);
+	importLegacyDeployState();
+	return instance;
+};
 
 const getMeta = (key: string): string | null => {
-	const row = db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as { value: string } | undefined;
+	const row = db().prepare('SELECT value FROM meta WHERE key = ?').get(key) as { value: string } | undefined;
 	return row?.value ?? null;
 };
 
 const setMeta = (key: string, value: string) => {
-	db.prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?').run(
+	db().prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?').run(
 		key,
 		value,
 		value
@@ -53,9 +58,13 @@ type LegacyDeployState = {
 const importLegacyDeployState = () => {
 	if (getMeta('importedLegacyDeployState')) return;
 
+	const legacyDeployStatePath = resolve(
+		env.BLOG_CMS_DEPLOY_STATE_FILE ?? resolve(contentBaseDirectory, '.cms/deploy-state.json')
+	);
+
 	if (existsSync(legacyDeployStatePath)) {
 		const legacy = JSON.parse(readFileSync(legacyDeployStatePath, 'utf8')) as LegacyDeployState;
-		const insert = db.prepare(`
+		const insert = db().prepare(`
 			INSERT INTO posts (path, published_hash, published_title, published_slug, published_at)
 			VALUES (?, ?, ?, ?, ?)
 			ON CONFLICT(path) DO UPDATE SET
@@ -65,18 +74,16 @@ const importLegacyDeployState = () => {
 				published_at = excluded.published_at
 		`);
 
-		db.exec('BEGIN');
+		db().exec('BEGIN');
 		for (const [path, post] of Object.entries(legacy.posts ?? {})) {
 			insert.run(path, post.hash, post.title, post.slug, post.deployedAt);
 		}
 		if (legacy.lastPublishedAt) setMeta('lastPublishedAt', legacy.lastPublishedAt);
-		db.exec('COMMIT');
+		db().exec('COMMIT');
 	}
 
 	setMeta('importedLegacyDeployState', new Date().toISOString());
 };
-
-importLegacyDeployState();
 
 export type PublishedPostState = {
 	hash: string;
@@ -89,7 +96,7 @@ export type PublishedPostState = {
 export const getLastPublishedAt = () => getMeta('lastPublishedAt');
 
 export const getPublishedPosts = (): Record<string, PublishedPostState> => {
-	const rows = db
+	const rows = db()
 		.prepare(
 			`SELECT path, published_hash, published_title, published_slug, published_commit, published_at
 			 FROM posts WHERE published_hash IS NOT NULL`
@@ -122,7 +129,7 @@ export const recordPublished = (
 	commit: string | null
 ) => {
 	const deployedAt = new Date().toISOString();
-	const upsert = db.prepare(`
+	const upsert = db().prepare(`
 		INSERT INTO posts (path, published_hash, published_title, published_slug, published_commit, published_at)
 		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(path) DO UPDATE SET
@@ -133,20 +140,20 @@ export const recordPublished = (
 			published_at = excluded.published_at
 	`);
 
-	db.exec('BEGIN');
-	db.prepare('UPDATE posts SET published_hash = NULL, published_commit = NULL, published_at = NULL').run();
+	db().exec('BEGIN');
+	db().prepare('UPDATE posts SET published_hash = NULL, published_commit = NULL, published_at = NULL').run();
 	for (const post of posts) {
 		upsert.run(post.path, post.contentHash, post.title, post.slug, commit, deployedAt);
 	}
-	db.prepare('DELETE FROM posts WHERE published_hash IS NULL AND editing_order IS NULL').run();
+	db().prepare('DELETE FROM posts WHERE published_hash IS NULL AND editing_order IS NULL').run();
 	setMeta('lastPublishedAt', deployedAt);
-	db.exec('COMMIT');
+	db().exec('COMMIT');
 
 	return deployedAt;
 };
 
 export const getEditingOrder = (): Map<string, number> => {
-	const rows = db
+	const rows = db()
 		.prepare('SELECT path, editing_order FROM posts WHERE editing_order IS NOT NULL ORDER BY editing_order')
 		.all() as { path: string; editing_order: number }[];
 
@@ -154,35 +161,35 @@ export const getEditingOrder = (): Map<string, number> => {
 };
 
 export const addToEditing = (path: string) => {
-	const max = db.prepare('SELECT COALESCE(MAX(editing_order), -1) AS max FROM posts').get() as { max: number };
-	db.prepare(
+	const max = db().prepare('SELECT COALESCE(MAX(editing_order), -1) AS max FROM posts').get() as { max: number };
+	db().prepare(
 		`INSERT INTO posts (path, editing_order) VALUES (?, ?)
 		 ON CONFLICT(path) DO UPDATE SET editing_order = COALESCE(posts.editing_order, excluded.editing_order)`
 	).run(path, max.max + 1);
 };
 
 export const removeFromEditing = (path: string) => {
-	db.exec('BEGIN');
-	db.prepare('UPDATE posts SET editing_order = NULL WHERE path = ?').run(path);
-	db.prepare('DELETE FROM posts WHERE published_hash IS NULL AND editing_order IS NULL').run();
-	db.exec('COMMIT');
+	db().exec('BEGIN');
+	db().prepare('UPDATE posts SET editing_order = NULL WHERE path = ?').run(path);
+	db().prepare('DELETE FROM posts WHERE published_hash IS NULL AND editing_order IS NULL').run();
+	db().exec('COMMIT');
 };
 
 export const reorderEditing = (paths: string[]) => {
 	if (paths.length > 500) throw new Error('Editing queue reorder exceeds sane bounds');
 
 	const current = getEditingOrder();
-	const update = db.prepare('UPDATE posts SET editing_order = ? WHERE path = ?');
+	const update = db().prepare('UPDATE posts SET editing_order = ? WHERE path = ?');
 
-	db.exec('BEGIN');
+	db().exec('BEGIN');
 	for (const [index, path] of paths.entries()) {
 		if (!current.has(path)) {
-			db.exec('ROLLBACK');
+			db().exec('ROLLBACK');
 			throw new Error(`Cannot reorder unknown queue entry: ${path}`);
 		}
 		update.run(index, path);
 	}
-	db.exec('COMMIT');
+	db().exec('COMMIT');
 };
 
 export const seedEditingQueue = (paths: string[]) => {
@@ -194,12 +201,12 @@ export const seedEditingQueue = (paths: string[]) => {
 };
 
 export const pruneMissingPosts = (existingPaths: Set<string>) => {
-	const rows = db.prepare('SELECT path FROM posts').all() as { path: string }[];
-	const remove = db.prepare('DELETE FROM posts WHERE path = ?');
+	const rows = db().prepare('SELECT path FROM posts').all() as { path: string }[];
+	const remove = db().prepare('DELETE FROM posts WHERE path = ?');
 
-	db.exec('BEGIN');
+	db().exec('BEGIN');
 	for (const row of rows) {
 		if (!existingPaths.has(row.path)) remove.run(row.path);
 	}
-	db.exec('COMMIT');
+	db().exec('COMMIT');
 };
