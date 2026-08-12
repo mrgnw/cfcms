@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Queue mockups · cms</title>
+<title>Editing queue mockup · cms</title>
 <style>
 	:root {
 		--paper: #fdfbf6;
@@ -15,6 +15,7 @@
 		--hover: #ece5d7;
 		--accent: #c05b2e;
 		--accent-ink: #9c4415;
+		--ok: #3c7a44;
 		--danger: #a43b2f;
 		--radius: 10px;
 		--font-display: 'Iowan Old Style', Palatino, Georgia, serif;
@@ -84,7 +85,7 @@
 	.row .meta { color: var(--ink-3); font-size: 11px; display: flex; gap: 6px; align-items: center; }
 	.row:hover { background: var(--hover); }
 
-	/* queue rows */
+	/* editing (queue) rows */
 	.qrow {
 		display: grid; grid-template-columns: 14px 1fr; gap: 2px 10px;
 		align-items: center; border-radius: 8px; padding: 8px 10px 8px 6px;
@@ -96,11 +97,6 @@
 	.qrow .grip { grid-row: span 2; color: var(--ink-3); font-size: 13px; letter-spacing: -1px; text-align: center; }
 	.qrow strong { font-weight: 600; }
 	.qrow .meta { color: var(--ink-3); font-size: 11px; }
-	.qrow.numbered { grid-template-columns: 18px 1fr; }
-	.qrow.numbered .num {
-		grid-row: span 2; font-family: var(--font-display); font-size: 15px;
-		color: var(--accent); text-align: center;
-	}
 
 	/* hover add-to-queue */
 	.row .add-q {
@@ -113,20 +109,55 @@
 
 	.footer-links {
 		display: flex; justify-content: space-between; align-items: center;
-		color: var(--ink-3); font-size: 11.5px; padding: 0 2px;
+		font-size: 11.5px; padding: 0 2px;
 	}
-	.footer-links a { color: inherit; text-decoration: none; }
+	.footer-links a { color: var(--ink-3); text-decoration: none; }
 	.footer-links a:hover { color: var(--ink-2); }
-	.publish {
-		background: var(--accent); border: none; border-radius: var(--radius);
-		color: #fff; font: inherit; font-size: 13px; font-weight: 600; padding: 10px;
+	.footer-links a.publish-link {
+		color: var(--accent-ink); font-weight: 600; font-size: 12px;
+		border: 1px solid var(--line); background: var(--paper);
+		border-radius: 999px; padding: 5px 12px;
 	}
+	.footer-links a.publish-link:hover { border-color: var(--accent); }
 
-	/* deleted view */
-	.deleted-head {
-		display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2);
+	/* views (publish, deleted) */
+	.view-head {
+		display: flex; align-items: baseline; gap: 8px; color: var(--ink-2);
 	}
-	.deleted-head strong { font-family: var(--font-display); font-size: 16px; color: var(--ink); }
+	.view-head .back { color: var(--ink-3); text-decoration: none; font-size: 14px; }
+	.view-head strong { font-family: var(--font-display); font-size: 18px; color: var(--ink); }
+	.view-head span { font-size: 12px; }
+	.change-row {
+		display: flex; justify-content: space-between; align-items: center; gap: 8px;
+		background: var(--paper); border: 1px solid var(--line); border-radius: 8px;
+		padding: 8px 10px; font-size: 13px;
+	}
+	.change-row .title { font-weight: 600; }
+	.change-row .date { color: var(--ink-3); font-size: 11px; font-weight: 400; }
+	.badge {
+		font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+		border-radius: 999px; padding: 2px 8px;
+	}
+	.badge.new { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+	.badge.changed { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-ink); }
+	.badge.unpublish { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+	.publish-btn {
+		background: var(--accent); border: none; border-radius: var(--radius);
+		color: #fff; font: inherit; font-size: 13px; font-weight: 600; padding: 11px;
+		cursor: pointer;
+	}
+	.publish-note { color: var(--ink-3); font-size: 11.5px; text-align: center; margin: -4px 0 0; }
+	.result {
+		border-left: 3px solid var(--ok); padding-left: 10px;
+		display: grid; gap: 6px; font-size: 12px; color: var(--ink-2);
+	}
+	.result h3 { margin: 0; font-size: 13px; color: var(--ink); }
+	.result .target {
+		background: var(--paper); border: 1px solid var(--line); border-radius: 8px;
+		padding: 6px 8px; display: flex; justify-content: space-between;
+	}
+	.result .target em { font-style: normal; color: var(--ok); }
+
 	.drow {
 		display: flex; justify-content: space-between; align-items: center; gap: 8px;
 		border-radius: 8px; padding: 8px 10px; font-size: 13px; color: var(--ink-2);
@@ -143,18 +174,18 @@
 <body>
 
 <section class="variant">
-	<h2>A — Queue section pinned in All</h2>
-	<p>Queue lives at the top of the main list as a labeled group. Drag the ⋮⋮ rows to reorder (try it). Hovering any other row reveals “+ Queue”. Deleted is a quiet footer link, out of the list.</p>
+	<h2>Main list</h2>
+	<p>Editing → Recent → Everything. Editing rows drag to reorder (try it). Hover a row for “+ Edit”. Publish and Deleted are views, reached from the footer — no direct publish button here.</p>
 	<div class="frame">
 		<div class="filters">
 			<button class="active">All <em>99</em></button>
-			<button>Queue <em>3</em></button>
+			<button>Editing <em>3</em></button>
 			<button>Drafts <em>85</em></button>
-			<button>Ready <em>0</em></button>
+			<button>Ready <em>2</em></button>
 		</div>
 		<div class="search">Search…</div>
-		<div class="section-label queue">Queue</div>
-		<div class="list" id="queue-a">
+		<div class="section-label queue">Editing</div>
+		<div class="list" id="queue">
 			<div class="qrow" draggable="true">
 				<span class="grip">⋮⋮</span>
 				<strong>making subagents terse too</strong>
@@ -167,61 +198,6 @@
 			</div>
 			<div class="qrow" draggable="true">
 				<span class="grip">⋮⋮</span>
-				<strong>dropped self-hosted authentik for a workers idp</strong>
-				<span class="meta">2026-07-19 · auth · cloudflare</span>
-			</div>
-		</div>
-		<div class="section-label">Everything</div>
-		<div class="list">
-			<div class="row">
-				<strong>the port collision census</strong>
-				<span class="meta">2026-08-02 · tooling</span>
-				<button class="add-q">+ Queue</button>
-			</div>
-			<div class="row">
-				<strong>tabs, spaces, and other hills</strong>
-				<span class="meta">2026-07-30 · Software</span>
-				<button class="add-q">+ Queue</button>
-			</div>
-			<div class="row">
-				<strong>weeknotes 30</strong>
-				<span class="meta">2026-07-26</span>
-				<button class="add-q">+ Queue</button>
-			</div>
-		</div>
-		<div class="footer-links">
-			<a href="#deleted">Deleted 2 ›</a>
-			<span></span>
-		</div>
-		<button class="publish">Publish</button>
-	</div>
-</section>
-
-<section class="variant">
-	<h2>B — Numbered “On deck” card</h2>
-	<p>Queue is a visually distinct card with explicit positions — stronger “this is a pipeline” feel. Same drag reorder, numbers update. Rest of the list stays untouched below.</p>
-	<div class="frame">
-		<div class="filters">
-			<button class="active">All <em>99</em></button>
-			<button>Queue <em>3</em></button>
-			<button>Drafts <em>85</em></button>
-			<button>Ready <em>0</em></button>
-		</div>
-		<div class="search">Search…</div>
-		<div class="section-label queue">On deck</div>
-		<div class="list" id="queue-b">
-			<div class="qrow numbered" draggable="true">
-				<span class="num">1</span>
-				<strong>making subagents terse too</strong>
-				<span class="meta">2026-07-28 · claude-code · skills</span>
-			</div>
-			<div class="qrow numbered" draggable="true">
-				<span class="num">2</span>
-				<strong>Simple... where?</strong>
-				<span class="meta">2026-08-05 · Software · principles</span>
-			</div>
-			<div class="qrow numbered" draggable="true">
-				<span class="num">3</span>
 				<strong>dropped self-hosted authentik for a workers idp</strong>
 				<span class="meta">2026-07-19 · auth · cloudflare</span>
 			</div>
@@ -231,28 +207,74 @@
 			<div class="row">
 				<strong>the port collision census</strong>
 				<span class="meta">2026-08-02 · tooling</span>
-				<button class="add-q">+ Queue</button>
+				<button class="add-q">+ Edit</button>
 			</div>
 			<div class="row">
 				<strong>tabs, spaces, and other hills</strong>
 				<span class="meta">2026-07-30 · Software</span>
-				<button class="add-q">+ Queue</button>
+				<button class="add-q">+ Edit</button>
+			</div>
+			<div class="row">
+				<strong>weeknotes 30</strong>
+				<span class="meta">2026-07-26</span>
+				<button class="add-q">+ Edit</button>
+			</div>
+		</div>
+		<div class="section-label">Everything</div>
+		<div class="list">
+			<div class="row">
+				<strong>a blog is a database with opinions</strong>
+				<span class="meta">2026-07-12 · Software</span>
+				<button class="add-q">+ Edit</button>
+			</div>
+			<div class="row">
+				<strong>weeknotes 29</strong>
+				<span class="meta">2026-07-05</span>
+				<button class="add-q">+ Edit</button>
 			</div>
 		</div>
 		<div class="footer-links">
 			<a href="#deleted">Deleted 2 ›</a>
-			<span></span>
+			<a class="publish-link" href="#publish">Publish 2 ›</a>
 		</div>
-		<button class="publish">Publish</button>
+	</div>
+</section>
+
+<section class="variant" id="publish">
+	<h2>Publish — dedicated view</h2>
+	<p>Shows exactly what a publish will do before you commit to it. The button lives here and only here. Results render in place after a run.</p>
+	<div class="frame">
+		<div class="view-head">
+			<a class="back" href="#">‹</a>
+			<strong>Publish</strong>
+			<span>2 pending changes</span>
+		</div>
+		<div class="list">
+			<div class="change-row">
+				<span class="title">Simple... where? <span class="date">2026-08-05</span></span>
+				<span class="badge new">new</span>
+			</div>
+			<div class="change-row">
+				<span class="title">weeknotes 30 <span class="date">2026-07-26</span></span>
+				<span class="badge changed">changed</span>
+			</div>
+		</div>
+		<button class="publish-btn">Publish 2 changes</button>
+		<p class="publish-note">last published 2026-08-10 · 18:42</p>
+		<div class="result">
+			<h3>Published</h3>
+			<div class="target"><span>blog</span><em>ok · 4.2s</em></div>
+			<div class="target"><span>push</span><em>ok</em></div>
+		</div>
 	</div>
 </section>
 
 <section class="variant" id="deleted">
 	<h2>Deleted — separate view</h2>
-	<p>Reached only from the footer link. Not a filter tab, never mixed into All. Restore puts a post back to draft; Purge removes the file.</p>
+	<p>Reached only from the footer link. Never mixed into the main list. Restore puts a post back to draft; Purge removes the file.</p>
 	<div class="frame">
-		<div class="deleted-head">
-			<span>‹</span>
+		<div class="view-head">
+			<a class="back" href="#">‹</a>
 			<strong>Deleted</strong>
 			<span>2 posts</span>
 		</div>
@@ -270,29 +292,24 @@
 </section>
 
 <script>
-	for (const list of [document.getElementById('queue-a'), document.getElementById('queue-b')]) {
-		let dragged = null;
-		list.addEventListener('dragstart', (e) => {
-			dragged = e.target.closest('.qrow');
-			dragged.classList.add('dragging');
-		});
-		list.addEventListener('dragend', () => {
-			dragged?.classList.remove('dragging');
-			dragged = null;
-			renumber(list);
-		});
-		list.addEventListener('dragover', (e) => {
-			e.preventDefault();
-			const over = e.target.closest('.qrow');
-			if (!over || over === dragged) return;
-			const rect = over.getBoundingClientRect();
-			const before = e.clientY < rect.top + rect.height / 2;
-			list.insertBefore(dragged, before ? over : over.nextSibling);
-		});
-	}
-	function renumber(list) {
-		list.querySelectorAll('.num').forEach((n, i) => { n.textContent = i + 1; });
-	}
+	const list = document.getElementById('queue');
+	let dragged = null;
+	list.addEventListener('dragstart', (e) => {
+		dragged = e.target.closest('.qrow');
+		dragged.classList.add('dragging');
+	});
+	list.addEventListener('dragend', () => {
+		dragged?.classList.remove('dragging');
+		dragged = null;
+	});
+	list.addEventListener('dragover', (e) => {
+		e.preventDefault();
+		const over = e.target.closest('.qrow');
+		if (!over || over === dragged) return;
+		const rect = over.getBoundingClientRect();
+		const before = e.clientY < rect.top + rect.height / 2;
+		list.insertBefore(dragged, before ? over : over.nextSibling);
+	});
 </script>
 </body>
 </html>
