@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { MediaQuery } from 'svelte/reactivity';
 	import { dndzone, type DndEvent } from 'svelte-dnd-action';
+	import { swipeable, type SwipeEndEventDetail } from '@svelte-put/swipeable';
 	import DeployBadge from './DeployBadge.svelte';
 	import { isEditing, isPending, statusOf, type PostCounts, type PostFilter, type PostListItem } from '$lib/types';
 
@@ -22,6 +24,9 @@
 	} = $props();
 
 	let query = $state('');
+	let swipedPath = $state<string | null>(null);
+
+	const touchLayout = new MediaQuery('max-width: 720px');
 
 	let visiblePosts = $derived(posts.filter((post) => !post.deleteRequested));
 
@@ -66,8 +71,28 @@
 	async function postAction(action: string, fields: Record<string, string>) {
 		const fd = new FormData();
 		for (const [key, value] of Object.entries(fields)) fd.set(key, value);
-		await fetch(`?/${action}`, { method: 'POST', body: fd });
+		const res = await fetch(`?/${action}`, { method: 'POST', body: fd });
 		await invalidateAll();
+		return res.ok;
+	}
+
+	function cancelSwipe(event: PointerEvent) {
+		swipedPath = null;
+		const wrap = (event.target as HTMLElement).closest<HTMLElement>('.row-wrap');
+		wrap?.style.setProperty('--swipe-distance-x', '0px');
+	}
+
+	async function finishSwipe(event: CustomEvent<SwipeEndEventDetail>, path: string) {
+		const wrap = event.currentTarget as HTMLElement;
+
+		if (!event.detail.passThreshold || event.detail.direction !== 'left') {
+			swipedPath = null;
+			return;
+		}
+		if (!(await postAction('trash', { path }))) {
+			wrap.style.setProperty('--swipe-distance-x', '0px');
+			swipedPath = null;
+		}
 	}
 
 	function handleDnd(event: CustomEvent<DndEvent<QueueItem>>) {
@@ -82,11 +107,26 @@
 </script>
 
 {#snippet postRow(item: PostListItem)}
-	<div class="row-wrap">
+	<div
+		class="row-wrap"
+		use:swipeable={{
+			direction: 'left',
+			threshold: '40%',
+			disableTouchEvents: false,
+			enabled: touchLayout.current
+		}}
+		onswipestart={() => (swipedPath = item.path)}
+		onswipeend={(event) => finishSwipe(event, item.path)}
+	>
+		<span class="swipe-hint" aria-hidden="true">Delete</span>
 		<a
 			class="row"
 			class:selected={item.path === selectedPath}
 			href={resolve(`/?post=${encodeURIComponent(item.path)}`)}
+			draggable="false"
+			onclick={(event) => {
+				if (swipedPath) event.preventDefault();
+			}}
 		>
 			<strong>{item.title}</strong>
 			<span class="post-meta">
@@ -98,24 +138,39 @@
 				<small>{item.tags.join(' · ')}</small>
 			{/if}
 		</a>
-		{#if !isEditing(item)}
+		<span class="row-actions" class:swiping={swipedPath === item.path}>
+			{#if !isEditing(item)}
+				<button
+					class="add-q"
+					type="button"
+					title="Add to editing queue"
+					aria-label="Add to editing queue"
+					onclick={() => !swipedPath && postAction('queueAdd', { path: item.path })}
+				>
+					<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0" />
+						<path d="M12 7a5 5 0 1 0 5 5" />
+						<path d="M13 3.055A9 9 0 1 0 20.941 11" />
+						<path d="M15 6v3h3l3-3h-3V3zm0 3l-3 3" />
+					</svg>
+				</button>
+			{/if}
 			<button
-				class="add-q"
+				class="del-q"
 				type="button"
-				title="Add to editing queue"
-				aria-label="Add to editing queue"
-				onclick={() => postAction('queueAdd', { path: item.path })}
+				title="Delete post"
+				aria-label="Delete post"
+				onclick={() => postAction('trash', { path: item.path })}
 			>
-				<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0" />
-					<path d="M12 7a5 5 0 1 0 5 5" />
-					<path d="M13 3.055A9 9 0 1 0 20.941 11" />
-					<path d="M15 6v3h3l3-3h-3V3zm0 3l-3 3" />
+				<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M4 7h16M10 4h4M9 11v6M15 11v6M6 7l1 13h10l1-13" />
 				</svg>
 			</button>
-		{/if}
+		</span>
 	</div>
 {/snippet}
+
+<svelte:window onpointercancel={cancelSwipe} />
 
 <aside class="sidebar" class:closed={!open} aria-label="Posts">
 	<header class="sidebar-head">
@@ -428,7 +483,24 @@
 		position: relative;
 	}
 
+	.swipe-hint {
+		display: none;
+		position: absolute;
+		inset: 0;
+		align-items: center;
+		justify-content: flex-end;
+		background: var(--danger);
+		border-radius: 8px;
+		color: var(--paper);
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		padding-right: 14px;
+		text-transform: uppercase;
+	}
+
 	.row {
+		position: relative;
 		display: grid;
 		gap: 3px;
 		border-radius: 8px;
@@ -436,6 +508,7 @@
 		padding: 8px 10px;
 		text-decoration: none;
 		font-size: 13px;
+		transform: translateX(var(--swipe-distance-x, 0px));
 	}
 
 	.row:hover {
@@ -447,26 +520,43 @@
 		box-shadow: inset 2px 0 0 var(--accent);
 	}
 
-	.add-q {
+	.row-actions {
 		position: absolute;
 		right: 8px;
 		top: 50%;
-		transform: translateY(-50%);
+		transform: translate(var(--swipe-distance-x, 0px), -50%);
+		display: flex;
+		gap: 4px;
+		opacity: 0;
+		transition: opacity 120ms;
+	}
+
+	.row-actions button {
 		border: 1px solid var(--line);
 		background: var(--paper);
-		color: var(--accent-ink);
 		border-radius: 999px;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		padding: 5px;
 		cursor: pointer;
-		opacity: 0;
-		transition: opacity 120ms;
 	}
 
-	.row-wrap:hover .add-q,
-	.add-q:focus-visible {
+	.add-q {
+		color: var(--accent-ink);
+	}
+
+	.del-q {
+		color: var(--ink-3);
+	}
+
+	.del-q:hover {
+		color: var(--danger);
+		border-color: var(--danger);
+	}
+
+	.row-wrap:hover .row-actions,
+	.row-actions:focus-within {
 		opacity: 1;
 	}
 
@@ -526,8 +616,23 @@
 		.sidebar {
 			border-right: none;
 		}
-		.add-q {
+		.row-actions {
 			opacity: 1;
+		}
+		.row-actions.swiping {
+			opacity: 0;
+		}
+		.row-actions .del-q {
+			display: none;
+		}
+		.swipe-hint {
+			display: flex;
+		}
+		.row {
+			background: var(--bg);
+		}
+		.row-wrap {
+			touch-action: pan-y;
 		}
 	}
 </style>

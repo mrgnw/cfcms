@@ -74,6 +74,15 @@ export const parseFrontmatter = (raw: string): ParsedFrontmatter => {
 	};
 };
 
+export const setDeleteFlag = (raw: string, wanted: boolean): string => {
+	const lines = raw.split(/\r?\n/).filter((line) => !/^(delete|deleted):/.test(line));
+
+	while (lines.length && !lines.at(-1)?.trim()) lines.pop();
+	if (wanted) lines.push('delete: true');
+
+	return lines.join('\n');
+};
+
 export const formatYamlScalar = (value: string) => {
 	if (value === '') return "''";
 	if (/^[A-Za-z0-9 _.\-/]+$/.test(value)) return value;
