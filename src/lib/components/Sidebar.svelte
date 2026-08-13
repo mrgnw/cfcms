@@ -76,19 +76,23 @@
 		return res.ok;
 	}
 
-	function snapBack(row: HTMLElement) {
-		row.style.setProperty('--swipe-distance-x', '0px');
+	function cancelSwipe(event: PointerEvent) {
 		swipedPath = null;
+		const wrap = (event.target as HTMLElement).closest<HTMLElement>('.row-wrap');
+		wrap?.style.setProperty('--swipe-distance-x', '0px');
 	}
 
 	async function finishSwipe(event: CustomEvent<SwipeEndEventDetail>, path: string) {
-		const row = event.currentTarget as HTMLElement;
+		const wrap = event.currentTarget as HTMLElement;
 
 		if (!event.detail.passThreshold || event.detail.direction !== 'left') {
 			swipedPath = null;
 			return;
 		}
-		if (!(await postAction('trash', { path }))) snapBack(row);
+		if (!(await postAction('trash', { path }))) {
+			wrap.style.setProperty('--swipe-distance-x', '0px');
+			swipedPath = null;
+		}
 	}
 
 	function handleDnd(event: CustomEvent<DndEvent<QueueItem>>) {
@@ -103,25 +107,26 @@
 </script>
 
 {#snippet postRow(item: PostListItem)}
-	<div class="row-wrap">
+	<div
+		class="row-wrap"
+		use:swipeable={{
+			direction: 'left',
+			threshold: '40%',
+			disableTouchEvents: false,
+			enabled: touchLayout.current
+		}}
+		onswipestart={() => (swipedPath = item.path)}
+		onswipeend={(event) => finishSwipe(event, item.path)}
+	>
 		<span class="swipe-hint" aria-hidden="true">Delete</span>
 		<a
 			class="row"
 			class:selected={item.path === selectedPath}
 			href={resolve(`/?post=${encodeURIComponent(item.path)}`)}
-			use:swipeable={{
-				direction: 'left',
-				threshold: '40%',
-				disableTouchEvents: false,
-				enabled: touchLayout.current
-			}}
-			onswipestart={() => (swipedPath = item.path)}
-			onswipeend={(event) => finishSwipe(event, item.path)}
-			onpointercancel={(event) => snapBack(event.currentTarget)}
+			draggable="false"
 			onclick={(event) => {
 				if (swipedPath) event.preventDefault();
 			}}
-			style:transform="translateX(var(--swipe-distance-x, 0px))"
 		>
 			<strong>{item.title}</strong>
 			<span class="post-meta">
@@ -140,7 +145,7 @@
 					type="button"
 					title="Add to editing queue"
 					aria-label="Add to editing queue"
-					onclick={() => postAction('queueAdd', { path: item.path })}
+					onclick={() => !swipedPath && postAction('queueAdd', { path: item.path })}
 				>
 					<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0" />
@@ -164,6 +169,8 @@
 		</span>
 	</div>
 {/snippet}
+
+<svelte:window onpointercancel={cancelSwipe} />
 
 <aside class="sidebar" class:closed={!open} aria-label="Posts">
 	<header class="sidebar-head">
@@ -501,6 +508,7 @@
 		padding: 8px 10px;
 		text-decoration: none;
 		font-size: 13px;
+		transform: translateX(var(--swipe-distance-x, 0px));
 	}
 
 	.row:hover {
@@ -516,7 +524,7 @@
 		position: absolute;
 		right: 8px;
 		top: 50%;
-		transform: translateY(-50%);
+		transform: translate(var(--swipe-distance-x, 0px), -50%);
 		display: flex;
 		gap: 4px;
 		opacity: 0;
@@ -614,7 +622,7 @@
 		.row-actions.swiping {
 			opacity: 0;
 		}
-		.del-q {
+		.row-actions .del-q {
 			display: none;
 		}
 		.swipe-hint {
@@ -622,6 +630,8 @@
 		}
 		.row {
 			background: var(--bg);
+		}
+		.row-wrap {
 			touch-action: pan-y;
 		}
 	}
