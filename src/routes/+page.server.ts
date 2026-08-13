@@ -144,6 +144,24 @@ export const actions = {
 		}
 		return { reordered: paths.length };
 	},
+	trash: async ({ request }) => {
+		const form = await request.formData();
+		const path = String(form.get('path') ?? '');
+
+		if (!path) return fail(400, { message: 'Post path is required' });
+
+		const post = await getPost(path);
+		const frontmatter = post.frontmatter
+			.split(/\r?\n/)
+			.filter((line) => !/^(delete|deleted):/.test(line))
+			.concat('delete: true')
+			.join('\n');
+
+		await savePost(path, frontmatter, post.body);
+		await commitPost(path, 'save');
+		removeFromEditing(path);
+		return { trashed: path };
+	},
 	restore: async ({ request }) => {
 		const form = await request.formData();
 		const path = String(form.get('path') ?? '');
