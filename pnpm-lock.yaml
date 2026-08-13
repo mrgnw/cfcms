@@ -14,6 +14,9 @@ importers:
       '@milkdown/kit':
         specifier: ^7.21.1
         version: 7.21.1(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.42.1)(typescript@6.0.3)
+      '@svelte-put/swipeable':
+        specifier: ^1.2.0
+        version: 1.2.0(svelte@5.55.5)
       runed:
         specifier: ^0.37.1
         version: 0.37.1(@sveltejs/kit@2.59.1(@sveltejs/vite-plugin-svelte@7.1.2(svelte@5.55.5)(vite@8.0.12(@types/node@25.7.0)))(svelte@5.55.5)(typescript@6.0.3)(vite@8.0.12(@types/node@25.7.0)))(svelte@5.55.5)
@@ -620,6 +623,11 @@ packages:
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
+
+  '@svelte-put/swipeable@1.2.0':
+    resolution: {integrity: sha512-hFLkIACJo57bu8FqgpWt4P+zUgpVIBYoN7frA0xTHx9et3jfpjV5iiil0DDUPjyu7I7smxC2htnVRcCrDG/MLQ==}
+    peerDependencies:
+      svelte: ^5.1.0
 
   '@sveltejs/acorn-typescript@1.0.9':
     resolution: {integrity: sha512-lVJX6qEgs/4DOcRTpo56tmKzVPtoWAaVbL4hfO7t7NVwl9AAXzQR6cihesW1BmNMPl+bK6dreu2sOKBP2Q9CIA==}
@@ -2292,6 +2300,10 @@ snapshots:
     optional: true
 
   '@standard-schema/spec@1.1.0': {}
+
+  '@svelte-put/swipeable@1.2.0(svelte@5.55.5)':
+    dependencies:
+      svelte: 5.55.5
 
   '@sveltejs/acorn-typescript@1.0.9(acorn@8.16.0)':
     dependencies:
