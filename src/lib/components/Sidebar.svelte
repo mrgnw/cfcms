@@ -162,7 +162,7 @@
 							<a href={resolve(`/?post=${encodeURIComponent(item.post.path)}`)}>
 								<strong>{item.post.title}</strong>
 								<span class="post-meta">
-									<DeployBadge post={item.post} />
+									<DeployBadge post={item.post} showEditing={false} />
 									<span>{item.post.date || 'undated'}</span>
 								</span>
 							</a>

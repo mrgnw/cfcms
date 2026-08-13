@@ -1,12 +1,15 @@
 <script lang="ts">
 	import { isEditing, statusOf, type PostListItem } from '$lib/types';
 
-	let { post }: { post: Pick<PostListItem, 'deployStatus' | 'editingOrder'> } = $props();
+	let {
+		post,
+		showEditing = true
+	}: { post: Pick<PostListItem, 'deployStatus' | 'editingOrder'>; showEditing?: boolean } = $props();
 
 	let status = $derived(statusOf(post));
 </script>
 
-{#if isEditing(post)}
+{#if showEditing && isEditing(post)}
 	<em class="deploy-badge edit">editing</em>
 {/if}
 {#if status !== 'draft'}
