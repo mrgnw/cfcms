@@ -99,8 +99,19 @@
 			{/if}
 		</a>
 		{#if !isEditing(item)}
-			<button class="add-q" type="button" onclick={() => postAction('queueAdd', { path: item.path })}>
-				+ Edit
+			<button
+				class="add-q"
+				type="button"
+				title="Add to editing queue"
+				aria-label="Add to editing queue"
+				onclick={() => postAction('queueAdd', { path: item.path })}
+			>
+				<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0" />
+					<path d="M12 7a5 5 0 1 0 5 5" />
+					<path d="M13 3.055A9 9 0 1 0 20.941 11" />
+					<path d="M15 6v3h3l3-3h-3V3zm0 3l-3 3" />
+				</svg>
 			</button>
 		{/if}
 	</div>
@@ -445,8 +456,10 @@
 		background: var(--paper);
 		color: var(--accent-ink);
 		border-radius: 999px;
-		font-size: 11px;
-		padding: 3px 9px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 5px;
 		cursor: pointer;
 		opacity: 0;
 		transition: opacity 120ms;
