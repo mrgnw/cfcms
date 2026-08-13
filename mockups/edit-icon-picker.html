@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Editing icon picker · cms.xcc.es</title>
+<script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+<style>
+	:root {
+		--paper: #f7f6f3;
+		--bg: #ffffff;
+		--line: #e4e2dc;
+		--hover: #efede8;
+		--ink: #1c1917;
+		--ink-2: #57534e;
+		--ink-3: #a8a29e;
+		--accent: #d97757;
+		--accent-ink: #b45309;
+	}
+	* { box-sizing: border-box; }
+	body {
+		background: var(--paper);
+		color: var(--ink);
+		font: 14px/1.5 -apple-system, system-ui, sans-serif;
+		margin: 0 auto;
+		max-width: 880px;
+		padding: 32px 20px 80px;
+	}
+	h1 { font-size: 22px; letter-spacing: -0.01em; margin: 0 0 4px; }
+	.sub { color: var(--ink-2); font-size: 13px; margin: 0 0 24px; }
+
+	.demo {
+		background: var(--bg);
+		border: 1px solid var(--line);
+		border-radius: 12px;
+		margin-bottom: 28px;
+		overflow: hidden;
+		position: sticky;
+		top: 12px;
+		z-index: 2;
+		box-shadow: 0 2px 4px rgba(0,0,0,0.03), 0 4px 12px rgba(0,0,0,0.06);
+	}
+	.demo-row {
+		align-items: center;
+		display: flex;
+		gap: 10px;
+		padding: 10px 14px;
+	}
+	.demo-row + .demo-row { border-top: 1px solid var(--line); }
+	.demo-row .title { flex: 1; font-weight: 600; font-size: 13px; }
+	.demo-row .date { color: var(--ink-3); font-size: 11px; font-weight: 400; }
+	.icon-btn {
+		align-items: center;
+		background: none;
+		border: none;
+		border-radius: 8px;
+		color: var(--ink-3);
+		cursor: pointer;
+		display: inline-flex;
+		font-size: 17px;
+		padding: 5px;
+	}
+	.icon-btn:hover { background: var(--hover); color: var(--accent-ink); }
+	.icon-btn.queued { color: var(--accent-ink); }
+	.badge {
+		background: color-mix(in srgb, var(--accent) 14%, transparent);
+		border-radius: 999px;
+		color: var(--accent-ink);
+		font-size: 10px;
+		font-weight: 650;
+		padding: 3px 6px;
+		text-transform: uppercase;
+	}
+	.picked-name {
+		border-top: 1px solid var(--line);
+		color: var(--ink-2);
+		font-family: ui-monospace, monospace;
+		font-size: 11.5px;
+		padding: 7px 14px;
+	}
+
+	h2 {
+		color: var(--ink-2);
+		font-size: 12px;
+		font-weight: 650;
+		letter-spacing: 0.05em;
+		margin: 26px 0 10px;
+		text-transform: uppercase;
+	}
+	.grid {
+		display: grid;
+		gap: 8px;
+		grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	}
+	.tile {
+		align-items: center;
+		background: var(--bg);
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		cursor: pointer;
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding: 14px 8px 10px;
+		text-align: center;
+		transition: border-color 120ms, transform 120ms;
+	}
+	.tile:hover { border-color: var(--accent); transform: translateY(-1px); }
+	.tile.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--bg)); }
+	.tile iconify-icon { color: var(--accent-ink); font-size: 26px; }
+	.tile .name {
+		color: var(--ink-3);
+		font-family: ui-monospace, monospace;
+		font-size: 10px;
+		word-break: break-all;
+	}
+	.tile .note { color: var(--ink-2); font-size: 11px; }
+</style>
+</head>
+<body>
+<h1>Pick the “editing” icon</h1>
+<p class="sub">Click any tile to preview it in the rows below and copy its Iconify name. Small size (17px) is how it renders in the sidebar.</p>
+
+<div class="demo">
+	<div class="demo-row">
+		<span class="title">Svelte 5 runes migration <span class="date">2026-07-30</span></span>
+		<button class="icon-btn" title="Give this post special attention"><iconify-icon id="demo-icon-idle" icon="tabler:target-arrow"></iconify-icon></button>
+	</div>
+	<div class="demo-row">
+		<span class="title">Kagaya service manager <span class="date">2026-08-02</span></span>
+		<span class="badge">editing</span>
+		<button class="icon-btn queued" title="In the editing queue"><iconify-icon id="demo-icon-queued" icon="tabler:target-arrow"></iconify-icon></button>
+	</div>
+	<div class="picked-name" id="picked-name">tabler:target-arrow</div>
+</div>
+
+<main id="groups"></main>
+
+<script>
+	const groups = [
+		['Aim & focus', [
+			['tabler:target-arrow', 'on target'],
+			['tabler:crosshair', 'locked on'],
+			['tabler:focus-2', 'in focus'],
+			['tabler:viewfinder', 'framed'],
+			['tabler:zoom-in-area', 'under the glass'],
+			['tabler:telescope', 'tracking it'],
+			['ph:binoculars', 'watching closely'],
+			['tabler:magnet', 'pulled in'],
+		]],
+		['Workbench', [
+			['tabler:hammer', 'being worked'],
+			['tabler:tools', 'on the bench'],
+			['ph:wrench', 'under repair'],
+			['tabler:needle-thread', 'stitching it up'],
+			['tabler:scissors', 'cutting'],
+			['ph:hard-hat', 'hard-hat area'],
+			['tabler:barrier-block', 'construction'],
+			['tabler:traffic-cone', 'roadwork'],
+		]],
+		['Lab & alchemy', [
+			['tabler:flask-2', 'in the lab'],
+			['ph:test-tube', 'experimenting'],
+			['tabler:atom', 'reacting'],
+			['game-icons:cauldron', 'brewing'],
+			['tabler:crystal-ball', 'taking shape'],
+			['ph:magic-wand', 'being transformed'],
+			['tabler:wand', 'wand, straight'],
+			['noto:alembic', 'distilling'],
+		]],
+		['Heat & momentum', [
+			['tabler:flame', 'hot'],
+			['ph:fire-simple', 'hot, quieter'],
+			['tabler:bolt', 'charged'],
+			['game-icons:campfire', 'keeping warm'],
+			['game-icons:torch', 'carrying the torch'],
+			['tabler:rocket', 'launching soon'],
+			['tabler:comet', 'incoming'],
+			['noto:hot-pepper', 'spicy draft'],
+		]],
+		['Creatures', [
+			['noto:unicorn', 'the chosen one'],
+			['noto:beaver', 'busy building'],
+			['noto:otter', 'juggling it'],
+			['noto:octopus', 'many hands on it'],
+			['noto:snail', 'slow-cooking'],
+			['noto:t-rex', 'big energy'],
+			['noto:sloth', 'honest'],
+			['noto:crab', 'sideways progress'],
+		]],
+		['Odd & typographic', [
+			['ooui:function-argument-ltr', 'your pick #1'],
+			['tabler:pointer-collaboration-2', 'your pick #2'],
+			['ph:asterisk', 'footnoted'],
+			['tabler:north-star', 'guiding star'],
+			['tabler:lasso', 'roped in'],
+			['tabler:ufo', 'abducted for edits'],
+			['tabler:submarine', 'deep work'],
+			['tabler:seeding', 'still growing'],
+		]],
+	];
+
+	const main = document.getElementById('groups');
+	for (const [title, icons] of groups) {
+		const h = document.createElement('h2');
+		h.textContent = title;
+		main.appendChild(h);
+		const grid = document.createElement('div');
+		grid.className = 'grid';
+		for (const [name, note] of icons) {
+			const tile = document.createElement('button');
+			tile.className = 'tile';
+			tile.dataset.icon = name;
+			tile.innerHTML = `<iconify-icon icon="${name}"></iconify-icon><span class="note">${note}</span><span class="name">${name}</span>`;
+			tile.addEventListener('click', () => pick(tile));
+			grid.appendChild(tile);
+		}
+		main.appendChild(grid);
+	}
+
+	function pick(tile) {
+		const name = tile.dataset.icon;
+		document.querySelectorAll('.tile.selected').forEach((t) => t.classList.remove('selected'));
+		tile.classList.add('selected');
+		document.getElementById('demo-icon-idle').setAttribute('icon', name);
+		document.getElementById('demo-icon-queued').setAttribute('icon', name);
+		document.getElementById('picked-name').textContent = name + ' · copied';
+		navigator.clipboard?.writeText(name);
+	}
+</script>
+</body>
+</html>
