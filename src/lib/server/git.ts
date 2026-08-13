@@ -36,7 +36,7 @@ const runGit = (args: string[]): Promise<GitResult> =>
 
 const compactMessage = (value: string) => value.replace(/\s+/g, ' ').trim().slice(0, 120);
 
-export const commitPost = async (postPath: string, action: 'create' | 'save') => {
+export const commitPost = async (postPath: string, action: 'create' | 'save' | 'delete') => {
 	const gitPath = getPostGitPath(postPath);
 	const add = await runGit(['add', '--', gitPath]);
 
@@ -53,3 +53,22 @@ export const commitPost = async (postPath: string, action: 'create' | 'save') =>
 };
 
 export const pushContent = async () => runGit(['push']);
+
+export const getHeadCommit = async () => {
+	const result = await runGit(['rev-parse', 'HEAD']);
+	return result.ok ? result.output.trim() : null;
+};
+
+export const diffNumstat = async (commit: string, postPath: string) => {
+	const result = await runGit(['diff', '--numstat', commit, 'HEAD', '--', getPostGitPath(postPath)]);
+
+	if (!result.ok) return null;
+
+	const line = result.output.trim().split('\n').filter(Boolean).at(0);
+	if (!line) return { added: 0, deleted: 0 };
+
+	const [added, deleted] = line.split('\t');
+	if (added === '-' || deleted === '-') return { added: 0, deleted: 0 };
+
+	return { added: Number(added), deleted: Number(deleted) };
+};

@@ -47,6 +47,24 @@
 		if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
 	}
 
+	function snapToWordBoundary(editorView: EditorView, pos: number) {
+		const resolved = editorView.state.doc.resolve(pos);
+		if (!resolved.parent.isTextblock) return pos;
+
+		const text = resolved.parent.textContent;
+		const offset = resolved.parentOffset;
+		const isWord = (char: string | undefined) => Boolean(char && /\S/.test(char));
+		if (offset <= 0 || offset >= text.length) return pos;
+		if (!isWord(text[offset - 1]) || !isWord(text[offset])) return pos;
+
+		let left = offset;
+		let right = offset;
+		while (left > 0 && isWord(text[left - 1])) left--;
+		while (right < text.length && isWord(text[right])) right++;
+
+		return pos + (offset - left <= right - offset ? left - offset : right - offset);
+	}
+
 	function onDrop(e: DragEvent) {
 		const md = e.dataTransfer?.getData('application/x-ref-md');
 		if (!md || !crepe || !view) return;
@@ -54,7 +72,7 @@
 		const inline = e.dataTransfer?.getData('application/x-ref-inline') === '1';
 		const at = view.posAtCoords({ left: e.clientX, top: e.clientY });
 		const pos = at ? at.pos : view.state.selection.to;
-		crepe.editor.action(insertPos(md, pos, inline));
+		crepe.editor.action(insertPos(md, snapToWordBoundary(view, pos), inline));
 		view.focus();
 	}
 
