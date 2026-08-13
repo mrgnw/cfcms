@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import type { DeployStatus, PendingChange, PublishData } from '$lib/types';
+	import type { PendingChange, PublishData } from '$lib/types';
 
 	let { changes, lastPublishedAt }: { changes: PendingChange[]; lastPublishedAt: string | null } = $props();
 
@@ -13,9 +13,6 @@
 		added: changes.reduce((sum, change) => sum + (change.added ?? 0), 0),
 		deleted: changes.reduce((sum, change) => sum + (change.deleted ?? 0), 0)
 	});
-
-	const badgeLabel = (status: DeployStatus) =>
-		status === 'ready' ? 'new' : status === 'delete' ? 'remove' : status;
 
 	function scaleWord(change: PendingChange) {
 		if (change.status === 'ready') return 'new';
@@ -85,7 +82,15 @@
 			{@const bar = barSegments(change)}
 			<a class="change-row" href={resolve(`/?post=${encodeURIComponent(change.path)}`)}>
 				<span class="title">{change.title} <span class="date">{change.date}</span></span>
-				<span class="badge {change.status}">{badgeLabel(change.status)}</span>
+				<span class="right">
+					{#if change.status === 'unpublish' || change.status === 'delete'}
+						<span class="badge">{change.status === 'delete' ? 'remove' : 'unpublish'}</span>
+					{/if}
+					<span class="bar" aria-hidden="true">
+						{#if bar.add}<i class="add" style:width="{bar.add}%"></i>{/if}
+						{#if bar.del}<i class="del" style:width="{bar.del}%"></i>{/if}
+					</span>
+				</span>
 				<span class="delta">
 					{#if change.status === 'ready'}
 						<em class="add">+{change.words} words</em>
@@ -96,10 +101,6 @@
 					{:else}
 						no baseline to diff
 					{/if}
-				</span>
-				<span class="bar" aria-hidden="true">
-					{#if bar.add}<i class="add" style:width="{bar.add}%"></i>{/if}
-					{#if bar.del}<i class="del" style:width="{bar.del}%"></i>{/if}
 				</span>
 			</a>
 		{:else}
@@ -227,28 +228,21 @@
 		font-weight: 400;
 	}
 
+	.right {
+		grid-row: span 2;
+		display: grid;
+		gap: 5px;
+		justify-items: end;
+		align-content: center;
+	}
+
 	.badge {
-		justify-self: end;
 		font-size: 10px;
 		font-weight: 650;
 		letter-spacing: 0.05em;
 		text-transform: uppercase;
 		border-radius: 999px;
 		padding: 2px 8px;
-	}
-
-	.badge.ready {
-		background: color-mix(in srgb, var(--ok) 14%, transparent);
-		color: var(--ok);
-	}
-
-	.badge.changed {
-		background: color-mix(in srgb, var(--accent) 14%, transparent);
-		color: var(--accent-ink);
-	}
-
-	.badge.unpublish,
-	.badge.delete {
 		background: color-mix(in srgb, var(--danger) 12%, transparent);
 		color: var(--danger);
 	}
@@ -261,8 +255,6 @@
 	}
 
 	.bar {
-		justify-self: end;
-		align-self: center;
 		display: flex;
 		gap: 1px;
 		height: 5px;
