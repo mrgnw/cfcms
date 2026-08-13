@@ -11,6 +11,7 @@ import {
 import { addToEditing, getLastPublishedAt, removeFromEditing, reorderEditing } from '$lib/server/db';
 import { commitPost, diffNumstat } from '$lib/server/git';
 import { runPublish } from '$lib/server/publish';
+import { setDeleteFlag } from '$lib/frontmatter';
 import { isPending, statusOf } from '$lib/types';
 
 const getPendingChanges = async (posts: Awaited<ReturnType<typeof listPosts>>) => {
@@ -151,13 +152,8 @@ export const actions = {
 		if (!path) return fail(400, { message: 'Post path is required' });
 
 		const post = await getPost(path);
-		const frontmatter = post.frontmatter
-			.split(/\r?\n/)
-			.filter((line) => !/^(delete|deleted):/.test(line))
-			.concat('delete: true')
-			.join('\n');
 
-		await savePost(path, frontmatter, post.body);
+		await savePost(path, setDeleteFlag(post.frontmatter, true), post.body);
 		await commitPost(path, 'save');
 		removeFromEditing(path);
 		return { trashed: path };
@@ -169,12 +165,8 @@ export const actions = {
 		if (!path) return fail(400, { message: 'Post path is required' });
 
 		const post = await getPost(path);
-		const frontmatter = post.frontmatter
-			.split(/\r?\n/)
-			.filter((line) => !/^(delete|deleted):/.test(line))
-			.join('\n');
 
-		await savePost(path, frontmatter, post.body);
+		await savePost(path, setDeleteFlag(post.frontmatter, false), post.body);
 		await commitPost(path, 'save');
 		return { restored: path };
 	},
