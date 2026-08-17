@@ -16,11 +16,10 @@
 	}
 
 	.controls {
-		align-items: center;
 		background: #14161a;
 		border-bottom: 1px solid #24262c;
 		display: flex;
-		flex-wrap: wrap;
+		flex-direction: column;
 		gap: 8px;
 		padding: 10px 16px;
 		position: sticky;
@@ -28,11 +27,32 @@
 		z-index: 10;
 	}
 
+	.controls-top { align-items: center; display: flex; gap: 10px; }
+
 	.controls h1 {
 		font-size: 13px;
 		font-weight: 650;
 		letter-spacing: 0.02em;
-		margin: 0 12px 0 0;
+		margin: 0;
+	}
+
+	.pick-row { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; }
+
+	.pick-label {
+		color: #8b8f97;
+		font-size: 10.5px;
+		font-weight: 700;
+		letter-spacing: 0.09em;
+		text-transform: uppercase;
+		width: 42px;
+	}
+
+	.group-label {
+		color: #61656d;
+		font-size: 10.5px;
+		letter-spacing: 0.05em;
+		margin: 0 2px 0 6px;
+		text-transform: uppercase;
 	}
 
 	.pal-btn {
@@ -470,18 +490,26 @@
 <body>
 
 <div class="controls">
-	<h1>Theme palettes</h1>
-	<div id="pals"></div>
-	<span class="spacer"></span>
-	<div class="modes" id="modes">
-		<button data-mode="light">Light</button>
-		<button data-mode="dark">Dark</button>
-		<button data-mode="both" aria-pressed="true">Both</button>
+	<div class="controls-top">
+		<h1>Theme palettes</h1>
+		<span class="spacer"></span>
+		<div class="modes" id="modes">
+			<button data-mode="light">Light</button>
+			<button data-mode="dark">Dark</button>
+			<button data-mode="both" aria-pressed="true">Both</button>
+		</div>
 	</div>
+	<div class="pick-row"><span class="pick-label">Light</span><span id="lights"></span></div>
+	<div class="pick-row"><span class="pick-label">Dark</span><span id="darks"></span></div>
 </div>
 
 <p class="note">
-	Every surface below is driven only by the 12 tokens in <code>+layout.svelte</code>. The code fence uses
+	Light and dark are picked independently — every combination is valid. Lights are grouped by accent hue:
+	pairing a warm-accent light with Slate dark flips the accent from terracotta to blue when the theme
+	switches, which reads as two different products. The cool-accent lights keep one identity across both modes.
+</p>
+<p class="note">
+	Every surface is driven only by the 12 tokens in <code>+layout.svelte</code>. The code fence uses
 	<code>--bg</code> instead of <code>--paper</code> so it separates from the page — the real editor needs
 	<code>--crepe-color-surface: var(--bg)</code> for that. Syntax colors are derived from the palette
 	(<code>accent-ink</code> / <code>ok</code> / <code>warn</code> / <code>ink-3</code>), so no extra values to pick.
@@ -495,81 +523,105 @@
 </div>
 
 <script>
-	const PALETTES = [
+	const LIGHTS = [
 		{
-			id: 'paper',
-			name: 'Paper',
-			note: 'current',
-			light: {
-				paper: '#fdfbf6', bg: '#f3efe6', ink: '#262019', 'ink-2': '#6b6254', 'ink-3': '#a19682',
-				line: '#e6ded0', hover: '#ece5d7', accent: '#c05b2e', 'accent-ink': '#9c4415',
-				ok: '#3c7a44', warn: '#8a6a14', danger: '#a43b2f'
-			},
-			dark: {
-				paper: '#1c1a17', bg: '#141210', ink: '#ece5d7', 'ink-2': '#a8a094', 'ink-3': '#756d60',
-				line: '#2c2721', hover: '#26211a', accent: '#e0794a', 'accent-ink': '#f0a077',
-				ok: '#7db588', warn: '#d6b354', danger: '#e08072'
-			}
+			id: 'bone', name: 'Bone', hue: 'cool', note: 'warm near-white, cool ink, blue accent',
+			paper: '#ffffff', bg: '#f5f4f1', ink: '#1a1c20', 'ink-2': '#585c64', 'ink-3': '#9a9ea6',
+			line: '#e4e3de', hover: '#edece7', accent: '#3b6fd4', 'accent-ink': '#2d57ac',
+			ok: '#2f7d4f', warn: '#8a6512', danger: '#c33c33'
 		},
 		{
-			id: 'manuscript',
-			name: 'Manuscript',
-			note: 'deeper sepia, softer rust',
-			light: {
-				paper: '#faf5ea', bg: '#eee6d4', ink: '#2e2419', 'ink-2': '#6f6047', 'ink-3': '#a3927a',
-				line: '#e0d5bd', hover: '#e7dcc6', accent: '#a8562b', 'accent-ink': '#8a4420',
-				ok: '#4a7346', warn: '#856517', danger: '#9c3b2c'
-			},
-			dark: {
-				paper: '#201b13', bg: '#15120c', ink: '#ede3cf', 'ink-2': '#ab9d84', 'ink-3': '#776b56',
-				line: '#302819', hover: '#2a2318', accent: '#d4784a', 'accent-ink': '#e8a273',
-				ok: '#85b57e', warn: '#d4b256', danger: '#dd7d6a'
-			}
+			id: 'fog', name: 'Fog', hue: 'cool', note: 'gray sidebar, white editor, indigo accent',
+			paper: '#ffffff', bg: '#eceef2', ink: '#191c22', 'ink-2': '#545b68', 'ink-3': '#949ba8',
+			line: '#dcdfe6', hover: '#e3e6ec', accent: '#4c5fd7', 'accent-ink': '#3a48ad',
+			ok: '#2f7d4f', warn: '#8a6512', danger: '#c33c33'
 		},
 		{
-			id: 'slate',
-			name: 'Slate',
-			note: 'cool neutral, blue accent',
-			light: {
-				paper: '#ffffff', bg: '#f4f5f7', ink: '#1b1f26', 'ink-2': '#5a6472', 'ink-3': '#98a1af',
-				line: '#e2e5ea', hover: '#eaedf1', accent: '#3b6fd4', 'accent-ink': '#2d57ac',
-				ok: '#2f7d4f', warn: '#8a6512', danger: '#c33c33'
-			},
-			dark: {
-				paper: '#16191f', bg: '#0f1115', ink: '#e4e7ec', 'ink-2': '#9aa4b2', 'ink-3': '#6a7484',
-				line: '#262b34', hover: '#1f242c', accent: '#6b9bf0', 'accent-ink': '#93b6f7',
-				ok: '#5fbd80', warn: '#d9b455', danger: '#ef7f74'
-			}
+			id: 'parchment', name: 'Parchment', hue: 'cool', note: 'cream surfaces, cool blue accent',
+			paper: '#fdfaf2', bg: '#f0ebdd', ink: '#241f18', 'ink-2': '#625b4c', 'ink-3': '#9b917d',
+			line: '#e3dbc8', hover: '#eae2d0', accent: '#3f6bbf', 'accent-ink': '#305399',
+			ok: '#43764a', warn: '#856517', danger: '#a8402f'
 		},
 		{
-			id: 'linen',
-			name: 'Linen',
-			note: 'warm gray-green, teal accent',
-			light: {
-				paper: '#fbfaf7', bg: '#eef0ea', ink: '#22261f', 'ink-2': '#5f6a5c', 'ink-3': '#9aa396',
-				line: '#dfe3d9', hover: '#e6ebe0', accent: '#2f7d72', 'accent-ink': '#24625a',
-				ok: '#47773f', warn: '#86671a', danger: '#a93f30'
-			},
-			dark: {
-				paper: '#191c18', bg: '#111310', ink: '#e6eae1', 'ink-2': '#9ba795', 'ink-3': '#6b7666',
-				line: '#262b23', hover: '#1f241d', accent: '#4fada0', 'accent-ink': '#7fc9bd',
-				ok: '#7fb877', warn: '#cfb055', danger: '#e0806f'
-			}
+			id: 'slate', name: 'Slate', hue: 'cool', note: 'matches Slate dark exactly',
+			paper: '#ffffff', bg: '#f4f5f7', ink: '#1b1f26', 'ink-2': '#5a6472', 'ink-3': '#98a1af',
+			line: '#e2e5ea', hover: '#eaedf1', accent: '#3b6fd4', 'accent-ink': '#2d57ac',
+			ok: '#2f7d4f', warn: '#8a6512', danger: '#c33c33'
 		},
 		{
-			id: 'amber',
-			name: 'Ink & Amber',
-			note: 'near-neutral, high contrast',
-			light: {
-				paper: '#ffffff', bg: '#f6f5f2', ink: '#14130f', 'ink-2': '#57544c', 'ink-3': '#97938a',
-				line: '#e5e3dd', hover: '#edebe5', accent: '#b7791f', 'accent-ink': '#96601a',
-				ok: '#35714a', warn: '#8a6a14', danger: '#b23b2c'
-			},
-			dark: {
-				paper: '#171613', bg: '#0e0d0b', ink: '#eceae4', 'ink-2': '#a19d94', 'ink-3': '#6f6b62',
-				line: '#262420', hover: '#1e1c19', accent: '#dfa235', 'accent-ink': '#f0c268',
-				ok: '#6fb383', warn: '#d8b657', danger: '#e58072'
-			}
+			id: 'linen', name: 'Linen', hue: 'cool', note: 'warm gray-green, teal accent',
+			paper: '#fbfaf7', bg: '#eef0ea', ink: '#22261f', 'ink-2': '#5f6a5c', 'ink-3': '#9aa396',
+			line: '#dfe3d9', hover: '#e6ebe0', accent: '#2f7d72', 'accent-ink': '#24625a',
+			ok: '#47773f', warn: '#86671a', danger: '#a93f30'
+		},
+		{
+			id: 'paper', name: 'Paper', hue: 'warm', note: 'current',
+			paper: '#fdfbf6', bg: '#f3efe6', ink: '#262019', 'ink-2': '#6b6254', 'ink-3': '#a19682',
+			line: '#e6ded0', hover: '#ece5d7', accent: '#c05b2e', 'accent-ink': '#9c4415',
+			ok: '#3c7a44', warn: '#8a6a14', danger: '#a43b2f'
+		},
+		{
+			id: 'manuscript', name: 'Manuscript', hue: 'warm', note: 'deeper sepia, softer rust',
+			paper: '#faf5ea', bg: '#eee6d4', ink: '#2e2419', 'ink-2': '#6f6047', 'ink-3': '#a3927a',
+			line: '#e0d5bd', hover: '#e7dcc6', accent: '#a8562b', 'accent-ink': '#8a4420',
+			ok: '#4a7346', warn: '#856517', danger: '#9c3b2c'
+		},
+		{
+			id: 'sand', name: 'Sand', hue: 'warm', note: 'beige-gray, muted clay, lowest contrast',
+			paper: '#faf8f4', bg: '#eae5dc', ink: '#2a2621', 'ink-2': '#6a6255', 'ink-3': '#a29a8b',
+			line: '#ded7ca', hover: '#e5decf', accent: '#a86a4a', 'accent-ink': '#8a5133',
+			ok: '#4a7350', warn: '#86671a', danger: '#a54134'
+		},
+		{
+			id: 'amber', name: 'Ink & Amber', hue: 'warm', note: 'near-neutral, high contrast',
+			paper: '#ffffff', bg: '#f6f5f2', ink: '#14130f', 'ink-2': '#57544c', 'ink-3': '#97938a',
+			line: '#e5e3dd', hover: '#edebe5', accent: '#b7791f', 'accent-ink': '#96601a',
+			ok: '#35714a', warn: '#8a6a14', danger: '#b23b2c'
+		},
+		{
+			id: 'chalk', name: 'Chalk', hue: 'warm', note: 'stark white, near-black ink',
+			paper: '#ffffff', bg: '#f2f2f0', ink: '#111111', 'ink-2': '#52524f', 'ink-3': '#949490',
+			line: '#e3e3e0', hover: '#eaeae7', accent: '#d4482c', 'accent-ink': '#ab3620',
+			ok: '#2f7042', warn: '#8a6512', danger: '#c0392b'
+		},
+		{
+			id: 'rose', name: 'Rose', hue: 'warm', note: 'warm white, muted plum accent',
+			paper: '#fdfbfa', bg: '#f4eeee', ink: '#241d1f', 'ink-2': '#665a5c', 'ink-3': '#a19597',
+			line: '#e7dcdd', hover: '#ede3e3', accent: '#a8496a', 'accent-ink': '#8a3552',
+			ok: '#3c7a44', warn: '#8a6a14', danger: '#b5342f'
+		}
+	];
+
+	const DARKS = [
+		{
+			id: 'slate', name: 'Slate', note: 'picked',
+			paper: '#16191f', bg: '#0f1115', ink: '#e4e7ec', 'ink-2': '#9aa4b2', 'ink-3': '#6a7484',
+			line: '#262b34', hover: '#1f242c', accent: '#6b9bf0', 'accent-ink': '#93b6f7',
+			ok: '#5fbd80', warn: '#d9b455', danger: '#ef7f74'
+		},
+		{
+			id: 'paper', name: 'Paper', note: 'warm dark, terracotta',
+			paper: '#1c1a17', bg: '#141210', ink: '#ece5d7', 'ink-2': '#a8a094', 'ink-3': '#756d60',
+			line: '#2c2721', hover: '#26211a', accent: '#e0794a', 'accent-ink': '#f0a077',
+			ok: '#7db588', warn: '#d6b354', danger: '#e08072'
+		},
+		{
+			id: 'manuscript', name: 'Manuscript', note: 'deep sepia',
+			paper: '#201b13', bg: '#15120c', ink: '#ede3cf', 'ink-2': '#ab9d84', 'ink-3': '#776b56',
+			line: '#302819', hover: '#2a2318', accent: '#d4784a', 'accent-ink': '#e8a273',
+			ok: '#85b57e', warn: '#d4b256', danger: '#dd7d6a'
+		},
+		{
+			id: 'linen', name: 'Linen', note: 'green-gray, teal',
+			paper: '#191c18', bg: '#111310', ink: '#e6eae1', 'ink-2': '#9ba795', 'ink-3': '#6b7666',
+			line: '#262b23', hover: '#1f241d', accent: '#4fada0', 'accent-ink': '#7fc9bd',
+			ok: '#7fb877', warn: '#cfb055', danger: '#e0806f'
+		},
+		{
+			id: 'amber', name: 'Ink & Amber', note: 'blackest surface, amber',
+			paper: '#171613', bg: '#0e0d0b', ink: '#eceae4', 'ink-2': '#a19d94', 'ink-3': '#6f6b62',
+			line: '#262420', hover: '#1e1c19', accent: '#dfa235', 'accent-ink': '#f0c268',
+			ok: '#6fb383', warn: '#d8b657', danger: '#e58072'
 		}
 	];
 
@@ -718,50 +770,65 @@
 		</div>
 	`;
 
-	let current = PALETTES[0].id;
+	const picked = { light: 'bone', dark: 'slate' };
 	let mode = 'both';
 
-	const applyTokens = (el, vars) => {
-		for (const token of TOKENS) el.style.setProperty(`--${token}`, vars[token]);
-	};
+	const setOf = (m) => (m === 'light' ? LIGHTS : DARKS).find((p) => p.id === picked[m]);
 
 	const stage = document.getElementById('stage');
 
 	function renderStage() {
-		const palette = PALETTES.find((p) => p.id === current);
 		const modes = mode === 'both' ? ['light', 'dark'] : [mode];
 
 		stage.className = `stage${mode === 'both' ? ' both' : ''}`;
 		stage.innerHTML = modes
 			.map(
 				(m) => `<div class="frame">
-					<div class="frame-label">${palette.name} · ${m}</div>
+					<div class="frame-label">${setOf(m).name} · ${m}</div>
 					<div class="shell" data-mode="${m}">${shellMarkup()}</div>
 				</div>`
 			)
 			.join('');
 
 		for (const shell of stage.querySelectorAll('.shell')) {
-			applyTokens(shell, palette[shell.dataset.mode]);
+			const vars = setOf(shell.dataset.mode);
+			for (const token of TOKENS) shell.style.setProperty(`--${token}`, vars[token]);
 			shell.style.colorScheme = shell.dataset.mode;
 		}
 	}
 
-	const pals = document.getElementById('pals');
-	pals.innerHTML = PALETTES.map(
-		(p) => `<button class="pal-btn" data-id="${p.id}" aria-pressed="${p.id === current}" title="${p.note}">
+	const chipButton = (p, m) =>
+		`<button class="pal-btn" data-id="${p.id}" aria-pressed="${p.id === picked[m]}" title="${p.note}">
 			<span class="chips">
-				<i style="background:${p.light.bg}"></i><i style="background:${p.light.accent}"></i><i style="background:${p.dark.bg}"></i><i style="background:${p.dark.accent}"></i>
-			</span>${p.name}</button>`
-	).join('');
+				<i style="background:${p.bg}"></i><i style="background:${p.paper}"></i><i style="background:${p.accent}"></i>
+			</span>${p.name}</button>`;
 
-	pals.addEventListener('click', (event) => {
-		const btn = event.target.closest('.pal-btn');
-		if (!btn) return;
-		current = btn.dataset.id;
-		for (const b of pals.children) b.setAttribute('aria-pressed', String(b.dataset.id === current));
-		renderStage();
-	});
+	function wirePicker(containerId, m, html) {
+		const container = document.getElementById(containerId);
+		container.innerHTML = html;
+		container.addEventListener('click', (event) => {
+			const btn = event.target.closest('.pal-btn');
+			if (!btn) return;
+			picked[m] = btn.dataset.id;
+			for (const b of container.querySelectorAll('.pal-btn')) {
+				b.setAttribute('aria-pressed', String(b.dataset.id === picked[m]));
+			}
+			renderStage();
+		});
+	}
+
+	const lightGroups = ['cool', 'warm']
+		.map(
+			(hue) =>
+				`<span class="group-label">${hue} accent</span>` +
+				LIGHTS.filter((p) => p.hue === hue)
+					.map((p) => chipButton(p, 'light'))
+					.join('')
+		)
+		.join('');
+
+	wirePicker('lights', 'light', lightGroups);
+	wirePicker('darks', 'dark', DARKS.map((p) => chipButton(p, 'dark')).join(''));
 
 	document.getElementById('modes').addEventListener('click', (event) => {
 		const btn = event.target.closest('button');
@@ -771,18 +838,15 @@
 		renderStage();
 	});
 
-	document.getElementById('sw').innerHTML = PALETTES.map(
-		(p) =>
-			['light', 'dark']
-				.map(
-					(m, i) => `<div class="sw-row">
-						<span class="sw-name">${i === 0 ? p.name : ''}</span>
-						<span class="sw-mode">${m}</span>
-						<span class="sw-strip">${TOKENS.map((t) => `<i style="background:${p[m][t]}" title="--${t}: ${p[m][t]}"></i>`).join('')}</span>
-					</div>`
-				)
-				.join('')
-	).join('');
+	const swatchRow = (p, m, showName) => `<div class="sw-row">
+		<span class="sw-name">${showName ? p.name : ''}</span>
+		<span class="sw-mode">${m}</span>
+		<span class="sw-strip">${TOKENS.map((t) => `<i style="background:${p[t]}" title="--${t}: ${p[t]}"></i>`).join('')}</span>
+	</div>`;
+
+	document.getElementById('sw').innerHTML =
+		LIGHTS.map((p) => swatchRow(p, 'light', true)).join('') +
+		DARKS.map((p) => swatchRow(p, 'dark', true)).join('');
 
 	renderStage();
 </script>

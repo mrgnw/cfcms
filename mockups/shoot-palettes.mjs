@@ -8,20 +8,31 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, deviceScaleFactor: 2 });
 await page.goto(file);
 
-const ids = await page.$$eval('.pal-btn', (els) => els.map((el) => el.dataset.id));
-console.log('palettes:', ids.join(', '));
+const lights = await page.$$eval('#lights .pal-btn', (els) => els.map((el) => el.dataset.id));
+const darks = await page.$$eval('#darks .pal-btn', (els) => els.map((el) => el.dataset.id));
+console.log(`${lights.length} lights, ${darks.length} darks`);
 
-for (const id of ids) {
-	await page.click(`.pal-btn[data-id="${id}"]`);
+// dark stays on Slate — the light is what needs comparing
+for (const id of lights) {
+	await page.click(`#lights .pal-btn[data-id="${id}"]`);
 	await page.waitForTimeout(120);
 	const frames = await page.$$('.frame');
 	if (frames.length !== 2) throw new Error(`${id}: expected 2 frames, got ${frames.length}`);
-	for (const [i, frame] of frames.entries()) {
-		const label = await frame.$eval('.frame-label', (el) => el.textContent.trim());
-		await frame.screenshot({ path: `${outDir}/${id}-${i === 0 ? 'light' : 'dark'}.png` });
-		console.log('shot', label);
-	}
+	const label = await frames[0].$eval('.frame-label', (el) => el.textContent.trim());
+	if (!label.toLowerCase().includes('light')) throw new Error(`first frame is not the light one: ${label}`);
+	await frames[0].screenshot({ path: `${outDir}/light-${id}.png` });
+	console.log('shot', label);
 }
+
+for (const id of darks) {
+	await page.click(`#darks .pal-btn[data-id="${id}"]`);
+	await page.waitForTimeout(120);
+	const frame = (await page.$$('.frame'))[1];
+	await frame.screenshot({ path: `${outDir}/dark-${id}.png` });
+	console.log('shot', await frame.$eval('.frame-label', (el) => el.textContent.trim()));
+}
+await page.click('#darks .pal-btn[data-id="slate"]');
+await page.locator('.controls').screenshot({ path: `${outDir}/controls.png` });
 
 const paperBg = await page.$eval('.shell[data-mode="dark"]', (el) => getComputedStyle(el).getPropertyValue('--paper').trim());
 if (!paperBg) throw new Error('dark tokens not applied');
