@@ -145,4 +145,19 @@
 	.milkdown-host :global(.ProseMirror::selection) {
 		background: color-mix(in srgb, var(--accent) 18%, transparent);
 	}
+
+	/* crepe hardcodes One Dark syntax colors and its config merge (defaultsDeep) makes them
+	   impossible to replace cleanly, so code blocks keep the dark surface those colors need */
+	.milkdown-host :global(.milkdown-code-block) {
+		--crepe-color-surface: #14171d;
+		--crepe-color-surface-low: #1f242c;
+		--crepe-color-on-surface: #e4e7ec;
+		--crepe-color-on-surface-variant: #9aa4b2;
+		--crepe-color-outline: #6a7484;
+		--crepe-color-hover: #1f242c;
+		--crepe-color-secondary: #262b34;
+		--crepe-color-on-secondary: #e4e7ec;
+		border: 1px solid var(--line);
+		border-radius: 8px;
+	}
 </style>
