@@ -33,17 +33,17 @@
 	let filter = $state<PostFilter>('all');
 
 	let deletedPosts = $derived(data.posts.filter((p) => p.deleteRequested));
-	let livePosts = $derived(data.posts.filter((p) => !p.deleteRequested));
+	let activePosts = $derived(data.posts.filter((p) => !p.deleteRequested));
 
 	let counts = $derived({
-		all: livePosts.length,
-		drafts: livePosts.filter((p) => statusOf(p) === 'draft').length,
-		ready: livePosts.filter((p) => isPending(statusOf(p))).length,
-		editing: livePosts.filter(isEditing).length,
+		all: activePosts.length,
+		drafts: activePosts.filter((p) => statusOf(p) === 'draft').length,
+		ready: activePosts.filter((p) => isPending(statusOf(p))).length,
+		live: activePosts.filter((p) => statusOf(p) === 'live').length,
 		deleted: deletedPosts.length
 	});
 
-	let recentPosts = $derived(livePosts.slice(0, 8));
+	let recentPosts = $derived(activePosts.slice(0, 8));
 </script>
 
 <svelte:head>

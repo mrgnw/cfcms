@@ -44,7 +44,7 @@ export type PublishData = {
 	results: PublishResult[];
 };
 
-export type PostFilter = 'all' | 'ready' | 'drafts' | 'editing';
+export type PostFilter = 'all' | 'ready' | 'drafts' | 'live';
 
 export type PendingChange = {
 	path: string;
@@ -56,7 +56,7 @@ export type PendingChange = {
 	deleted: number | null;
 };
 
-export type PostCounts = { all: number; drafts: number; ready: number; editing: number; deleted: number };
+export type PostCounts = { all: number; drafts: number; ready: number; live: number; deleted: number };
 
 export const pendingStatuses = new Set<DeployStatus>(['ready', 'changed', 'unpublish', 'delete']);
 

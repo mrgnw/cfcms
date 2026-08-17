@@ -37,8 +37,8 @@
 		<button type="button" class="stat" onclick={() => (filter = 'ready')}>
 			<em>{counts.ready}</em><span>Ready</span>
 		</button>
-		<button type="button" class="stat" onclick={() => (filter = 'editing')}>
-			<em>{counts.editing}</em><span>Editing</span>
+		<button type="button" class="stat" onclick={() => (filter = 'live')}>
+			<em>{counts.live}</em><span>Live</span>
 		</button>
 	</div>
 

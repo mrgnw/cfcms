@@ -60,7 +60,7 @@
 			const status = statusOf(post);
 			if (filter === 'ready' && !isPending(status)) return false;
 			if (filter === 'drafts' && status !== 'draft') return false;
-			if (filter === 'editing' && !isEditing(post)) return false;
+			if (filter === 'live' && status !== 'live') return false;
 			return matchesQuery(post);
 		})
 	);
@@ -199,14 +199,14 @@
 		<button class:active={filter === 'all'} onclick={() => (filter = 'all')} type="button">
 			All <em>{counts.all}</em>
 		</button>
-		<button class:active={filter === 'editing'} onclick={() => (filter = 'editing')} type="button">
-			Editing <em>{counts.editing}</em>
-		</button>
 		<button class:active={filter === 'drafts'} onclick={() => (filter = 'drafts')} type="button">
 			Drafts <em>{counts.drafts}</em>
 		</button>
 		<button class:active={filter === 'ready'} onclick={() => (filter = 'ready')} type="button">
 			Ready <em>{counts.ready}</em>
+		</button>
+		<button class:active={filter === 'live'} onclick={() => (filter = 'live')} type="button">
+			Live <em>{counts.live}</em>
 		</button>
 	</div>
 
