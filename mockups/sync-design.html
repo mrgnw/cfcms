@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Versions &amp; conflict design · cms.xcc.es</title>
+<style>
+	* { box-sizing: border-box; }
+
+	:root {
+		--paper: #fdfbf6;
+		--bg: #f3efe6;
+		--ink: #262019;
+		--ink-2: #6b6254;
+		--line: #e6ded0;
+		--accent: #c05b2e;
+		--accent-ink: #9c4415;
+		--llm: #7c5cbf;
+		--air: #2e7bc0;
+		--mini: #3a8f5f;
+		--ph: #b8860b;
+	}
+
+	body {
+		background: var(--bg);
+		color: var(--ink);
+		font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, sans-serif;
+		margin: 0;
+		padding: 40px 20px 80px;
+	}
+
+	.page { margin: 0 auto; max-width: 760px; }
+
+	h1 { font-size: 19px; font-weight: 700; margin: 0 0 4px; }
+	.sub { color: var(--ink-2); font-size: 13px; margin: 0 0 36px; }
+
+	section { margin: 0 0 44px; }
+
+	h2 {
+		border-bottom: 1px solid var(--line);
+		font-size: 12px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		margin: 0 0 14px;
+		padding-bottom: 6px;
+		text-transform: uppercase;
+	}
+	h2 .n { color: var(--accent-ink); margin-right: 6px; }
+
+	p { margin: 0 0 10px; }
+	.note { color: var(--ink-2); font-size: 12.5px; }
+
+	code, .mono { font: 12.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+	.writer {
+		border-radius: 4px;
+		color: #fff;
+		display: inline-block;
+		font: 700 10.5px/1 ui-monospace, monospace;
+		padding: 3px 5px;
+		vertical-align: 1px;
+	}
+	.w-llm { background: var(--llm); }
+	.w-air { background: var(--air); }
+	.w-mini { background: var(--mini); }
+	.w-ph { background: var(--ph); }
+
+	/* file model */
+	.files {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		padding: 14px 18px;
+	}
+	.file { align-items: baseline; display: flex; gap: 10px; padding: 3px 0; }
+	.file .mono { min-width: 200px; }
+	.file .role { color: var(--ink-2); font-size: 12.5px; }
+	.file.main .mono { font-weight: 700; }
+	.file.ghost { opacity: 0.45; }
+
+	.pipeline { color: var(--ink-2); font-size: 12.5px; margin-top: 12px; }
+	.pipeline b { color: var(--ink); }
+
+	/* spectrum */
+	.spectrum { display: grid; gap: 1px; grid-template-columns: repeat(7, 1fr); }
+	.station { background: var(--paper); border: 1px solid var(--line); padding: 8px 8px 10px; }
+	.station:first-child { border-radius: 8px 0 0 8px; }
+	.station:last-child { border-radius: 0 8px 8px 0; }
+	.station h3 { font-size: 11px; font-weight: 700; margin: 0 0 3px; }
+	.station .who { color: var(--ink-2); font-size: 10.5px; line-height: 1.45; }
+	.station.us { box-shadow: inset 0 0 0 2px var(--accent); }
+	.station.us h3 { color: var(--accent-ink); }
+	.station.borrow { box-shadow: inset 0 -3px 0 var(--accent); }
+	.spectrum-note { color: var(--ink-2); font-size: 12px; margin-top: 8px; }
+	.spectrum-note b { color: var(--accent-ink); }
+
+	/* flow */
+	.flow { display: flex; flex-direction: column; gap: 0; }
+	.step {
+		align-items: baseline;
+		display: flex;
+		gap: 10px;
+		padding: 5px 0;
+	}
+	.cond { color: var(--ink-2); font-size: 12.5px; min-width: 265px; text-align: right; }
+	.arrow { color: var(--ink-2); }
+	.outcome {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 7px;
+		font-size: 13px;
+		padding: 5px 11px;
+	}
+	.outcome.good { border-color: color-mix(in srgb, var(--mini) 45%, var(--line)); }
+	.outcome.fork { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+	.never { color: var(--ink-2); font-size: 12.5px; margin-top: 10px; }
+	.never s { opacity: 0.75; }
+
+	/* reconcile mock */
+	.shell {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 12px;
+		display: grid;
+		gap: 0;
+		grid-template-columns: 1fr 250px;
+		overflow: hidden;
+	}
+	.editor { padding: 20px 24px; }
+	.editor h3 { font-size: 17px; margin: 0 0 12px; }
+	.para { color: var(--ink); font: 14px/1.6 Georgia, serif; margin: 0 0 12px; }
+	.para.dim { opacity: 0.45; }
+	.para.diff {
+		background: color-mix(in srgb, var(--air) 9%, transparent);
+		border-radius: 6px;
+		box-shadow: inset 2.5px 0 0 var(--air);
+		padding: 6px 10px;
+	}
+	.diff-tag {
+		color: var(--air);
+		display: block;
+		font: 700 10px/1 ui-monospace, monospace;
+		letter-spacing: 0.06em;
+		margin-bottom: 5px;
+		text-transform: uppercase;
+	}
+	.rail {
+		background: var(--bg);
+		border-left: 1px solid var(--line);
+		padding: 14px;
+	}
+	.rail-head {
+		align-items: center;
+		display: flex;
+		font-size: 12px;
+		font-weight: 700;
+		gap: 7px;
+		margin-bottom: 4px;
+	}
+	.rail-sub { color: var(--ink-2); font-size: 11px; margin-bottom: 12px; }
+	.chunk {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 8px;
+		margin-bottom: 10px;
+		padding: 9px 10px;
+	}
+	.chunk .txt { font: 12.5px/1.5 Georgia, serif; margin-bottom: 8px; }
+	.chunk .acts { display: flex; gap: 6px; }
+	.chunk button {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		color: var(--ink-2);
+		cursor: pointer;
+		font: 600 11px/1 inherit;
+		font-family: inherit;
+		padding: 4px 8px;
+	}
+	.chunk button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+	.chunk.used { opacity: 0.4; }
+	.chunk.used .acts { display: none; }
+	.rail-foot { color: var(--ink-2); font-size: 11px; margin-top: 4px; }
+
+	/* lifecycle */
+	.life { display: flex; gap: 10px; }
+	.life-stage { flex: 1; }
+	.life-stage h3 { font-size: 12px; font-weight: 700; margin: 0 0 6px; }
+	.life-stage ul { color: var(--ink-2); font-size: 12.5px; margin: 0; padding-left: 16px; }
+	.life-stage li { margin-bottom: 3px; }
+	.life-arrow { align-self: center; color: var(--ink-2); }
+
+	/* liveness table */
+	table { border-collapse: collapse; width: 100%; }
+	th, td { border-bottom: 1px solid var(--line); font-size: 13px; padding: 7px 10px; text-align: left; }
+	th { color: var(--ink-2); font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+	td b { font-weight: 650; }
+
+	/* open question */
+	.vs { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+	.opt {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		padding: 14px 16px;
+	}
+	.opt.rec { box-shadow: inset 0 0 0 2px var(--accent); }
+	.opt h3 { align-items: center; display: flex; font-size: 13px; gap: 8px; margin: 0 0 8px; }
+	.rec-tag {
+		background: var(--accent);
+		border-radius: 4px;
+		color: #fff;
+		font: 700 9.5px/1 inherit;
+		letter-spacing: 0.05em;
+		padding: 3px 5px;
+		text-transform: uppercase;
+	}
+	.opt .mono { display: block; margin: 2px 0; }
+	.opt .note { margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="page">
+	<h1>Versions &amp; conflict — design</h1>
+	<p class="sub">One writer per version file · .md in, .md out · conflict is a file, not an error</p>
+
+	<section>
+		<h2><span class="n">1</span>The model — a post is a main file plus writer versions</h2>
+		<div class="files">
+			<div class="file main"><span class="mono">notes/simple.md</span><span class="role">the post — the only file publish ever reads</span></div>
+			<div class="file"><span class="mono">notes/simple.llm.md</span><span class="role"><span class="writer w-llm">llm</span>&nbsp; llm's version — already exists today</span></div>
+			<div class="file"><span class="mono">notes/simple.air.md</span><span class="role"><span class="writer w-air">air</span>&nbsp; macbook air's version — born from a conflicting save</span></div>
+			<div class="file ghost"><span class="mono">notes/simple.ph.md</span><span class="role"><span class="writer w-ph">ph</span>&nbsp; iphone's version — only exists while it diverges</span></div>
+		</div>
+		<p class="pipeline"><b>.llm.md was never a special case</b> — it's the first instance of the general rule: a writer that doesn't currently own main writes its own version file. Everything stays plain markdown, git-tracked. Publish, deploy hashes, git history: all unchanged, all reading main only.</p>
+		<p class="note">Writer ids, shortest that stays readable: <span class="writer w-llm">llm</span> <span class="writer w-mini">mini</span> <span class="writer w-air">air</span> <span class="writer w-ph">ph</span> <code>pad</code> <code>avp</code>. Two windows on one device share an id — a same-writer collision forks to <code>air2</code>, which should be rare enough to never see.</p>
+	</section>
+
+	<section>
+		<h2><span class="n">2</span>Where this sits — seven ideologies of conflict</h2>
+		<div class="spectrum">
+			<div class="station"><h3>Exclude</h3><div class="who">locks before edit — RCS, SVN lock, Word check-out</div></div>
+			<div class="station"><h3>Reject</h3><div class="who">stale write refused — ETag/412, Wikipedia</div></div>
+			<div class="station borrow"><h3>Merge</h3><div class="who">3-way vs base — diff3, git, Unison</div></div>
+			<div class="station"><h3>Transform</h3><div class="who">reorder ops live — OT, Google Docs</div></div>
+			<div class="station"><h3>Converge</h3><div class="who">merge by construction — CRDT, Yjs, Automerge</div></div>
+			<div class="station"><h3>Commute</h3><div class="who">patches as algebra — Darcs, Pijul</div></div>
+			<div class="station us"><h3>Embrace</h3><div class="who">fork on conflict, human merges — Dropbox copies, CouchDB siblings, Bayou, git branches</div></div>
+		</div>
+		<p class="spectrum-note"><b>xccms = Embrace</b>, borrowing <b>Merge</b>'s one lesson: remember the base (every save already commits, so the base is always a git commit — 3-way diffs are free). Embrace's known failure is orphaned conflict copies that rot unread — because Dropbox and CouchDB had no merge UI. A CMS does: the reference pane already inserts chunks from a sibling version. That missing piece is the part that's already built.</p>
+	</section>
+
+	<section>
+		<h2><span class="n">3</span>One save, three outcomes</h2>
+		<div class="flow">
+			<div class="step"><span class="cond">base = current main (the 99% case)</span><span class="arrow">→</span><span class="outcome good">write <code>simple.md</code> · commit · done</span></div>
+			<div class="step"><span class="cond">base moved, but text identical to main</span><span class="arrow">→</span><span class="outcome good">no-op — already converged</span></div>
+			<div class="step"><span class="cond">base moved, text differs</span><span class="arrow">→</span><span class="outcome fork">write <code>simple.air.md</code> · commit · reconcile chip appears</span></div>
+		</div>
+		<p class="never">Never happens: <s>overwrite</s> (the lost-update bug), <s>blocked save</s> (locks), <s>silent machine merge</s>. Offline is the same path — an offline device reconnects, saves against its old base, and forks. Offline support costs nothing extra.</p>
+	</section>
+
+	<section>
+		<h2><span class="n">4</span>Reconcile — only the divergent parts</h2>
+		<div class="shell">
+			<div class="editor">
+				<h3>Simple… where?</h3>
+				<p class="para dim">Simplicity is a claim people make about the part of the system they happen to be looking at. The complexity didn't vanish — it moved.</p>
+				<p class="para diff"><span class="diff-tag">air changed this</span>The question worth asking isn't "is this simple?" but "where did the complexity go?" Someone is holding it. If it's not you, find out who.</p>
+				<p class="para dim">Frameworks advertise the part they simplified. The invoice for the part they didn't arrives later, itemized as configuration.</p>
+			</div>
+			<div class="rail">
+				<div class="rail-head"><span class="writer w-air">air</span> simple.air.md</div>
+				<div class="rail-sub">2 of 14 blocks differ · based on Tue's save</div>
+				<div class="chunk">
+					<div class="txt">The question isn't "is this simple?" — it's "who is holding the complexity now?" Every simplification is a transfer.</div>
+					<div class="acts"><button class="primary">replace</button><button>insert below</button><button>skip</button></div>
+				</div>
+				<div class="chunk used">
+					<div class="txt">Frameworks advertise the part they simplified…</div>
+				</div>
+				<div class="rail-foot">when every block is used or skipped, the file deletes itself — git remembers it</div>
+			</div>
+		</div>
+		<p class="note" style="margin-top:10px">Same pane as the llm draft today, pointed at any writer version — but showing <b>only divergent blocks</b>, and 3-way aware: base in git means "you changed it / they changed it / both did" is computable, so untouched blocks never appear. Blocks are computed at diff time (existing <code>splitBlocks</code> + neighbour-content anchoring) — no ids stored in the markdown, no identity problem.</p>
+	</section>
+
+	<section>
+		<h2><span class="n">5</span>A version file's life</h2>
+		<div class="life">
+			<div class="life-stage">
+				<h3>Born</h3>
+				<ul>
+					<li>llm writes a draft</li>
+					<li>a save loses the race</li>
+					<li>offline device reconnects</li>
+				</ul>
+			</div>
+			<div class="life-arrow">→</div>
+			<div class="life-stage">
+				<h3>Visible</h3>
+				<ul>
+					<li>badge on the post in the sidebar</li>
+					<li>pane auto-opens in the editor</li>
+					<li>never blocks editing main</li>
+				</ul>
+			</div>
+			<div class="life-arrow">→</div>
+			<div class="life-stage">
+				<h3>Gone</h3>
+				<ul>
+					<li>every block used or skipped</li>
+					<li>or dismissed whole</li>
+					<li>file deleted — history in git</li>
+				</ul>
+			</div>
+		</div>
+	</section>
+
+	<section>
+		<h2><span class="n">6</span>Devices &amp; liveness</h2>
+		<table>
+			<tr><th>your editor</th><th>main moved under it</th><th>result</th></tr>
+			<tr><td><b>clean</b> (viewing)</td><td>another device saved</td><td>adopt the new content — this is the mobile↔desktop "see it live" experience</td></tr>
+			<tr><td><b>dirty</b> (typing)</td><td>another device saved</td><td>keep typing; next save forks to your version file; reconcile when you choose</td></tr>
+			<tr><td><b>offline</b></td><td>anything</td><td>keep typing; reconnect = the dirty row</td></tr>
+		</table>
+		<p class="note" style="margin-top:10px">Frontmatter syncs per-field, not per-file — <code>publish:</code> and <code>delete:</code> are booleans that trigger deploys; last-write-wins per key is correct there and never worth a merge UI.</p>
+	</section>
+
+	<section>
+		<h2><span class="n">7</span>Open question — when is a version file born?</h2>
+		<div class="vs">
+			<div class="opt rec">
+				<h3>Lazy <span class="rec-tag">recommended</span></h3>
+				<span class="mono">simple.md ← everyone, optimistically</span>
+				<span class="mono">simple.air.md ← born only on conflict</span>
+				<p class="note">Zero friction when there's no conflict — which for one person is almost always. The llm stays eager (it never owns main). Sibling files exist only while something actually diverges.</p>
+			</div>
+			<div class="opt">
+				<h3>Eager</h3>
+				<span class="mono">simple.mini.md ← mini, always</span>
+				<span class="mono">simple.air.md ← air, always</span>
+				<span class="mono">simple.md ← assembled via reconcile</span>
+				<p class="note">Every edit needs a merge step to reach main — friction on the 99% case to simplify the 1%. Conflicts impossible, but main is never directly yours.</p>
+			</div>
+		</div>
+	</section>
+</div>
+</body>
+</html>
