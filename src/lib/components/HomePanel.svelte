@@ -106,7 +106,7 @@
 		background: var(--accent);
 		border: none;
 		border-radius: 10px;
-		color: #fff;
+		color: var(--on-accent);
 		cursor: pointer;
 		font: inherit;
 		font-weight: 600;

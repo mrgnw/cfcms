@@ -108,14 +108,16 @@
 	.milkdown-host :global(.milkdown) {
 		--crepe-color-background: transparent;
 		--crepe-color-on-background: var(--ink);
-		--crepe-color-surface: var(--paper);
-		--crepe-color-surface-low: var(--bg);
+		--crepe-color-surface: var(--bg);
+		--crepe-color-surface-low: var(--hover);
 		--crepe-color-on-surface: var(--ink);
 		--crepe-color-on-surface-variant: var(--ink-2);
 		--crepe-color-outline: var(--ink-3);
 		--crepe-color-primary: var(--accent);
 		--crepe-color-secondary: var(--hover);
 		--crepe-color-on-secondary: var(--ink);
+		--crepe-color-inverse: var(--ink);
+		--crepe-color-on-inverse: var(--paper);
 		--crepe-color-inline-code: var(--accent-ink);
 		--crepe-color-error: var(--danger);
 		--crepe-color-hover: var(--hover);
@@ -124,6 +126,8 @@
 		--crepe-font-title: var(--font-display);
 		--crepe-font-default: var(--font-display);
 		--crepe-font-code: var(--font-mono);
+		--crepe-shadow-1: 0 1px 3px 1px var(--shadow);
+		--crepe-shadow-2: 0 2px 6px 2px var(--shadow);
 		background: transparent;
 	}
 

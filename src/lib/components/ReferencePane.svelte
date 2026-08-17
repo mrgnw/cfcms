@@ -274,7 +274,7 @@
 
 	.sent:hover {
 		background: color-mix(in srgb, var(--accent) 16%, transparent);
-		box-shadow: 0 2px 5px rgba(0, 0, 0, 0.18);
+		box-shadow: 0 2px 5px var(--shadow);
 		color: var(--ink);
 		transform: translateY(-1px);
 	}

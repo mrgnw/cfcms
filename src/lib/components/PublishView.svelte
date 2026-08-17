@@ -281,7 +281,7 @@
 		background: var(--accent);
 		border: none;
 		border-radius: var(--radius);
-		color: #fff;
+		color: var(--on-accent);
 		cursor: pointer;
 		font: inherit;
 		font-size: 13px;
