@@ -238,7 +238,7 @@
 			</div>
 		</div>
 		<p class="pipeline"><b>A version is the same concept wherever it's born</b> — externally as a file (the llm's draft) or internally when a session diverges (your air while the mini saved). Files are how versions cross the boundary; inside, they're writer-labeled sources. <code>.llm.md</code> already works this way today.</p>
-		<p class="note">Writer ids, shortest that stays readable: <span class="writer w-llm">llm</span> <span class="writer w-mini">mini</span> <span class="writer w-air">air</span> <span class="writer w-ph">ph</span> <code>pad</code> <code>avp</code>. Two windows on one device share an id — a same-writer collision becomes <code>air2</code>, rare enough to never see.</p>
+		<p class="note">Writers self-identify — an editable chip with a short device-derived default (<span class="writer w-mini">mac</span> <span class="writer w-air">air</span> <span class="writer w-ph">ph</span> <code>pad</code> <code>avp</code>), remembered per browser. A session claims its name only when it starts typing — viewing is anonymous (§8).</p>
 	</section>
 
 	<section>
@@ -337,13 +337,26 @@
 		<h2><span class="n">7</span>Boundary rules — when files are touched</h2>
 		<table>
 			<tr><th>event</th><th>file</th><th>direction</th></tr>
-			<tr><td>llm (or anything external) writes a draft</td><td><code>x.llm.md</code></td><td><b>in</b> — becomes a version</td></tr>
+			<tr><td>llm (or anything external) writes a draft</td><td><code>x.llm.md</code></td><td><b>in</b> — becomes a version; a new post if <code>x.md</code> doesn't exist yet. The llm is never a live writer — this is an import, the whole llm protocol</td></tr>
 			<tr><td>importing existing markdown</td><td><code>x.md</code></td><td><b>in</b> — becomes a new post</td></tr>
 			<tr><td>every save</td><td><code>x.md</code></td><td><b>out</b> — re-rendered, so git history, backups, and the llm always see current content</td></tr>
 			<tr><td>publish</td><td><code>x.md</code></td><td><b>out</b> — the pipeline reads the rendered file, unchanged from today</td></tr>
 			<tr><td>someone edits <code>x.md</code> directly on disk</td><td><code>x.md</code></td><td><b>in</b> — detected by hash, imported as an <code>ext</code> version instead of being clobbered</td></tr>
 		</table>
 		<p class="note" style="margin-top:10px">Assumption to veto: <code>x.md</code> keeps being re-rendered on every save (not only at publish). It costs nothing and keeps git as a dense backup and the file readable by anything — but the file is a rendering, no longer the truth while a post is being edited.</p>
+	</section>
+
+	<section>
+		<h2><span class="n">8</span>Writer names — labels with a lease, not identities</h2>
+		<p>A name's only jobs: label a version in the source pane, and scope where a fork lands. Sessions self-identify via an editable chip with a short device-derived default. <b>Typing claims the name; viewing is anonymous</b> — open as many windows as you like, the lease is taken by the first keystroke.</p>
+		<table>
+			<tr><th>situation</th><th>resolution</th></tr>
+			<tr><td>second live session starts typing under a taken name</td><td>one server lease per name — newcomer becomes <code>air2</code>; a reconnect within grace is the same session and resumes</td></tr>
+			<tr><td>named itself offline, arrives to find the name leased</td><td>same rule — suffixed; its pending fork lands under the new label, nothing lost</td></tr>
+			<tr><td>arrives to find a parked version under its name</td><td>identity by content: identical → same writer for every purpose that exists, resume · different → both versions survive, one suffixed — misattribution impossible either way</td></tr>
+			<tr><td><code>llm</code> · <code>ext</code></td><td>reserved — labels of import paths, never leasable by a session</td></tr>
+		</table>
+		<p class="note" style="margin-top:10px">Same principle as blocks: identity is observational — computed from content when it matters, never stored. No durable tokens that can silently reset; the only state is the lease, which any live connection has anyway. Brainstorm alternative not taken: a persisted random id per browser would answer "same writer?" definitively, at the cost of stored identity that rots when a profile is cleared.</p>
 	</section>
 </div>
 </body>
