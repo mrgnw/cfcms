@@ -14,13 +14,15 @@
 		type PendingChange,
 		type Post,
 		type PostFilter,
-		type PostListItem
+		type PostListItem,
+		type WriterVersion
 	} from '$lib/types';
 
 	type PageData = {
 		posts: PostListItem[];
 		post: Post | null;
 		llmDraft: LlmDraft | null;
+		versions: WriterVersion[] | null;
 		view: 'publish' | 'deleted' | null;
 		pendingChanges: PendingChange[] | null;
 		lastPublishedAt: string | null;
@@ -74,7 +76,12 @@
 			</a>
 			{#key data.post.path}
 				<div class="post-enter">
-					<PostEditor post={data.post} llmDraft={data.llmDraft} onSaved={() => invalidateAll()} />
+					<PostEditor
+						post={data.post}
+						llmDraft={data.llmDraft}
+						versions={data.versions}
+						onSaved={() => invalidateAll()}
+					/>
 				</div>
 			{/key}
 		{:else}

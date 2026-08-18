@@ -10,7 +10,9 @@ import {
 } from '$lib/server/content';
 import {
 	addToEditing,
+	deleteVersion,
 	getLastPublishedAt,
+	listVersions,
 	removeFromEditing,
 	reorderEditing,
 	upsertVersion
@@ -51,6 +53,7 @@ export const load = async ({ url }) => {
 		posts: posts.map(({ frontmatter, body, ...summary }) => summary),
 		post,
 		llmDraft,
+		versions: post ? listVersions(post.path).map(({ writer, body, updatedAt }) => ({ writer, body, updatedAt })) : null,
 		view: view === 'publish' || view === 'deleted' ? view : null,
 		pendingChanges: view === 'publish' ? await getPendingChanges(posts) : null,
 		lastPublishedAt: getLastPublishedAt()
@@ -115,6 +118,16 @@ export const actions = {
 			savedHash: result.post.contentHash,
 			backup: commit
 		};
+	},
+	dismissVersion: async ({ request }) => {
+		const form = await request.formData();
+		const path = String(form.get('path') ?? '');
+		const writer = String(form.get('writer') ?? '');
+
+		if (!path || !writer) return fail(400, { message: 'path and writer are required' });
+
+		deleteVersion(path, writer);
+		return { dismissed: writer };
 	},
 	fork: async ({ request }) => {
 		const form = await request.formData();

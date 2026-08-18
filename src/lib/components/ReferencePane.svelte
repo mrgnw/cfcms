@@ -3,7 +3,7 @@
 	import { isProse, normalizeBlock, splitBlocks, splitSentences } from '$lib/blocks';
 
 	type Props = {
-		path: string;
+		label: string;
 		body: string;
 		userBody: string;
 		onInsert: (markdown: string, inline: boolean) => void;
@@ -12,7 +12,7 @@
 	type Item = { id: number; block: string; prose: boolean; sentences: string[] };
 	type DragRef = { kind: 'para'; itemId: number } | { kind: 'sent'; itemId: number; index: number };
 
-	let { path, body, userBody, onInsert }: Props = $props();
+	let { label, body, userBody, onInsert }: Props = $props();
 
 	let nextId = 0;
 	let items = $state<Item[]>(
@@ -127,7 +127,7 @@
 
 <aside class="reference" aria-label="LLM draft">
 	<div class="reference-head">
-		<span class="ref-path">{path}</span>
+		<span class="ref-path">{label}</span>
 		<span class="mode-seg" role="group" aria-label="Chunk action">
 			<button type="button" class:on={mode === 'insert'} onclick={() => (mode = 'insert')}>Insert</button>
 			<button type="button" class:on={mode === 'copy'} onclick={() => (mode = 'copy')}>Copy</button>

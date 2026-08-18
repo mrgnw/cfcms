@@ -6,12 +6,16 @@
 	import MilkdownEditor from './MilkdownEditor.svelte';
 	import ReferencePane from './ReferencePane.svelte';
 	import { parseFrontmatter, serializeFrontmatter } from '$lib/frontmatter';
-	import type { LlmDraft, Post } from '$lib/types';
+	import type { LlmDraft, Post, WriterVersion } from '$lib/types';
 
 	type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error';
 
-	let { post, llmDraft = null, onSaved }: { post: Post; llmDraft?: LlmDraft | null; onSaved?: () => void } =
-		$props();
+	let {
+		post,
+		llmDraft = null,
+		versions = null,
+		onSaved
+	}: { post: Post; llmDraft?: LlmDraft | null; versions?: WriterVersion[] | null; onSaved?: () => void } = $props();
 
 	const initial = untrack(() => parseFrontmatter(post.frontmatter));
 
@@ -35,13 +39,31 @@
 			})())
 		: 'ssrnoop00';
 	let conflictInfo = $state<{ writer: string; currentHash: string; currentFrontmatter: string; currentBody: string } | null>(null);
+
+	type PaneSource = { id: string; label: string; body: string; dismissible: boolean };
+
+	let sources = $derived<PaneSource[]>([
+		...(llmDraft ? [{ id: 'llm', label: 'llm', body: llmDraft.body, dismissible: false }] : []),
+		...(versions ?? []).map((v) => ({ id: v.writer, label: v.writer, body: v.body, dismissible: true }))
+	]);
+	let selectedSourceId = $state<string | null>(null);
+	let activeSource = $derived(sources.find((s) => s.id === selectedSourceId) ?? sources[0] ?? null);
+
+	async function dismissSource(id: string) {
+		const fd = new FormData();
+		fd.set('path', post.path);
+		fd.set('writer', id);
+		await fetch('?/dismissVersion', { method: 'POST', body: fd });
+		onSaved?.();
+	}
+
 	let tagsInput = $state<HTMLTextAreaElement | undefined>();
 	let customInput = $state<HTMLTextAreaElement | undefined>();
 	let milkdown = $state<
 		| { setContent: (markdown: string) => void; insertMarkdown: (markdown: string, inline?: boolean) => void }
 		| undefined
 	>();
-	let referenceOpen = $state(untrack(() => Boolean(llmDraft)));
+	let referenceOpen = $state(untrack(() => Boolean(llmDraft) || (versions?.length ?? 0) > 0));
 
 	function insertFromReference(markdown: string, inline: boolean) {
 		milkdown?.insertMarkdown(markdown, inline);
@@ -209,7 +231,7 @@
 				<button class="fork-button">Start your version</button>
 			</form>
 		{/if}
-		{#if llmDraft}
+		{#if sources.length > 0}
 			<button
 				class="reference-toggle"
 				type="button"
@@ -268,9 +290,32 @@
 	</p>
 {/if}
 
-<div class="workspace" class:split={referenceOpen && llmDraft}>
-	{#if referenceOpen && llmDraft}
-		<ReferencePane path={llmDraft.path} body={llmDraft.body} userBody={bodyField} onInsert={insertFromReference} />
+<div class="workspace" class:split={referenceOpen && activeSource}>
+	{#if referenceOpen && activeSource}
+		<div class="reference-stack">
+			{#if sources.length > 1 || activeSource.dismissible}
+				<div class="source-tabs">
+					{#each sources as source (source.id)}
+						<button
+							type="button"
+							class="source-tab"
+							class:active={source.id === activeSource.id}
+							onclick={() => (selectedSourceId = source.id)}
+						>
+							{source.label}
+						</button>
+					{/each}
+					{#if activeSource.dismissible}
+						<button type="button" class="source-dismiss" onclick={() => activeSource && dismissSource(activeSource.id)}>
+							dismiss
+						</button>
+					{/if}
+				</div>
+			{/if}
+			{#key activeSource.id}
+				<ReferencePane label={activeSource.label} body={activeSource.body} userBody={bodyField} onInsert={insertFromReference} />
+			{/key}
+		</div>
 	{/if}
 
 	<div class="draft">
@@ -430,6 +475,47 @@
 		display: grid;
 		grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
 		gap: 36px;
+	}
+
+	.reference-stack {
+		min-width: 0;
+	}
+
+	.source-tabs {
+		display: flex;
+		gap: 4px;
+		margin-bottom: 8px;
+	}
+
+	.source-tab {
+		background: transparent;
+		border: none;
+		border-radius: 6px;
+		color: var(--ink-3);
+		cursor: pointer;
+		font: inherit;
+		font-size: 12px;
+		padding: 3px 9px;
+	}
+
+	.source-tab.active {
+		background: var(--hover);
+		color: var(--accent-ink);
+	}
+
+	.source-dismiss {
+		background: transparent;
+		border: none;
+		color: var(--ink-3);
+		cursor: pointer;
+		font: inherit;
+		font-size: 11px;
+		margin-left: auto;
+		padding: 3px 6px;
+	}
+
+	.source-dismiss:hover {
+		color: var(--danger);
 	}
 
 	@media (max-width: 960px) {

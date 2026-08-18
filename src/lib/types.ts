@@ -27,6 +27,12 @@ export type LlmDraft = {
 	body: string;
 };
 
+export type WriterVersion = {
+	writer: string;
+	body: string;
+	updatedAt: string;
+};
+
 export type PublishResult = {
 	name: string;
 	ok: boolean;
