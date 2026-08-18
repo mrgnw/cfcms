@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
 	import { browser } from '$app/environment';
+	import { deserialize } from '$app/forms';
 	import { TextareaAutosize } from 'runed';
 	import MilkdownEditor from './MilkdownEditor.svelte';
 	import ReferencePane from './ReferencePane.svelte';
@@ -22,6 +23,7 @@
 	let deleteField = $state(initial.deleteRequested);
 	let customField = $state(initial.custom);
 	let bodyField = $state(untrack(() => post.body));
+	let knownHash = $state(untrack(() => post.contentHash ?? ''));
 	let tagsInput = $state<HTMLTextAreaElement | undefined>();
 	let customInput = $state<HTMLTextAreaElement | undefined>();
 	let milkdown = $state<
@@ -95,12 +97,29 @@
 		fd.set('path', post.path);
 		fd.set('frontmatter', serialized);
 		fd.set('body', bodyField);
+		fd.set('baseHash', knownHash);
 
 		try {
 			const res = await fetch('?/save', { method: 'POST', body: fd });
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			status = 'saved';
-			onSaved?.();
+			const result = deserialize(await res.text());
+
+			if (result.type === 'success') {
+				const savedHash = (result.data as { savedHash?: string } | undefined)?.savedHash;
+				if (savedHash) knownHash = savedHash;
+				status = 'saved';
+				onSaved?.();
+				return;
+			}
+
+			if (result.type === 'failure') {
+				const data = result.data as { message?: string; conflict?: boolean } | undefined;
+				status = 'error';
+				lastError = data?.message ?? 'Save failed';
+				if (data?.conflict) autosaveOn = false;
+				return;
+			}
+
+			throw new Error(`Unexpected action result: ${result.type}`);
 		} catch (err) {
 			status = 'error';
 			lastError = err instanceof Error ? err.message : String(err);

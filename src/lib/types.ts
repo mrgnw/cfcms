@@ -12,6 +12,7 @@ export type PostListItem = {
 	slug?: string;
 	excerpt?: string;
 	updatedAt?: string;
+	contentHash?: string;
 	deployStatus?: DeployStatus;
 	deployedAt?: string;
 };

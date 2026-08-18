@@ -68,19 +68,29 @@ export const actions = {
 		const postPath = String(form.get('path') ?? '');
 		const frontmatter = String(form.get('frontmatter') ?? '');
 		const body = String(form.get('body') ?? '');
+		const baseHash = String(form.get('baseHash') ?? '');
 
 		if (!postPath) return fail(400, { message: 'Post path is required' });
+		if (!baseHash) return fail(400, { message: 'baseHash is required' });
 
-		await savePost(postPath, frontmatter, body);
-		const commit = await commitPost(postPath, 'save');
+		const result = await savePost(postPath, frontmatter, body, baseHash);
+
+		if (result.outcome === 'conflict') {
+			return fail(409, { conflict: true, message: 'Post changed elsewhere — your save was not applied' });
+		}
+
+		const commit = result.outcome === 'write' ? await commitPost(postPath, 'save') : null;
 
 		return {
-			message: commit.ok
-				? commit.committed
-					? 'Saved and committed'
-					: 'Saved; no git changes'
-				: 'Saved; git backup failed',
+			message: !commit
+				? 'Already saved'
+				: commit.ok
+					? commit.committed
+						? 'Saved and committed'
+						: 'Saved; no git changes'
+					: 'Saved; git backup failed',
 			savedPath: postPath,
+			savedHash: result.post.contentHash,
 			backup: commit
 		};
 	},
@@ -153,7 +163,9 @@ export const actions = {
 
 		const post = await getPost(path);
 
-		await savePost(path, setDeleteFlag(post.frontmatter, true), post.body);
+		const result = await savePost(path, setDeleteFlag(post.frontmatter, true), post.body, post.contentHash);
+		if (result.outcome === 'conflict') return fail(409, { message: 'Post changed while trashing — retry' });
+
 		await commitPost(path, 'save');
 		removeFromEditing(path);
 		return { trashed: path };
@@ -166,7 +178,9 @@ export const actions = {
 
 		const post = await getPost(path);
 
-		await savePost(path, setDeleteFlag(post.frontmatter, false), post.body);
+		const result = await savePost(path, setDeleteFlag(post.frontmatter, false), post.body, post.contentHash);
+		if (result.outcome === 'conflict') return fail(409, { message: 'Post changed while restoring — retry' });
+
 		await commitPost(path, 'save');
 		return { restored: path };
 	},

@@ -4,6 +4,7 @@ import { formatYamlScalar, parseYamlScalar } from '$lib/frontmatter';
 import { getEditingOrder, pruneMissingPosts, seedEditingQueue } from './db';
 import { getDeployStatus, hashPostContent, readDeployState, type DeployState, type DeployStatus } from './deploy-state';
 import { contentBaseDirectory, contentDirectory } from './paths';
+import { decideSave, storedBodyForm, type SaveDecision } from '$lib/save-rules';
 
 export type PostSummary = {
 	path: string;
@@ -209,17 +210,41 @@ export const getLlmDraft = async (postPath: string) => {
 	}
 };
 
-export const savePost = async (postPath: string, frontmatter: string, body: string) => {
-	const filePath = getPostFilePath(postPath);
-	const normalizedFrontmatter = frontmatter.trim();
-	const normalizedBody = body.replace(/\s+$/, '');
-	const content = normalizedFrontmatter
-		? `---\n${normalizedFrontmatter}\n---\n\n${normalizedBody}\n`
-		: `${normalizedBody}\n`;
+const saveChains = new Map<string, Promise<unknown>>();
 
-	await writeFile(filePath, content, 'utf8');
-	return getPost(postPath);
+const chainSave = <T>(postPath: string, work: () => Promise<T>): Promise<T> => {
+	const previous = saveChains.get(postPath) ?? Promise.resolve();
+	const run = previous.then(work, work);
+	const settled = run.then(
+		() => undefined,
+		() => undefined
+	);
+	saveChains.set(postPath, settled);
+	settled.then(() => {
+		if (saveChains.get(postPath) === settled) saveChains.delete(postPath);
+	});
+	return run;
 };
+
+export type SaveResult = { outcome: SaveDecision; post: Post };
+
+export const savePost = (postPath: string, frontmatter: string, body: string, baseHash: string): Promise<SaveResult> =>
+	chainSave(postPath, async () => {
+		const current = await getPost(postPath);
+		const incomingHash = hashPostContent(frontmatter, storedBodyForm(frontmatter, body));
+		const outcome = decideSave(baseHash, current.contentHash, incomingHash);
+
+		if (outcome !== 'write') return { outcome, post: current };
+
+		const normalizedFrontmatter = frontmatter.trim();
+		const normalizedBody = body.replace(/\s+$/, '');
+		const content = normalizedFrontmatter
+			? `---\n${normalizedFrontmatter}\n---\n\n${normalizedBody}\n`
+			: `${normalizedBody}\n`;
+
+		await writeFile(getPostFilePath(postPath), content, 'utf8');
+		return { outcome, post: await getPost(postPath) };
+	});
 
 export const deletePostFile = async (postPath: string) => {
 	await unlink(getPostFilePath(postPath));
