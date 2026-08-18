@@ -86,6 +86,30 @@
 			input: () => customField,
 			styleProp: 'minHeight'
 		});
+
+		const pollMs = 5000;
+
+		const poll = async () => {
+			if (document.hidden || status !== 'saved' || conflictInfo) return;
+			const res = await fetch(`/api/post?path=${encodeURIComponent(post.path)}`).catch(() => null);
+			if (!res?.ok) return;
+			const latest = (await res.json()) as { contentHash: string; frontmatter: string; body: string };
+			if (latest.contentHash === knownHash) return;
+			if (status !== 'saved') return;
+			adoptContent(latest);
+			onSaved?.();
+		};
+
+		const pollTimer = setInterval(poll, pollMs);
+		const onVisible = () => {
+			if (!document.hidden) poll();
+		};
+		document.addEventListener('visibilitychange', onVisible);
+
+		onDestroy(() => {
+			clearInterval(pollTimer);
+			document.removeEventListener('visibilitychange', onVisible);
+		});
 	}
 
 	let status = $state<SaveStatus>('saved');
