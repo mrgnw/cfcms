@@ -125,7 +125,7 @@
 	}
 </script>
 
-<aside class="reference" aria-label="LLM draft">
+<aside class="reference" aria-label={label}>
 	<div class="reference-head">
 		<span class="ref-path">{label}</span>
 		<span class="mode-seg" role="group" aria-label="Chunk action">

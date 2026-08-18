@@ -29,7 +29,13 @@
 	let bodyField = $state(untrack(() => post.body));
 	let knownHash = $state(untrack(() => post.contentHash ?? ''));
 	const defaultWriter = () => (/iPhone/.test(navigator.userAgent) ? 'ph' : 'mac');
-	const writer = browser ? (localStorage.getItem('cms-writer') ?? defaultWriter()) : 'mac';
+	const storedWriter = browser ? localStorage.getItem('cms-writer') : null;
+	const writer =
+		storedWriter && /^[a-z][a-z0-9]{0,7}$/.test(storedWriter) && storedWriter !== 'llm' && storedWriter !== 'ext'
+			? storedWriter
+			: browser
+				? defaultWriter()
+				: 'mac';
 	const sessionId = browser
 		? (sessionStorage.getItem('cms-session') ??
 			(() => {
@@ -39,6 +45,7 @@
 			})())
 		: 'ssrnoop00';
 	let conflictInfo = $state<{ writer: string; currentHash: string; currentFrontmatter: string; currentBody: string } | null>(null);
+	let diverged = $state(false);
 
 	type PaneSource = { id: string; label: string; body: string; dismissible: boolean };
 
@@ -90,12 +97,12 @@
 		const pollMs = 5000;
 
 		const poll = async () => {
-			if (document.hidden || status !== 'saved' || conflictInfo) return;
+			if (document.hidden || status !== 'saved' || conflictInfo || diverged) return;
 			const res = await fetch(`/api/post?path=${encodeURIComponent(post.path)}`).catch(() => null);
 			if (!res?.ok) return;
 			const latest = (await res.json()) as { contentHash: string; frontmatter: string; body: string };
 			if (latest.contentHash === knownHash) return;
-			if (status !== 'saved') return;
+			if (status !== 'saved' || conflictInfo || diverged) return;
 			adoptContent(latest);
 			onSaved?.();
 		};
@@ -150,80 +157,96 @@
 		knownHash = next.contentHash;
 		status = 'saved';
 		conflictInfo = null;
+		diverged = false;
 	}
 
+	let saveInFlight = false;
+
 	async function save() {
-		if (saveTimer) {
-			clearTimeout(saveTimer);
-			saveTimer = null;
+		if (saveInFlight) {
+			if (saveTimer) clearTimeout(saveTimer);
+			saveTimer = setTimeout(save, 400);
+			return;
 		}
-		status = 'saving';
-		lastError = null;
-
-		const serialized = serializeFrontmatter({
-			title: titleField,
-			date: dateField,
-			tags: currentTags,
-			publish: publishField,
-			pin: pinField,
-			deleteRequested: deleteField,
-			custom: customField
-		});
-
-		const fd = new FormData();
-		fd.set('path', post.path);
-		fd.set('frontmatter', serialized);
-		fd.set('body', bodyField);
-		fd.set('baseHash', knownHash);
-		fd.set('writer', writer);
-		fd.set('sessionId', sessionId);
+		saveInFlight = true;
 
 		try {
-			const res = await fetch('?/save', { method: 'POST', body: fd });
-			const result = deserialize(await res.text());
+			if (saveTimer) {
+				clearTimeout(saveTimer);
+				saveTimer = null;
+			}
+			status = 'saving';
+			lastError = null;
 
-			if (result.type === 'success') {
-				const data = result.data as
-					| {
-							savedHash?: string;
-							conflict?: boolean;
-							writer?: string;
-							currentHash?: string;
-							currentFrontmatter?: string;
-							currentBody?: string;
-					  }
-					| undefined;
+			const serialized = serializeFrontmatter({
+				title: titleField,
+				date: dateField,
+				tags: currentTags,
+				publish: publishField,
+				pin: pinField,
+				deleteRequested: deleteField,
+				custom: customField
+			});
 
-				if (data?.conflict && data.writer && data.currentHash) {
-					conflictInfo = {
-						writer: data.writer,
-						currentHash: data.currentHash,
-						currentFrontmatter: data.currentFrontmatter ?? '',
-						currentBody: data.currentBody ?? ''
-					};
+			const fd = new FormData();
+			fd.set('path', post.path);
+			fd.set('frontmatter', serialized);
+			fd.set('body', bodyField);
+			fd.set('baseHash', knownHash);
+			fd.set('writer', writer);
+			fd.set('sessionId', sessionId);
+
+			try {
+				const res = await fetch('?/save', { method: 'POST', body: fd });
+				const result = deserialize(await res.text());
+
+				if (result.type === 'success') {
+					const data = result.data as
+						| {
+								savedHash?: string;
+								conflict?: boolean;
+								writer?: string;
+								currentHash?: string;
+								currentFrontmatter?: string;
+								currentBody?: string;
+						  }
+						| undefined;
+
+					if (data?.conflict && data.writer && data.currentHash) {
+						conflictInfo = {
+							writer: data.writer,
+							currentHash: data.currentHash,
+							currentFrontmatter: data.currentFrontmatter ?? '',
+							currentBody: data.currentBody ?? ''
+						};
+						status = 'saved';
+						diverged = true;
+						onSaved?.();
+						return;
+					}
+
+					if (data?.savedHash) knownHash = data.savedHash;
 					status = 'saved';
+					conflictInfo = null;
+					diverged = false;
 					onSaved?.();
 					return;
 				}
 
-				if (data?.savedHash) knownHash = data.savedHash;
-				status = 'saved';
-				conflictInfo = null;
-				onSaved?.();
-				return;
-			}
+				if (result.type === 'failure') {
+					const data = result.data as { message?: string; conflict?: boolean } | undefined;
+					status = 'error';
+					lastError = data?.message ?? 'Save failed';
+					return;
+				}
 
-			if (result.type === 'failure') {
-				const data = result.data as { message?: string; conflict?: boolean } | undefined;
+				throw new Error(`Unexpected action result: ${result.type}`);
+			} catch (err) {
 				status = 'error';
-				lastError = data?.message ?? 'Save failed';
-				return;
+				lastError = err instanceof Error ? err.message : String(err);
 			}
-
-			throw new Error(`Unexpected action result: ${result.type}`);
-		} catch (err) {
-			status = 'error';
-			lastError = err instanceof Error ? err.message : String(err);
+		} finally {
+			saveInFlight = false;
 		}
 	}
 
