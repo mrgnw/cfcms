@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdir, readdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 import { formatYamlScalar, parseYamlScalar } from '$lib/frontmatter';
@@ -164,6 +165,24 @@ export const listPosts = async () => {
 		return secondDate.localeCompare(firstDate);
 	});
 };
+
+export const postsRev = (posts: PostSummary[]) =>
+	createHash('sha256')
+		.update(
+			JSON.stringify(
+				posts.map((post) => [
+					post.path,
+					post.title,
+					post.date,
+					post.editingOrder,
+					post.deployStatus,
+					post.deleteRequested,
+					post.pin
+				])
+			)
+		)
+		.digest('hex')
+		.slice(0, 16);
 
 export const getPost = async (postPath: string) =>
 	parsePost(getPostFilePath(postPath), await readDeployState(), getEditingOrder());

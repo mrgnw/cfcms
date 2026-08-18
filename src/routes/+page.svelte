@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
+	import { browser } from '$app/environment';
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import DeletedView from '$lib/components/DeletedView.svelte';
@@ -20,6 +22,7 @@
 
 	type PageData = {
 		posts: PostListItem[];
+		postsRev: string;
 		post: Post | null;
 		llmDraft: LlmDraft | null;
 		versions: WriterVersion[] | null;
@@ -46,6 +49,29 @@
 	});
 
 	let recentPosts = $derived(activePosts.slice(0, 8));
+
+	if (browser) {
+		const pollMs = 5000;
+
+		const poll = async () => {
+			if (document.hidden) return;
+			const res = await fetch('/api/posts').catch(() => null);
+			if (!res?.ok) return;
+			const latest = (await res.json()) as { rev: string };
+			if (latest.rev !== data.postsRev) invalidateAll();
+		};
+
+		const pollTimer = setInterval(poll, pollMs);
+		const onVisible = () => {
+			if (!document.hidden) poll();
+		};
+		document.addEventListener('visibilitychange', onVisible);
+
+		onDestroy(() => {
+			clearInterval(pollTimer);
+			document.removeEventListener('visibilitychange', onVisible);
+		});
+	}
 </script>
 
 <svelte:head>

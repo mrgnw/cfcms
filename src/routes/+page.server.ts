@@ -6,6 +6,7 @@ import {
 	getLlmDraft,
 	getPost,
 	listPosts,
+	postsRev,
 	savePost
 } from '$lib/server/content';
 import {
@@ -51,6 +52,7 @@ export const load = async ({ url }) => {
 
 	return {
 		posts: posts.map(({ frontmatter, body, ...summary }) => summary),
+		postsRev: postsRev(posts),
 		post,
 		llmDraft,
 		versions: post ? listVersions(post.path).map(({ writer, body, updatedAt }) => ({ writer, body, updatedAt })) : null,
