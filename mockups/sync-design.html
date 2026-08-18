@@ -125,71 +125,21 @@
 	.never { color: var(--ink-2); font-size: 12.5px; margin-top: 10px; }
 	.never s { opacity: 0.75; }
 
-	/* reconcile mock */
-	.shell {
-		background: var(--paper);
-		border: 1px solid var(--line);
-		border-radius: 12px;
-		display: grid;
-		gap: 0;
-		grid-template-columns: 1fr 250px;
-		overflow: hidden;
-	}
-	.editor { padding: 20px 24px; }
-	.editor h3 { font-size: 17px; margin: 0 0 12px; }
-	.para { color: var(--ink); font: 14px/1.6 Georgia, serif; margin: 0 0 12px; }
-	.para.dim { opacity: 0.45; }
-	.para.diff {
-		background: color-mix(in srgb, var(--air) 9%, transparent);
-		border-radius: 6px;
-		box-shadow: inset 2.5px 0 0 var(--air);
-		padding: 6px 10px;
-	}
-	.diff-tag {
-		color: var(--air);
-		display: block;
-		font: 700 10px/1 ui-monospace, monospace;
-		letter-spacing: 0.06em;
-		margin-bottom: 5px;
-		text-transform: uppercase;
-	}
-	.rail {
-		background: var(--bg);
-		border-left: 1px solid var(--line);
-		padding: 14px;
-	}
-	.rail-head {
-		align-items: center;
-		display: flex;
-		font-size: 12px;
-		font-weight: 700;
-		gap: 7px;
-		margin-bottom: 4px;
-	}
-	.rail-sub { color: var(--ink-2); font-size: 11px; margin-bottom: 12px; }
-	.chunk {
+	/* goals */
+	.goals { margin: 0 0 10px; padding-left: 18px; }
+	.goals li { margin-bottom: 6px; }
+
+	.grain {
 		background: var(--paper);
 		border: 1px solid var(--line);
 		border-radius: 8px;
-		margin-bottom: 10px;
-		padding: 9px 10px;
-	}
-	.chunk .txt { font: 12.5px/1.5 Georgia, serif; margin-bottom: 8px; }
-	.chunk .acts { display: flex; gap: 6px; }
-	.chunk button {
-		background: var(--paper);
-		border: 1px solid var(--line);
-		border-radius: 6px;
 		color: var(--ink-2);
-		cursor: pointer;
-		font: 600 11px/1 inherit;
-		font-family: inherit;
-		padding: 4px 8px;
+		font-size: 12px;
+		margin-top: 4px;
+		padding: 8px 12px;
 	}
-	.chunk button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-	.chunk.used { opacity: 0.4; }
-	.chunk.used .acts { display: none; }
-	.rail-foot { color: var(--ink-2); font-size: 11px; margin-top: 4px; }
+
+	.mermaid { display: flex; justify-content: center; margin: 6px 0 10px; }
 
 	/* lifecycle */
 	.life { display: flex; gap: 10px; }
@@ -211,6 +161,19 @@
 <div class="page">
 	<h1>Versions &amp; conflict — design</h1>
 	<p class="sub">.md at the boundary · a store as truth while editing · versions are sources you pull parts from, never auto-merged</p>
+
+	<section>
+		<h2>Why — the experience this buys</h2>
+		<p>Today, opening the same post on the phone and the mac silently destroys work: whichever device saves last wins. Everything below exists to replace that with five promises:</p>
+		<ul class="goals">
+			<li><b>Type anywhere, lose nothing.</b> Any device, any window, offline on a plane — every word survives, always.</li>
+			<li><b>Look anywhere, see the latest.</b> A session you're only reading follows along as other devices save — the phone as a live preview.</li>
+			<li><b>The llm contributes without touching your words.</b> Its drafts arrive as versions you pull from, never merged in behind your back.</li>
+			<li><b>When versions differ, decide per change.</b> See only what diverges; adopt or reject each change atomically — never all-or-nothing, never automatic.</li>
+			<li><b>Publishing stays boring.</b> The blog still gets a plain <code>.md</code> from git, same pipeline as today.</li>
+		</ul>
+		<p class="note">The posture behind all five: a conflict is not an error to prevent — it is a second version of the post, kept and offered as a source. Everything else in this document is mechanism serving these promises.</p>
+	</section>
 
 	<section>
 		<h2><span class="n">1</span>The model — .md at the boundary, a store in the middle</h2>
@@ -238,6 +201,9 @@
 			</div>
 		</div>
 		<p class="pipeline"><b>A version is the same concept wherever it's born</b> — externally as a file (the llm's draft) or internally when a session diverges (your air while the mini saved). Files are how versions cross the boundary; inside, they're writer-labeled sources. <code>.llm.md</code> already works this way today.</p>
+		<p class="pipeline"><b>The unit is the post, not the file.</b> Inside the store, a post segments at several depths — the levels where diffs, atomic decisions, and someday deep links operate:</p>
+		<div class="grain mono">post &nbsp;▸&nbsp; sections (by heading) &nbsp;▸&nbsp; blocks (paragraph · codefence · list item) &nbsp;▸&nbsp; sentences</div>
+		<p class="note">Which depth reconcile uses is not locked yet — the design only requires that segments are computed from content when needed, never stored.</p>
 		<p class="note">Writers self-identify — an editable chip with a short device-derived default (<span class="writer w-mini">mac</span> <span class="writer w-air">air</span> <span class="writer w-ph">ph</span> <code>pad</code> <code>avp</code>), remembered per browser. A session claims its name only when it starts typing — viewing is anonymous (§8).</p>
 	</section>
 
@@ -256,42 +222,44 @@
 	</section>
 
 	<section>
-		<h2><span class="n">3</span>One save, three outcomes</h2>
+		<h2><span class="n">3</span>One scenario — the mac and the phone edit the same post</h2>
+		<p>The <b>base</b> is whichever revision of the post a session loaded before typing — what its edits are based on. Every save carries it: "here is my full text, based on v14". The store compares that base against the post's current revision:</p>
+		<pre class="mermaid">
+sequenceDiagram
+	participant mac
+	participant store as cms store · truth
+	participant ph as phone
+	mac->>store: open post → v14
+	ph->>store: open post → v14
+	mac->>store: save, based on v14 — tightened the intro
+	Note over store: base is current → post becomes v15
+	ph->>store: save, based on v14 — rewrote the closing
+	Note over store: base moved and texts differ →<br/>kept as the ph version · post stays v15
+	store-->>ph: here is what diverges — pull what you want
+		</pre>
 		<div class="flow">
-			<div class="step"><span class="cond">base = current doc (the 99% case)</span><span class="arrow">→</span><span class="outcome good">update the doc · <code>simple.md</code> re-rendered · done</span></div>
-			<div class="step"><span class="cond">base moved, but text identical</span><span class="arrow">→</span><span class="outcome good">no-op — already converged</span></div>
-			<div class="step"><span class="cond">base moved, text differs</span><span class="arrow">→</span><span class="outcome fork">text kept as the <span class="writer w-air">air</span> version · source pane appears</span></div>
+			<div class="step"><span class="cond">your base is still the post's current revision</span><span class="arrow">→</span><span class="outcome good">post updated · <code>simple.md</code> re-rendered · done (the 99% case)</span></div>
+			<div class="step"><span class="cond">base moved, but your text matches anyway</span><span class="arrow">→</span><span class="outcome good">no-op — already converged</span></div>
+			<div class="step"><span class="cond">base moved and texts differ (the phone above)</span><span class="arrow">→</span><span class="outcome fork">kept as the <span class="writer w-ph">ph</span> version · reconcile offered, never forced</span></div>
 		</div>
-		<p class="never">Never happens: <s>overwrite</s> (the lost-update bug), <s>blocked save</s> (locks), <s>silent machine merge</s>. Offline is the same path — an offline device reconnects, saves against its old base, and its text becomes its version. Offline support costs nothing extra.</p>
+		<p class="never">Never happens: <s>overwrite</s> (today's lost-update bug), <s>blocked save</s> (locks), <s>silent machine merge</s>. Offline is the same path — reconnect, save against an old base, your text becomes your version. Offline support costs nothing extra.</p>
 	</section>
 
 	<section>
-		<h2><span class="n">4</span>Reconcile — only the divergent parts</h2>
-		<div class="shell">
-			<div class="editor">
-				<h3>Simple… where?</h3>
-				<p class="para dim">Simplicity is a claim people make about the part of the system they happen to be looking at. The complexity didn't vanish — it moved.</p>
-				<p class="para diff"><span class="diff-tag">air changed this</span>The question worth asking isn't "is this simple?" but "where did the complexity go?" Someone is holding it. If it's not you, find out who.</p>
-				<p class="para dim">Frameworks advertise the part they simplified. The invoice for the part they didn't arrives later, itemized as configuration.</p>
-			</div>
-			<div class="rail">
-				<div class="rail-head"><span class="writer w-air">air</span> air's version</div>
-				<div class="rail-sub">2 of 14 blocks differ · based on Tue's save</div>
-				<div class="chunk">
-					<div class="txt">The question isn't "is this simple?" — it's "who is holding the complexity now?" Every simplification is a transfer.</div>
-					<div class="acts"><button class="primary">replace</button><button>insert below</button><button>skip</button></div>
-				</div>
-				<div class="chunk used">
-					<div class="txt">Frameworks advertise the part they simplified…</div>
-				</div>
-				<div class="rail-foot">when every block is used or skipped, the version disappears</div>
-			</div>
-		</div>
-		<p class="note" style="margin-top:10px">Same pane as the llm draft today, pointed at any writer's version — but showing <b>only divergent blocks</b>, and 3-way aware: the store remembers each session's base, so "you changed it / they changed it / both did" is computable and untouched blocks never appear. Blocks are computed at diff time (existing <code>splitBlocks</code> + neighbour-content anchoring) — no ids stored anywhere, no identity problem.</p>
+		<h2><span class="n">4</span>Reconcile — one atomic decision per change</h2>
+		<p>UX contract, no UI decided yet. A divergence is presented as individual changes at segment level; each is its own decision. No "accept all", no automatic merge, and skipping one change never blocks another.</p>
+		<table>
+			<tr><th>the version…</th><th>your atomic decision</th></tr>
+			<tr><td>added a segment</td><td>accept just it — it lands where its neighbours are · or skip it</td></tr>
+			<tr><td>modified a segment</td><td>take theirs · keep yours — a whole-segment swap</td></tr>
+			<tr><td>removed a segment</td><td>confirm the removal · keep yours</td></tr>
+			<tr><td>moved a segment</td><td>nothing to decide — position follows content; a move alone is not a difference</td></tr>
+		</table>
+		<p class="note" style="margin-top:10px">Unchanged segments never appear. The base is what makes the verbs possible: knowing what both sides started from is the only way to tell "they added" from "you removed". The llm reference pane already does accept-per-chunk today — this generalizes it to any version, with base-aware verbs.</p>
 	</section>
 
 	<section>
-		<h2><span class="n">5</span>A version file's life</h2>
+		<h2><span class="n">5</span>A version's life</h2>
 		<div class="life">
 			<div class="life-stage">
 				<h3>Born</h3>
@@ -359,5 +327,28 @@
 		<p class="note" style="margin-top:10px">Same principle as blocks: identity is observational — computed from content when it matters, never stored. No durable tokens that can silently reset; the only state is the lease, which any live connection has anyway. Brainstorm alternative not taken: a persisted random id per browser would answer "same writer?" definitively, at the cost of stored identity that rots when a profile is cleared.</p>
 	</section>
 </div>
+<script type="module">
+	import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+	mermaid.initialize({
+		startOnLoad: true,
+		theme: 'base',
+		themeVariables: {
+			fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+			fontSize: '13px',
+			primaryColor: '#fdfbf6',
+			primaryTextColor: '#262019',
+			primaryBorderColor: '#e6ded0',
+			lineColor: '#6b6254',
+			actorBkg: '#fdfbf6',
+			actorBorder: '#e6ded0',
+			actorTextColor: '#262019',
+			signalColor: '#6b6254',
+			signalTextColor: '#262019',
+			noteBkgColor: '#f3efe6',
+			noteBorderColor: '#e6ded0',
+			noteTextColor: '#6b6254'
+		}
+	});
+</script>
 </body>
 </html>
