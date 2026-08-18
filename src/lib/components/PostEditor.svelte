@@ -53,7 +53,11 @@
 		const fd = new FormData();
 		fd.set('path', post.path);
 		fd.set('writer', id);
-		await fetch('?/dismissVersion', { method: 'POST', body: fd });
+		const res = await fetch('?/dismissVersion', { method: 'POST', body: fd }).catch(() => null);
+		if (!res?.ok) {
+			lastError = `Could not dismiss version ${id}`;
+			return;
+		}
 		onSaved?.();
 	}
 
