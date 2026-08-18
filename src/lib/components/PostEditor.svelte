@@ -24,6 +24,17 @@
 	let customField = $state(initial.custom);
 	let bodyField = $state(untrack(() => post.body));
 	let knownHash = $state(untrack(() => post.contentHash ?? ''));
+	const defaultWriter = () => (/iPhone/.test(navigator.userAgent) ? 'ph' : 'mac');
+	const writer = browser ? (localStorage.getItem('cms-writer') ?? defaultWriter()) : 'mac';
+	const sessionId = browser
+		? (sessionStorage.getItem('cms-session') ??
+			(() => {
+				const id = crypto.randomUUID().replaceAll('-', '').slice(0, 8);
+				sessionStorage.setItem('cms-session', id);
+				return id;
+			})())
+		: 'ssrnoop00';
+	let conflictInfo = $state<{ writer: string; currentHash: string; currentFrontmatter: string; currentBody: string } | null>(null);
 	let tagsInput = $state<HTMLTextAreaElement | undefined>();
 	let customInput = $state<HTMLTextAreaElement | undefined>();
 	let milkdown = $state<
@@ -75,6 +86,22 @@
 		markDirty();
 	}
 
+	function adoptContent(next: { contentHash: string; frontmatter: string; body: string }) {
+		const fields = parseFrontmatter(next.frontmatter);
+		titleField = fields.title;
+		dateField = fields.date;
+		tagsText = fields.tags.join(', ');
+		publishField = fields.publish;
+		pinField = fields.pin;
+		deleteField = fields.deleteRequested;
+		customField = fields.custom;
+		bodyField = next.body;
+		milkdown?.setContent(next.body);
+		knownHash = next.contentHash;
+		status = 'saved';
+		conflictInfo = null;
+	}
+
 	async function save() {
 		if (saveTimer) {
 			clearTimeout(saveTimer);
@@ -98,15 +125,40 @@
 		fd.set('frontmatter', serialized);
 		fd.set('body', bodyField);
 		fd.set('baseHash', knownHash);
+		fd.set('writer', writer);
+		fd.set('sessionId', sessionId);
 
 		try {
 			const res = await fetch('?/save', { method: 'POST', body: fd });
 			const result = deserialize(await res.text());
 
 			if (result.type === 'success') {
-				const savedHash = (result.data as { savedHash?: string } | undefined)?.savedHash;
-				if (savedHash) knownHash = savedHash;
+				const data = result.data as
+					| {
+							savedHash?: string;
+							conflict?: boolean;
+							writer?: string;
+							currentHash?: string;
+							currentFrontmatter?: string;
+							currentBody?: string;
+					  }
+					| undefined;
+
+				if (data?.conflict && data.writer && data.currentHash) {
+					conflictInfo = {
+						writer: data.writer,
+						currentHash: data.currentHash,
+						currentFrontmatter: data.currentFrontmatter ?? '',
+						currentBody: data.currentBody ?? ''
+					};
+					status = 'saved';
+					onSaved?.();
+					return;
+				}
+
+				if (data?.savedHash) knownHash = data.savedHash;
 				status = 'saved';
+				conflictInfo = null;
 				onSaved?.();
 				return;
 			}
@@ -115,7 +167,6 @@
 				const data = result.data as { message?: string; conflict?: boolean } | undefined;
 				status = 'error';
 				lastError = data?.message ?? 'Save failed';
-				if (data?.conflict) autosaveOn = false;
 				return;
 			}
 
@@ -198,6 +249,23 @@
 
 {#if lastError}
 	<p class="error-banner">{lastError}</p>
+{/if}
+
+{#if conflictInfo}
+	<p class="conflict-banner">
+		Changed elsewhere — your text is safe as the <b>{conflictInfo.writer}</b> version.
+		<button
+			type="button"
+			onclick={() =>
+				conflictInfo &&
+				adoptContent({
+					contentHash: conflictInfo.currentHash,
+					frontmatter: conflictInfo.currentFrontmatter,
+					body: conflictInfo.currentBody
+				})}>Load theirs</button
+		>
+		<button type="button" onclick={() => (conflictInfo = null)}>Keep typing</button>
+	</p>
 {/if}
 
 <div class="workspace" class:split={referenceOpen && llmDraft}>
@@ -431,6 +499,28 @@
 		margin: 0 auto 14px;
 		max-width: 68ch;
 		padding: 8px 12px;
+	}
+
+	.conflict-banner {
+		background: color-mix(in srgb, var(--warn) 12%, transparent);
+		border-radius: var(--radius);
+		color: var(--ink);
+		font-size: 13px;
+		margin: 0 auto 14px;
+		max-width: 68ch;
+		padding: 8px 12px;
+	}
+
+	.conflict-banner button {
+		background: transparent;
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		color: var(--ink-2);
+		cursor: pointer;
+		font: inherit;
+		font-size: 12px;
+		margin-left: 8px;
+		padding: 3px 9px;
 	}
 
 	.frontmatter {

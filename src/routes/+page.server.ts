@@ -8,7 +8,13 @@ import {
 	listPosts,
 	savePost
 } from '$lib/server/content';
-import { addToEditing, getLastPublishedAt, removeFromEditing, reorderEditing } from '$lib/server/db';
+import {
+	addToEditing,
+	getLastPublishedAt,
+	removeFromEditing,
+	reorderEditing,
+	upsertVersion
+} from '$lib/server/db';
 import { commitPost, diffNumstat } from '$lib/server/git';
 import { runPublish } from '$lib/server/publish';
 import { setDeleteFlag } from '$lib/frontmatter';
@@ -69,14 +75,30 @@ export const actions = {
 		const frontmatter = String(form.get('frontmatter') ?? '');
 		const body = String(form.get('body') ?? '');
 		const baseHash = String(form.get('baseHash') ?? '');
+		const writer = String(form.get('writer') ?? '');
+		const sessionId = String(form.get('sessionId') ?? '');
 
 		if (!postPath) return fail(400, { message: 'Post path is required' });
 		if (!baseHash) return fail(400, { message: 'baseHash is required' });
+		if (!/^[a-z][a-z0-9]{0,7}$/.test(writer) || writer === 'llm' || writer === 'ext') {
+			return fail(400, { message: `Invalid writer label: ${writer}` });
+		}
+		if (!/^[a-z0-9]{4,16}$/.test(sessionId)) {
+			return fail(400, { message: 'Invalid session id' });
+		}
 
 		const result = await savePost(postPath, frontmatter, body, baseHash);
 
 		if (result.outcome === 'conflict') {
-			return fail(409, { conflict: true, message: 'Post changed elsewhere — your save was not applied' });
+			const storedWriter = upsertVersion({ path: postPath, writer, sessionId, baseHash, frontmatter, body });
+			return {
+				conflict: true,
+				writer: storedWriter,
+				currentHash: result.post.contentHash,
+				currentFrontmatter: result.post.frontmatter,
+				currentBody: result.post.body,
+				savedPath: postPath
+			};
 		}
 
 		const commit = result.outcome === 'write' ? await commitPost(postPath, 'save') : null;
