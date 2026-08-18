@@ -197,7 +197,7 @@
 			<div class="bnode">
 				<h3>Out · files</h3>
 				<div class="bitem mono">simple.md</div>
-				<div class="brole">re-rendered after each save — git-tracked; publish reads it</div>
+				<div class="brole">written at publish — git-tracked; the blog's record</div>
 			</div>
 		</div>
 		<p class="pipeline"><b>A version is the same concept wherever it's born</b> — externally as a file (the llm's draft) or internally when a session diverges (your air while the mini saved). Files are how versions cross the boundary; inside, they're writer-labeled sources. <code>.llm.md</code> already works this way today.</p>
@@ -238,7 +238,7 @@ sequenceDiagram
 	store-->>ph: here is what diverges — pull what you want
 		</pre>
 		<div class="flow">
-			<div class="step"><span class="cond">your base is still the post's current revision</span><span class="arrow">→</span><span class="outcome good">post updated · <code>simple.md</code> re-rendered · done (the 99% case)</span></div>
+			<div class="step"><span class="cond">your base is still the post's current revision</span><span class="arrow">→</span><span class="outcome good">post updated · done (the 99% case)</span></div>
 			<div class="step"><span class="cond">base moved, but your text matches anyway</span><span class="arrow">→</span><span class="outcome good">no-op — already converged</span></div>
 			<div class="step"><span class="cond">base moved and texts differ (the phone above)</span><span class="arrow">→</span><span class="outcome fork">kept as the <span class="writer w-ph">ph</span> version · reconcile offered, never forced</span></div>
 		</div>
@@ -307,11 +307,11 @@ sequenceDiagram
 			<tr><th>event</th><th>file</th><th>direction</th></tr>
 			<tr><td>llm (or anything external) writes a draft</td><td><code>x.llm.md</code></td><td><b>in</b> — becomes a version; a new post if <code>x.md</code> doesn't exist yet. The llm is never a live writer — this is an import, the whole llm protocol</td></tr>
 			<tr><td>importing existing markdown</td><td><code>x.md</code></td><td><b>in</b> — becomes a new post</td></tr>
-			<tr><td>every save</td><td><code>x.md</code></td><td><b>out</b> — re-rendered, so git history, backups, and the llm always see current content</td></tr>
-			<tr><td>publish</td><td><code>x.md</code></td><td><b>out</b> — the pipeline reads the rendered file, unchanged from today</td></tr>
+			<tr><td>a draft being edited</td><td>—</td><td>visible in the app, held in the store with its revisions — not a file</td></tr>
+			<tr><td>publish</td><td><code>x.md</code></td><td><b>out</b> — rendered from the store; the pipeline reads it, unchanged from today</td></tr>
 			<tr><td>someone edits <code>x.md</code> directly on disk</td><td><code>x.md</code></td><td><b>in</b> — detected by hash, imported as an <code>ext</code> version instead of being clobbered</td></tr>
 		</table>
-		<p class="note" style="margin-top:10px">Assumption to veto: <code>x.md</code> keeps being re-rendered on every save (not only at publish). It costs nothing and keeps git as a dense backup and the file readable by anything — but the file is a rendering, no longer the truth while a post is being edited.</p>
+		<p class="note" style="margin-top:10px">Decided: a draft must be visible, but not as a file. <code>x.md</code> is written at the publish boundary; the store keeps draft revisions and history. The current per-save file write stays as interim behavior until the store lands — harmless, just no longer the design.</p>
 	</section>
 
 	<section>
