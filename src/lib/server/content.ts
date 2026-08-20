@@ -172,8 +172,7 @@ export const postsRev = (posts: PostSummary[]) =>
 			JSON.stringify(
 				posts.map((post) => [
 					post.path,
-					post.title,
-					post.date,
+					post.contentHash,
 					post.editingOrder,
 					post.deployStatus,
 					post.deleteRequested,
