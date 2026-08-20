@@ -21,6 +21,7 @@ import {
 import { commitPost, diffNumstat } from '$lib/server/git';
 import { runPublish } from '$lib/server/publish';
 import { setDeleteFlag } from '$lib/frontmatter';
+import { isValidWriter } from '$lib/save-rules';
 import { isPending, statusOf } from '$lib/types';
 
 const getPendingChanges = async (posts: Awaited<ReturnType<typeof listPosts>>) => {
@@ -85,7 +86,7 @@ export const actions = {
 
 		if (!postPath) return fail(400, { message: 'Post path is required' });
 		if (!baseHash) return fail(400, { message: 'baseHash is required' });
-		if (!/^[a-z][a-z0-9]{0,7}$/.test(writer) || writer === 'llm' || writer === 'ext') {
+		if (!isValidWriter(writer)) {
 			return fail(400, { message: `Invalid writer label: ${writer}` });
 		}
 		if (!/^[a-z0-9]{4,16}$/.test(sessionId)) {

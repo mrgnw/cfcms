@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
+	import { startPoll } from '$lib/poll';
+	import { isValidWriter } from '$lib/save-rules';
 	import { browser } from '$app/environment';
 	import { deserialize } from '$app/forms';
 	import { TextareaAutosize } from 'runed';
@@ -30,12 +32,7 @@
 	let knownHash = $state(untrack(() => post.contentHash ?? ''));
 	const defaultWriter = () => (/iPhone/.test(navigator.userAgent) ? 'ph' : 'mac');
 	const storedWriter = browser ? localStorage.getItem('cms-writer') : null;
-	const writer =
-		storedWriter && /^[a-z][a-z0-9]{0,7}$/.test(storedWriter) && storedWriter !== 'llm' && storedWriter !== 'ext'
-			? storedWriter
-			: browser
-				? defaultWriter()
-				: 'mac';
+	const writer = storedWriter && isValidWriter(storedWriter) ? storedWriter : browser ? defaultWriter() : 'mac';
 	const sessionId = browser
 		? (sessionStorage.getItem('cms-session') ??
 			(() => {
@@ -47,11 +44,11 @@
 	let conflictInfo = $state<{ writer: string; currentHash: string; currentFrontmatter: string; currentBody: string } | null>(null);
 	let diverged = $state(false);
 
-	type PaneSource = { id: string; label: string; body: string; dismissible: boolean };
+	type PaneSource = { id: string; body: string; dismissible: boolean };
 
 	let sources = $derived<PaneSource[]>([
-		...(llmDraft ? [{ id: 'llm', label: 'llm', body: llmDraft.body, dismissible: false }] : []),
-		...(versions ?? []).map((v) => ({ id: v.writer, label: v.writer, body: v.body, dismissible: true }))
+		...(llmDraft ? [{ id: 'llm', body: llmDraft.body, dismissible: false }] : []),
+		...(versions ?? []).map((v) => ({ id: v.writer, body: v.body, dismissible: true }))
 	]);
 	let selectedSourceId = $state<string | null>(null);
 	let activeSource = $derived(sources.find((s) => s.id === selectedSourceId) ?? sources[0] ?? null);
@@ -94,29 +91,18 @@
 			styleProp: 'minHeight'
 		});
 
-		const pollMs = 5000;
-
-		const poll = async () => {
-			if (document.hidden || status !== 'saved' || conflictInfo || diverged) return;
-			const res = await fetch(`/api/post?path=${encodeURIComponent(post.path)}`).catch(() => null);
-			if (!res?.ok) return;
-			const latest = (await res.json()) as { contentHash: string; frontmatter: string; body: string };
-			if (latest.contentHash === knownHash) return;
-			if (status !== 'saved' || conflictInfo || diverged) return;
-			adoptContent(latest);
-			onSaved?.();
-		};
-
-		const pollTimer = setInterval(poll, pollMs);
-		const onVisible = () => {
-			if (!document.hidden) poll();
-		};
-		document.addEventListener('visibilitychange', onVisible);
-
-		onDestroy(() => {
-			clearInterval(pollTimer);
-			document.removeEventListener('visibilitychange', onVisible);
-		});
+		onDestroy(
+			startPoll(async () => {
+				if (status !== 'saved' || conflictInfo || diverged) return;
+				const res = await fetch(`/api/post?path=${encodeURIComponent(post.path)}`).catch(() => null);
+				if (!res?.ok) return;
+				const latest = (await res.json()) as { contentHash: string; frontmatter: string; body: string };
+				if (latest.contentHash === knownHash) return;
+				if (status !== 'saved' || conflictInfo || diverged) return;
+				adoptContent(latest);
+				onSaved?.();
+			}, 5000)
+		);
 	}
 
 	let status = $state<SaveStatus>('saved');
@@ -196,55 +182,53 @@
 			fd.set('writer', writer);
 			fd.set('sessionId', sessionId);
 
-			try {
-				const res = await fetch('?/save', { method: 'POST', body: fd });
-				const result = deserialize(await res.text());
+			const res = await fetch('?/save', { method: 'POST', body: fd });
+			const result = deserialize(await res.text());
 
-				if (result.type === 'success') {
-					const data = result.data as
-						| {
-								savedHash?: string;
-								conflict?: boolean;
-								writer?: string;
-								currentHash?: string;
-								currentFrontmatter?: string;
-								currentBody?: string;
-						  }
-						| undefined;
+			if (result.type === 'success') {
+				const data = result.data as
+					| {
+							savedHash?: string;
+							conflict?: boolean;
+							writer?: string;
+							currentHash?: string;
+							currentFrontmatter?: string;
+							currentBody?: string;
+					  }
+					| undefined;
 
-					if (data?.conflict && data.writer && data.currentHash) {
-						conflictInfo = {
-							writer: data.writer,
-							currentHash: data.currentHash,
-							currentFrontmatter: data.currentFrontmatter ?? '',
-							currentBody: data.currentBody ?? ''
-						};
-						status = 'saved';
-						diverged = true;
-						onSaved?.();
-						return;
-					}
-
-					if (data?.savedHash) knownHash = data.savedHash;
+				if (data?.conflict && data.writer && data.currentHash) {
+					conflictInfo = {
+						writer: data.writer,
+						currentHash: data.currentHash,
+						currentFrontmatter: data.currentFrontmatter ?? '',
+						currentBody: data.currentBody ?? ''
+					};
 					status = 'saved';
-					conflictInfo = null;
-					diverged = false;
+					diverged = true;
 					onSaved?.();
 					return;
 				}
 
-				if (result.type === 'failure') {
-					const data = result.data as { message?: string; conflict?: boolean } | undefined;
-					status = 'error';
-					lastError = data?.message ?? 'Save failed';
-					return;
-				}
-
-				throw new Error(`Unexpected action result: ${result.type}`);
-			} catch (err) {
-				status = 'error';
-				lastError = err instanceof Error ? err.message : String(err);
+				if (data?.savedHash) knownHash = data.savedHash;
+				status = 'saved';
+				conflictInfo = null;
+				diverged = false;
+				onSaved?.();
+				return;
 			}
+
+			if (result.type === 'failure') {
+				const data = result.data as { message?: string; conflict?: boolean } | undefined;
+				status = 'error';
+				lastError = data?.message ?? 'Save failed';
+				return;
+			}
+
+			throw new Error(`Unexpected action result: ${result.type}`);
+		} catch (err) {
+			status = 'error';
+			lastError = err instanceof Error ? err.message : String(err);
 		} finally {
 			saveInFlight = false;
 		}
@@ -353,7 +337,7 @@
 							class:active={source.id === activeSource.id}
 							onclick={() => (selectedSourceId = source.id)}
 						>
-							{source.label}
+							{source.id}
 						</button>
 					{/each}
 					{#if activeSource.dismissible}
@@ -364,7 +348,7 @@
 				</div>
 			{/if}
 			{#key activeSource.id}
-				<ReferencePane label={activeSource.label} body={activeSource.body} userBody={bodyField} onInsert={insertFromReference} />
+				<ReferencePane label={activeSource.id} body={activeSource.body} userBody={bodyField} onInsert={insertFromReference} />
 			{/key}
 		</div>
 	{/if}
