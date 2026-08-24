@@ -8,7 +8,8 @@
 	import MilkdownEditor from './MilkdownEditor.svelte';
 	import ReferencePane from './ReferencePane.svelte';
 	import { parseFrontmatter, serializeFrontmatter } from '$lib/frontmatter';
-	import type { LlmDraft, Post, WriterVersion } from '$lib/types';
+	import { splitBlocks, normalizeBlock } from '$lib/blocks';
+	import type { FieldSegment, LlmDraft, Post, Segment, WriterVersion } from '$lib/types';
 
 	type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error';
 
@@ -62,14 +63,29 @@
 	let conflictInfo = $state<{ writer: string; currentHash: string; currentFrontmatter: string; currentBody: string } | null>(null);
 	let diverged = $state(false);
 
-	type PaneSource = { id: string; body: string; dismissible: boolean };
+	type PaneSource = {
+		id: string;
+		body: string;
+		dismissible: boolean;
+		updatedAt?: string;
+		segments?: Segment[] | null;
+		fields?: FieldSegment[] | null;
+	};
 
 	let sources = $derived<PaneSource[]>([
 		...(llmDraft ? [{ id: 'llm', body: llmDraft.body, dismissible: false }] : []),
-		...(versions ?? []).map((v) => ({ id: v.writer, body: v.body, dismissible: true }))
+		...(versions ?? []).map((v) => ({
+			id: v.writer,
+			body: v.body,
+			dismissible: true,
+			updatedAt: v.updatedAt,
+			segments: v.segments,
+			fields: v.fields
+		}))
 	]);
 	let selectedSourceId = $state<string | null>(null);
 	let activeSource = $derived(sources.find((s) => s.id === selectedSourceId) ?? sources[0] ?? null);
+	const sourceKey = (source: PaneSource) => `${source.id}:${source.updatedAt ?? ''}`;
 
 	async function dismissSource(id: string) {
 		const fd = new FormData();
@@ -93,6 +109,39 @@
 
 	function insertFromReference(markdown: string, inline: boolean) {
 		milkdown?.insertMarkdown(markdown, inline);
+		markDirty();
+	}
+
+	function replaceBody(nextBlocks: string[]) {
+		const next = nextBlocks.join('\n\n');
+		bodyField = next;
+		milkdown?.setContent(next);
+		markDirty();
+	}
+
+	function applySegment(segment: Segment) {
+		const blocks = splitBlocks(bodyField);
+		const norms = blocks.map(normalizeBlock);
+
+		if (segment.kind === 'modified' || segment.kind === 'removed') {
+			const target = norms.indexOf(normalizeBlock(segment.yours));
+			if (target < 0) return;
+			if (segment.kind === 'modified') blocks.splice(target, 1, segment.theirs);
+			else blocks.splice(target, 1);
+			replaceBody(blocks);
+			return;
+		}
+
+		const anchor = segment.afterMain ? norms.indexOf(normalizeBlock(segment.afterMain)) : -1;
+		blocks.splice(anchor + 1, 0, segment.theirs);
+		replaceBody(blocks);
+	}
+
+	function applyField(field: FieldSegment) {
+		if (field.name === 'title') titleField = field.theirs;
+		else if (field.name === 'date') dateField = field.theirs;
+		else if (field.name === 'tags') tagsText = field.theirs;
+		else if (field.name === 'custom') customField = field.theirs;
 		markDirty();
 	}
 
@@ -391,8 +440,17 @@
 					{/if}
 				</div>
 			{/if}
-			{#key activeSource.id}
-				<ReferencePane label={activeSource.id} body={activeSource.body} userBody={bodyField} onInsert={insertFromReference} />
+			{#key sourceKey(activeSource)}
+				<ReferencePane
+					label={activeSource.id}
+					body={activeSource.body}
+					userBody={bodyField}
+					segments={activeSource.segments}
+					fields={activeSource.fields}
+					onInsert={insertFromReference}
+					onApplySegment={applySegment}
+					onApplyField={applyField}
+				/>
 			{/key}
 		</div>
 	{/if}

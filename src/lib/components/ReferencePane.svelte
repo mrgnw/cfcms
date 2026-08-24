@@ -1,18 +1,29 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { isProse, normalizeBlock, splitBlocks, splitSentences } from '$lib/blocks';
+	import type { FieldSegment, Segment } from '$lib/types';
 
 	type Props = {
 		label: string;
 		body: string;
 		userBody: string;
+		segments?: Segment[] | null;
+		fields?: FieldSegment[] | null;
 		onInsert: (markdown: string, inline: boolean) => void;
+		onApplySegment?: (segment: Segment) => void;
+		onApplyField?: (field: FieldSegment) => void;
 	};
 
 	type Item = { id: number; block: string; prose: boolean; sentences: string[] };
 	type DragRef = { kind: 'para'; itemId: number } | { kind: 'sent'; itemId: number; index: number };
 
-	let { label, body, userBody, onInsert }: Props = $props();
+	let { label, body, userBody, segments = null, fields = null, onInsert, onApplySegment, onApplyField }: Props = $props();
+
+	let resolved = $state<Set<number>>(new Set());
+	const resolve = (index: number) => {
+		resolved = new Set([...resolved, index]);
+	};
+	let fieldResolved = $state<Set<string>>(new Set());
 
 	let nextId = 0;
 	let items = $state<Item[]>(
@@ -134,62 +145,118 @@
 		</span>
 	</div>
 
-	{#each items as item (item.id)}
-		{#if item.prose}
-			<p
-				class="para"
-				class:used={isUsed(item.block)}
-				class:drop-before={paraHint?.id === item.id && paraHint.where === 'before'}
-				class:drop-after={paraHint?.id === item.id && paraHint.where === 'after'}
-				ondragover={(e) => paraOver(e, item.id)}
-				ondrop={(e) => paraDrop(e, item.id)}
-			>
-				{#each item.sentences as sentence, j (j)}
-					<button
+	{#if segments != null}
+		{#if fields?.length}
+			{#each fields as field (field.name)}
+				{#if !fieldResolved.has(field.name)}
+					<div class="segment field">
+						<div class="seg-kind">{field.name}</div>
+						<div class="seg-theirs">{field.theirs}</div>
+						<div class="seg-yours">yours: {field.yours || '—'}</div>
+						<div class="seg-acts">
+							<button
+								class="primary"
+								onclick={() => {
+									onApplyField?.(field);
+									fieldResolved = new Set([...fieldResolved, field.name]);
+								}}>take theirs</button
+							>
+							<button onclick={() => (fieldResolved = new Set([...fieldResolved, field.name]))}>keep mine</button>
+						</div>
+					</div>
+				{/if}
+			{/each}
+		{/if}
+		{#each segments as segment, index (index)}
+			{#if !resolved.has(index)}
+				<div class="segment {segment.kind}">
+					<div class="seg-kind">{segment.kind === 'conflict' ? 'both changed' : segment.kind}</div>
+					{#if segment.kind === 'removed'}
+						<div class="seg-yours strike">{segment.yours}</div>
+					{:else}
+						<div class="seg-theirs">{segment.theirs}</div>
+					{/if}
+					{#if segment.kind === 'modified'}
+						<div class="seg-yours">replaces: {segment.yours}</div>
+					{/if}
+					<div class="seg-acts">
+						<button
+							class="primary"
+							onclick={() => {
+								onApplySegment?.(segment);
+								resolve(index);
+							}}
+						>
+							{segment.kind === 'added' ? 'accept' : segment.kind === 'modified' ? 'take theirs' : segment.kind === 'removed' ? 'remove it' : 'insert theirs'}
+						</button>
+						<button onclick={() => resolve(index)}>
+							{segment.kind === 'removed' ? 'keep it' : segment.kind === 'modified' || segment.kind === 'conflict' ? 'keep mine' : 'skip'}
+						</button>
+					</div>
+				</div>
+			{/if}
+		{/each}
+		{#if !segments.length && !fields?.length}
+			<p class="seg-empty">Nothing diverges — this version matches the post.</p>
+		{/if}
+	{:else}
+		{#each items as item (item.id)}
+			{#if item.prose}
+				<p
+					class="para"
+					class:used={isUsed(item.block)}
+					class:drop-before={paraHint?.id === item.id && paraHint.where === 'before'}
+					class:drop-after={paraHint?.id === item.id && paraHint.where === 'after'}
+					ondragover={(e) => paraOver(e, item.id)}
+					ondrop={(e) => paraDrop(e, item.id)}
+				>
+					{#each item.sentences as sentence, j (j)}
+						<button
+							type="button"
+							class="sent"
+							class:used={isUsed(sentence)}
+							class:copied={copiedKey === `${item.id}:${j}`}
+							class:sdrop-before={sentHint?.itemId === item.id && sentHint.index === j && sentHint.where === 'before'}
+							class:sdrop-after={sentHint?.itemId === item.id && sentHint.index === j && sentHint.where === 'after'}
+							draggable="true"
+							ondragstart={(e) => sentDragStart(e, item.id, j, sentence)}
+							ondragover={(e) => sentOver(e, item.id, j)}
+							ondrop={(e) => sentDrop(e, item.id, j)}
+							ondragend={endDrag}
+							onclick={() => activate(sentence, true, `${item.id}:${j}`)}
+							title={mode === 'copy' ? 'Copy this sentence' : 'Insert this sentence at the cursor'}
+						>{sentence}</button>
+					{/each}<button
 						type="button"
-						class="sent"
-						class:used={isUsed(sentence)}
-						class:copied={copiedKey === `${item.id}:${j}`}
-						class:sdrop-before={sentHint?.itemId === item.id && sentHint.index === j && sentHint.where === 'before'}
-						class:sdrop-after={sentHint?.itemId === item.id && sentHint.index === j && sentHint.where === 'after'}
+						class="para-insert"
+						class:copied={copiedKey === `${item.id}:p`}
 						draggable="true"
-						ondragstart={(e) => sentDragStart(e, item.id, j, sentence)}
-						ondragover={(e) => sentOver(e, item.id, j)}
-						ondrop={(e) => sentDrop(e, item.id, j)}
+						ondragstart={(e) => paraDragStart(e, item.id, item.block)}
 						ondragend={endDrag}
-						onclick={() => activate(sentence, true, `${item.id}:${j}`)}
-						title={mode === 'copy' ? 'Copy this sentence' : 'Insert this sentence at the cursor'}
-					>{sentence}</button>
-				{/each}<button
+						onclick={() => activate(item.block, false, `${item.id}:p`)}
+						title={mode === 'copy' ? 'Copy the paragraph' : 'Insert the whole paragraph at the cursor'}
+						aria-label="Paragraph"
+					>¶</button>
+				</p>
+			{:else}
+				<button
 					type="button"
-					class="para-insert"
-					class:copied={copiedKey === `${item.id}:p`}
+					class="block"
+					class:used={isUsed(item.block)}
+					class:copied={copiedKey === `${item.id}:b`}
+					class:drop-before={paraHint?.id === item.id && paraHint.where === 'before'}
+					class:drop-after={paraHint?.id === item.id && paraHint.where === 'after'}
 					draggable="true"
 					ondragstart={(e) => paraDragStart(e, item.id, item.block)}
+					ondragover={(e) => paraOver(e, item.id)}
+					ondrop={(e) => paraDrop(e, item.id)}
 					ondragend={endDrag}
-					onclick={() => activate(item.block, false, `${item.id}:p`)}
-					title={mode === 'copy' ? 'Copy the paragraph' : 'Insert the whole paragraph at the cursor'}
-					aria-label="Paragraph"
-				>¶</button>
-			</p>
-		{:else}
-			<button
-				type="button"
-				class="block"
-				class:used={isUsed(item.block)}
-				class:copied={copiedKey === `${item.id}:b`}
-				class:drop-before={paraHint?.id === item.id && paraHint.where === 'before'}
-				class:drop-after={paraHint?.id === item.id && paraHint.where === 'after'}
-				draggable="true"
-				ondragstart={(e) => paraDragStart(e, item.id, item.block)}
-				ondragover={(e) => paraOver(e, item.id)}
-				ondrop={(e) => paraDrop(e, item.id)}
-				ondragend={endDrag}
-				onclick={() => activate(item.block, false, `${item.id}:b`)}
-				title={mode === 'copy' ? 'Copy' : 'Insert at the cursor'}
-			>{item.block}</button>
-		{/if}
-	{/each}
+					onclick={() => activate(item.block, false, `${item.id}:b`)}
+					title={mode === 'copy' ? 'Copy' : 'Insert at the cursor'}
+				>{item.block}</button>
+			{/if}
+		{/each}
+	{/if}
 </aside>
 
 <style>
@@ -367,5 +434,52 @@
 			position: static;
 			max-height: 40vh;
 		}
+	}
+
+	.segment {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 8px;
+		margin-bottom: 10px;
+		padding: 9px 10px;
+	}
+
+	.segment.added { box-shadow: inset 2.5px 0 0 var(--ok); }
+	.segment.modified { box-shadow: inset 2.5px 0 0 var(--accent); }
+	.segment.removed { box-shadow: inset 2.5px 0 0 var(--danger); }
+	.segment.conflict { box-shadow: inset 2.5px 0 0 var(--warn); }
+	.segment.field { box-shadow: inset 2.5px 0 0 var(--ink-3); }
+
+	.seg-kind {
+		color: var(--ink-3);
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		margin-bottom: 5px;
+		text-transform: uppercase;
+	}
+
+	.seg-theirs { font: 13px/1.5 var(--font-body, Georgia, serif); margin-bottom: 6px; white-space: pre-wrap; }
+	.seg-yours { color: var(--ink-3); font-size: 11.5px; margin-bottom: 6px; white-space: pre-wrap; }
+	.seg-yours.strike { text-decoration: line-through; }
+	.seg-acts { display: flex; gap: 6px; }
+
+	.seg-acts button {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		color: var(--ink-2);
+		cursor: pointer;
+		font: 600 11px/1 inherit;
+		font-family: inherit;
+		padding: 4px 8px;
+	}
+
+	.seg-acts button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+	.seg-empty {
+		color: var(--ink-3);
+		font-size: 12.5px;
+		padding: 8px 10px;
 	}
 </style>
