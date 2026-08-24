@@ -46,17 +46,16 @@ export const findRevisionByHash = async (postPath: string, wantedHash: string) =
 
 	const gitPath = getPostGitPath(postPath);
 	const log = await runGit(['log', `-n${revisionWalkLimit}`, '--format=%H', '--', gitPath]);
-	let found: { frontmatter: string; body: string } | null = null;
+	if (!log.ok) return null;
 
-	if (log.ok) {
-		for (const revision of log.output.trim().split('\n').filter(Boolean)) {
-			const show = await runGit(['show', `${revision}:${gitPath}`]);
-			if (!show.ok || show.output.length >= outputLimit) continue;
-			const split = splitRawPost(show.output);
-			if (hashPostContent(split.frontmatter, split.body) === wantedHash) {
-				found = split;
-				break;
-			}
+	let found: { frontmatter: string; body: string } | null = null;
+	for (const revision of log.output.trim().split('\n').filter(Boolean)) {
+		const show = await runGit(['show', `${revision}:${gitPath}`]);
+		if (!show.ok || show.output.length >= outputLimit) continue;
+		const split = splitRawPost(show.output);
+		if (hashPostContent(split.frontmatter, split.body) === wantedHash) {
+			found = split;
+			break;
 		}
 	}
 
