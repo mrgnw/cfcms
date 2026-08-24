@@ -30,9 +30,27 @@
 	let customField = $state(initial.custom);
 	let bodyField = $state(untrack(() => post.body));
 	let knownHash = $state(untrack(() => post.contentHash ?? ''));
-	const defaultWriter = () => (/iPhone/.test(navigator.userAgent) ? 'ph' : 'mac');
-	const storedWriter = browser ? localStorage.getItem('cms-writer') : null;
-	const writer = storedWriter && isValidWriter(storedWriter) ? storedWriter : browser ? defaultWriter() : 'mac';
+	const defaultWriter = () => {
+		if (/iPhone/.test(navigator.userAgent)) return 'ph';
+		if (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1) return 'pad';
+		return 'mac';
+	};
+	const initialWriter = () => {
+		if (!browser) return 'mac';
+		const stored = localStorage.getItem('cms-writer');
+		return stored && isValidWriter(stored) ? stored : defaultWriter();
+	};
+	let writerName = $state(initialWriter());
+	let editingWriter = $state(false);
+	let writerDraft = $state('');
+
+	function commitWriter() {
+		editingWriter = false;
+		const next = writerDraft.trim();
+		if (!isValidWriter(next) || next === writerName) return;
+		writerName = next;
+		localStorage.setItem('cms-writer', next);
+	}
 	const sessionId = browser
 		? (sessionStorage.getItem('cms-session') ??
 			(() => {
@@ -179,7 +197,7 @@
 			fd.set('frontmatter', serialized);
 			fd.set('body', bodyField);
 			fd.set('baseHash', knownHash);
-			fd.set('writer', writer);
+			fd.set('writer', writerName);
 			fd.set('sessionId', sessionId);
 
 			const res = await fetch('?/save', { method: 'POST', body: fd });
@@ -196,6 +214,8 @@
 							currentBody?: string;
 					  }
 					| undefined;
+
+				if (data?.writer && data.writer !== writerName) writerName = data.writer;
 
 				if (data?.conflict && data.writer && data.currentHash) {
 					conflictInfo = {
@@ -274,6 +294,30 @@
 				onclick={() => (referenceOpen = !referenceOpen)}
 			>
 				Reference
+			</button>
+		{/if}
+		{#if editingWriter}
+			<input
+				class="writer-chip-input"
+				bind:value={writerDraft}
+				{@attach (el) => el.focus()}
+				onblur={commitWriter}
+				onkeydown={(e) => {
+					if (e.key === 'Enter') commitWriter();
+					if (e.key === 'Escape') editingWriter = false;
+				}}
+			/>
+		{:else}
+			<button
+				class="writer-chip"
+				type="button"
+				title="This device writes as '{writerName}' — click to rename"
+				onclick={() => {
+					writerDraft = writerName;
+					editingWriter = true;
+				}}
+			>
+				{writerName}
 			</button>
 		{/if}
 		<button
@@ -557,6 +601,26 @@
 		.workspace.split {
 			grid-template-columns: 1fr;
 		}
+	}
+
+	.writer-chip {
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+		border: none;
+		border-radius: 5px;
+		color: var(--accent-ink);
+		cursor: pointer;
+		font: 700 11px/1 var(--font-mono);
+		padding: 4px 7px;
+	}
+
+	.writer-chip-input {
+		background: var(--bg);
+		border: 1px solid var(--line);
+		border-radius: 5px;
+		color: var(--ink);
+		font: 700 11px/1 var(--font-mono);
+		padding: 4px 7px;
+		width: 72px;
 	}
 
 	.status-button {

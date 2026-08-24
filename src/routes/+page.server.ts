@@ -11,6 +11,7 @@ import {
 } from '$lib/server/content';
 import {
 	addToEditing,
+	claimWriter,
 	deleteVersion,
 	getLastPublishedAt,
 	listVersions,
@@ -93,10 +94,18 @@ export const actions = {
 			return fail(400, { message: 'Invalid session id' });
 		}
 
+		const grantedWriter = claimWriter(writer, sessionId);
 		const result = await savePost(postPath, frontmatter, body, baseHash);
 
 		if (result.outcome === 'conflict') {
-			const storedWriter = upsertVersion({ path: postPath, writer, sessionId, baseHash, frontmatter, body });
+			const storedWriter = upsertVersion({
+				path: postPath,
+				writer: grantedWriter,
+				sessionId,
+				baseHash,
+				frontmatter,
+				body
+			});
 			return {
 				conflict: true,
 				writer: storedWriter,
@@ -119,7 +128,8 @@ export const actions = {
 					: 'Saved; git backup failed',
 			savedPath: postPath,
 			savedHash: result.post.contentHash,
-			backup: commit
+			backup: commit,
+			writer: grantedWriter
 		};
 	},
 	dismissVersion: async ({ request }) => {

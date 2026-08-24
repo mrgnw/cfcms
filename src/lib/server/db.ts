@@ -43,6 +43,12 @@ const db = () => {
 			updated_at TEXT NOT NULL,
 			PRIMARY KEY (path, writer)
 		);
+
+		CREATE TABLE IF NOT EXISTS leases (
+			writer TEXT PRIMARY KEY,
+			session_id TEXT NOT NULL,
+			seen_at TEXT NOT NULL
+		);
 	`);
 	importLegacyDeployState();
 	return instance;
@@ -288,4 +294,29 @@ export const listVersions = (path: string): WriterVersion[] => {
 
 export const deleteVersion = (path: string, writer: string) => {
 	db().prepare('DELETE FROM versions WHERE path = ? AND writer = ?').run(path, writer);
+};
+
+const leaseGraceMs = 40_000;
+
+export const claimWriter = (requested: string, sessionId: string): string => {
+	const now = Date.now();
+	const owner = db().prepare('SELECT session_id, seen_at FROM leases WHERE writer = ?');
+	const write = db().prepare(`
+		INSERT INTO leases (writer, session_id, seen_at) VALUES (?, ?, ?)
+		ON CONFLICT(writer) DO UPDATE SET session_id = excluded.session_id, seen_at = excluded.seen_at
+	`);
+
+	for (let attempt = 0; attempt < versionWriterLimit; attempt += 1) {
+		const writer = attempt === 0 ? requested : `${requested}${attempt + 1}`;
+		const existing = owner.get(writer) as { session_id: string; seen_at: string } | undefined;
+		const heldByOther =
+			existing && existing.session_id !== sessionId && now - Date.parse(existing.seen_at) < leaseGraceMs;
+
+		if (heldByOther) continue;
+
+		write.run(writer, sessionId, new Date(now).toISOString());
+		return writer;
+	}
+
+	throw new Error(`No free writer lease for ${requested}`);
 };
