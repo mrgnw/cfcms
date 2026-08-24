@@ -9,7 +9,7 @@ Design: `mockups/sync-design.html` · concepts settled 2026-08-18
 ## Progress
 
 - [x] **Conflict-safe saves** — PR #1, merged 2026-08-24. Base-tracked writes (`src/lib/save-rules.ts`), version-on-conflict (sqlite `versions` table), versions as reference-pane tabs with dismiss, adopt-when-clean editor poll (`/api/post`), rev-gated live sidebar (`/api/posts`).
-- [ ] **Writer chips + leases** — branch: writer-chips · plan: `docs/superpowers/plans/2026-08-24-writer-chips.md` (gitignored, local). Editable writer chip in the editor header, better iPad default, server lease so two live sessions never share a name (design §8). Replaces the `localStorage.setItem('cms-writer', ...)` console workaround.
+- [ ] **Writer chips + leases** — implemented on branch writer-chips, PR open (awaiting merge). Editable writer chip in the editor header, iPad default via `maxTouchPoints`, server lease (`leases` table, 40 s grace) so two live sessions never share a name; granted name returned on every save and adopted by the chip. Plan: `docs/superpowers/plans/2026-08-24-writer-chips.md` (gitignored, local).
 - [ ] **Segment-level reconcile** — base-aware 3-way diff in the reference pane: only divergent segments, atomic verbs (added → accept/skip · modified → theirs/yours · removed → confirm/keep), design §4. Also covers: version frontmatter divergence currently invisible; pane snapshot staleness for live-updating versions.
 - [ ] **Store-as-truth** — drafts move into sqlite with revisions; `x.md` written at publish only; one-time corpus import; external `.md` edits become an `ext` version. Fixes the pre-existing leading-newline accumulation bug (needs the hash-migration moment). Add the `storedBodyForm`↔`parsePost` round-trip check here.
 
