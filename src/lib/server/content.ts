@@ -5,7 +5,7 @@ import { formatYamlScalar, parseYamlScalar } from '$lib/frontmatter';
 import { getEditingOrder, pruneMissingPosts, seedEditingQueue } from './db';
 import { getDeployStatus, hashPostContent, readDeployState, type DeployState, type DeployStatus } from './deploy-state';
 import { contentBaseDirectory, contentDirectory } from './paths';
-import { decideSave, storedBodyForm, type SaveDecision } from '$lib/save-rules';
+import { decideSave, normalizeNewlines, storedBodyForm, type SaveDecision } from '$lib/save-rules';
 
 export type PostSummary = {
 	path: string;
@@ -31,6 +31,11 @@ export type Post = PostSummary & {
 };
 
 const frontmatterPattern = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
+
+export const splitRawPost = (raw: string) => {
+	const match = raw.match(frontmatterPattern);
+	return { frontmatter: match?.[1] ?? '', body: match ? raw.slice(match[0].length) : raw };
+};
 
 const isMarkdownFile = (filePath: string) => filePath.endsWith('.md');
 
@@ -85,9 +90,7 @@ const parsePost = async (
 	editingOrder: Map<string, number>
 ): Promise<Post> => {
 	const raw = await readFile(filePath, 'utf8');
-	const match = raw.match(frontmatterPattern);
-	const frontmatter = match?.[1] ?? '';
-	const body = match ? raw.slice(match[0].length) : raw;
+	const { frontmatter, body } = splitRawPost(raw);
 	const metadata = await stat(filePath);
 	const postPath = normalizePostPath(relative(contentDirectory, filePath));
 	const fallbackTitle = postPath.replace(/\.md$/, '').split('/').at(-1)?.replaceAll('-', ' ') ?? 'Untitled';
@@ -246,8 +249,10 @@ const chainSave = <T>(postPath: string, work: () => Promise<T>): Promise<T> => {
 
 export type SaveResult = { outcome: SaveDecision; post: Post };
 
-export const savePost = (postPath: string, frontmatter: string, body: string, baseHash: string): Promise<SaveResult> =>
+export const savePost = (postPath: string, rawFrontmatter: string, rawBody: string, baseHash: string): Promise<SaveResult> =>
 	chainSave(postPath, async () => {
+		const frontmatter = normalizeNewlines(rawFrontmatter);
+		const body = normalizeNewlines(rawBody);
 		const current = await getPost(postPath);
 		const incomingHash = hashPostContent(frontmatter, storedBodyForm(frontmatter, body));
 		const outcome = decideSave(baseHash, current.contentHash, incomingHash);

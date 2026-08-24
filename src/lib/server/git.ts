@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { getPostGitPath } from './content';
+import { getPostGitPath, splitRawPost } from './content';
+import { hashPostContent } from './deploy-state';
 import { contentBaseDirectory } from './paths';
 
 type GitResult = {
@@ -33,6 +34,35 @@ const runGit = (args: string[]): Promise<GitResult> =>
 			resolve({ ok: false, status: null, output: caught.message });
 		});
 	});
+
+const revisionWalkLimit = 50;
+const baseContentCache = new Map<string, { frontmatter: string; body: string } | null>();
+const baseContentCacheLimit = 200;
+
+export const findRevisionByHash = async (postPath: string, wantedHash: string) => {
+	const cacheKey = `${postPath}\n${wantedHash}`;
+	const cached = baseContentCache.get(cacheKey);
+	if (cached !== undefined) return cached;
+
+	const gitPath = getPostGitPath(postPath);
+	const log = await runGit(['log', `-n${revisionWalkLimit}`, '--format=%H', '--', gitPath]);
+	if (!log.ok) return null;
+
+	let found: { frontmatter: string; body: string } | null = null;
+	for (const revision of log.output.trim().split('\n').filter(Boolean)) {
+		const show = await runGit(['show', `${revision}:${gitPath}`]);
+		if (!show.ok || show.output.length >= outputLimit) continue;
+		const split = splitRawPost(show.output);
+		if (hashPostContent(split.frontmatter, split.body) === wantedHash) {
+			found = split;
+			break;
+		}
+	}
+
+	if (baseContentCache.size >= baseContentCacheLimit) baseContentCache.clear();
+	baseContentCache.set(cacheKey, found);
+	return found;
+};
 
 const compactMessage = (value: string) => value.replace(/\s+/g, ' ').trim().slice(0, 120);
 
