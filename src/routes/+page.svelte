@@ -1,5 +1,8 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
+	import { browser } from '$app/environment';
 	import { invalidateAll } from '$app/navigation';
+	import { startPoll } from '$lib/poll';
 	import { resolve } from '$app/paths';
 	import DeletedView from '$lib/components/DeletedView.svelte';
 	import HomePanel from '$lib/components/HomePanel.svelte';
@@ -14,13 +17,16 @@
 		type PendingChange,
 		type Post,
 		type PostFilter,
-		type PostListItem
+		type PostListItem,
+		type WriterVersion
 	} from '$lib/types';
 
 	type PageData = {
 		posts: PostListItem[];
+		postsRev: string;
 		post: Post | null;
 		llmDraft: LlmDraft | null;
+		versions: WriterVersion[] | null;
 		view: 'publish' | 'deleted' | null;
 		pendingChanges: PendingChange[] | null;
 		lastPublishedAt: string | null;
@@ -44,6 +50,17 @@
 	});
 
 	let recentPosts = $derived(activePosts.slice(0, 8));
+
+	if (browser) {
+		onDestroy(
+			startPoll(async () => {
+				const res = await fetch('/api/posts').catch(() => null);
+				if (!res?.ok) return;
+				const latest = (await res.json()) as { rev: string };
+				if (latest.rev !== data.postsRev) invalidateAll();
+			}, 5000)
+		);
+	}
 </script>
 
 <svelte:head>
@@ -74,7 +91,12 @@
 			</a>
 			{#key data.post.path}
 				<div class="post-enter">
-					<PostEditor post={data.post} llmDraft={data.llmDraft} onSaved={() => invalidateAll()} />
+					<PostEditor
+						post={data.post}
+						llmDraft={data.llmDraft}
+						versions={data.versions}
+						onSaved={() => invalidateAll()}
+					/>
 				</div>
 			{/key}
 		{:else}

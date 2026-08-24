@@ -12,6 +12,7 @@ export type PostListItem = {
 	slug?: string;
 	excerpt?: string;
 	updatedAt?: string;
+	contentHash?: string;
 	deployStatus?: DeployStatus;
 	deployedAt?: string;
 };
@@ -24,6 +25,12 @@ export type Post = PostListItem & {
 export type LlmDraft = {
 	path: string;
 	body: string;
+};
+
+export type WriterVersion = {
+	writer: string;
+	body: string;
+	updatedAt: string;
 };
 
 export type PublishResult = {

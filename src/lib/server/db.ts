@@ -32,6 +32,17 @@ const db = () => {
 			key TEXT PRIMARY KEY,
 			value TEXT
 		);
+
+		CREATE TABLE IF NOT EXISTS versions (
+			path TEXT NOT NULL,
+			writer TEXT NOT NULL,
+			session_id TEXT NOT NULL,
+			base_hash TEXT NOT NULL,
+			frontmatter TEXT NOT NULL,
+			body TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			PRIMARY KEY (path, writer)
+		);
 	`);
 	importLegacyDeployState();
 	return instance;
@@ -209,4 +220,72 @@ export const pruneMissingPosts = (existingPaths: Set<string>) => {
 		if (!existingPaths.has(row.path)) remove.run(row.path);
 	}
 	db().exec('COMMIT');
+};
+
+export type WriterVersion = {
+	path: string;
+	writer: string;
+	sessionId: string;
+	baseHash: string;
+	frontmatter: string;
+	body: string;
+	updatedAt: string;
+};
+
+const versionWriterLimit = 10;
+
+export const upsertVersion = (version: Omit<WriterVersion, 'updatedAt'>): string => {
+	const now = new Date().toISOString();
+	const owner = db().prepare('SELECT session_id FROM versions WHERE path = ? AND writer = ?');
+	const write = db().prepare(`
+		INSERT INTO versions (path, writer, session_id, base_hash, frontmatter, body, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(path, writer) DO UPDATE SET
+			base_hash = excluded.base_hash,
+			frontmatter = excluded.frontmatter,
+			body = excluded.body,
+			updated_at = excluded.updated_at
+	`);
+
+	for (let attempt = 0; attempt < versionWriterLimit; attempt += 1) {
+		const writer = attempt === 0 ? version.writer : `${version.writer}${attempt + 1}`;
+		const existing = owner.get(version.path, writer) as { session_id: string } | undefined;
+
+		if (existing && existing.session_id !== version.sessionId) continue;
+
+		write.run(version.path, writer, version.sessionId, version.baseHash, version.frontmatter, version.body, now);
+		return writer;
+	}
+
+	throw new Error(`No free writer label for ${version.writer} on ${version.path}`);
+};
+
+export const listVersions = (path: string): WriterVersion[] => {
+	const rows = db()
+		.prepare(
+			'SELECT path, writer, session_id, base_hash, frontmatter, body, updated_at FROM versions WHERE path = ? ORDER BY writer'
+		)
+		.all(path) as {
+		path: string;
+		writer: string;
+		session_id: string;
+		base_hash: string;
+		frontmatter: string;
+		body: string;
+		updated_at: string;
+	}[];
+
+	return rows.map((row) => ({
+		path: row.path,
+		writer: row.writer,
+		sessionId: row.session_id,
+		baseHash: row.base_hash,
+		frontmatter: row.frontmatter,
+		body: row.body,
+		updatedAt: row.updated_at
+	}));
+};
+
+export const deleteVersion = (path: string, writer: string) => {
+	db().prepare('DELETE FROM versions WHERE path = ? AND writer = ?').run(path, writer);
 };

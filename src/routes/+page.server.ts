@@ -6,12 +6,22 @@ import {
 	getLlmDraft,
 	getPost,
 	listPosts,
+	postsRev,
 	savePost
 } from '$lib/server/content';
-import { addToEditing, getLastPublishedAt, removeFromEditing, reorderEditing } from '$lib/server/db';
+import {
+	addToEditing,
+	deleteVersion,
+	getLastPublishedAt,
+	listVersions,
+	removeFromEditing,
+	reorderEditing,
+	upsertVersion
+} from '$lib/server/db';
 import { commitPost, diffNumstat } from '$lib/server/git';
 import { runPublish } from '$lib/server/publish';
 import { setDeleteFlag } from '$lib/frontmatter';
+import { isValidWriter } from '$lib/save-rules';
 import { isPending, statusOf } from '$lib/types';
 
 const getPendingChanges = async (posts: Awaited<ReturnType<typeof listPosts>>) => {
@@ -43,8 +53,10 @@ export const load = async ({ url }) => {
 
 	return {
 		posts: posts.map(({ frontmatter, body, ...summary }) => summary),
+		postsRev: postsRev(posts),
 		post,
 		llmDraft,
+		versions: post ? listVersions(post.path).map(({ writer, body, updatedAt }) => ({ writer, body, updatedAt })) : null,
 		view: view === 'publish' || view === 'deleted' ? view : null,
 		pendingChanges: view === 'publish' ? await getPendingChanges(posts) : null,
 		lastPublishedAt: getLastPublishedAt()
@@ -68,21 +80,57 @@ export const actions = {
 		const postPath = String(form.get('path') ?? '');
 		const frontmatter = String(form.get('frontmatter') ?? '');
 		const body = String(form.get('body') ?? '');
+		const baseHash = String(form.get('baseHash') ?? '');
+		const writer = String(form.get('writer') ?? '');
+		const sessionId = String(form.get('sessionId') ?? '');
 
 		if (!postPath) return fail(400, { message: 'Post path is required' });
+		if (!baseHash) return fail(400, { message: 'baseHash is required' });
+		if (!isValidWriter(writer)) {
+			return fail(400, { message: `Invalid writer label: ${writer}` });
+		}
+		if (!/^[a-z0-9]{4,16}$/.test(sessionId)) {
+			return fail(400, { message: 'Invalid session id' });
+		}
 
-		await savePost(postPath, frontmatter, body);
-		const commit = await commitPost(postPath, 'save');
+		const result = await savePost(postPath, frontmatter, body, baseHash);
+
+		if (result.outcome === 'conflict') {
+			const storedWriter = upsertVersion({ path: postPath, writer, sessionId, baseHash, frontmatter, body });
+			return {
+				conflict: true,
+				writer: storedWriter,
+				currentHash: result.post.contentHash,
+				currentFrontmatter: result.post.frontmatter,
+				currentBody: result.post.body,
+				savedPath: postPath
+			};
+		}
+
+		const commit = result.outcome === 'write' ? await commitPost(postPath, 'save') : null;
 
 		return {
-			message: commit.ok
-				? commit.committed
-					? 'Saved and committed'
-					: 'Saved; no git changes'
-				: 'Saved; git backup failed',
+			message: !commit
+				? 'Already saved'
+				: commit.ok
+					? commit.committed
+						? 'Saved and committed'
+						: 'Saved; no git changes'
+					: 'Saved; git backup failed',
 			savedPath: postPath,
+			savedHash: result.post.contentHash,
 			backup: commit
 		};
+	},
+	dismissVersion: async ({ request }) => {
+		const form = await request.formData();
+		const path = String(form.get('path') ?? '');
+		const writer = String(form.get('writer') ?? '');
+
+		if (!path || !writer) return fail(400, { message: 'path and writer are required' });
+
+		deleteVersion(path, writer);
+		return { dismissed: writer };
 	},
 	fork: async ({ request }) => {
 		const form = await request.formData();
@@ -153,7 +201,9 @@ export const actions = {
 
 		const post = await getPost(path);
 
-		await savePost(path, setDeleteFlag(post.frontmatter, true), post.body);
+		const result = await savePost(path, setDeleteFlag(post.frontmatter, true), post.body, post.contentHash);
+		if (result.outcome === 'conflict') return fail(409, { message: 'Post changed while trashing — retry' });
+
 		await commitPost(path, 'save');
 		removeFromEditing(path);
 		return { trashed: path };
@@ -166,7 +216,9 @@ export const actions = {
 
 		const post = await getPost(path);
 
-		await savePost(path, setDeleteFlag(post.frontmatter, false), post.body);
+		const result = await savePost(path, setDeleteFlag(post.frontmatter, false), post.body, post.contentHash);
+		if (result.outcome === 'conflict') return fail(409, { message: 'Post changed while restoring — retry' });
+
 		await commitPost(path, 'save');
 		return { restored: path };
 	},

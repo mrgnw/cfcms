@@ -1,16 +1,23 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
+	import { startPoll } from '$lib/poll';
+	import { isValidWriter } from '$lib/save-rules';
 	import { browser } from '$app/environment';
+	import { deserialize } from '$app/forms';
 	import { TextareaAutosize } from 'runed';
 	import MilkdownEditor from './MilkdownEditor.svelte';
 	import ReferencePane from './ReferencePane.svelte';
 	import { parseFrontmatter, serializeFrontmatter } from '$lib/frontmatter';
-	import type { LlmDraft, Post } from '$lib/types';
+	import type { LlmDraft, Post, WriterVersion } from '$lib/types';
 
 	type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error';
 
-	let { post, llmDraft = null, onSaved }: { post: Post; llmDraft?: LlmDraft | null; onSaved?: () => void } =
-		$props();
+	let {
+		post,
+		llmDraft = null,
+		versions = null,
+		onSaved
+	}: { post: Post; llmDraft?: LlmDraft | null; versions?: WriterVersion[] | null; onSaved?: () => void } = $props();
 
 	const initial = untrack(() => parseFrontmatter(post.frontmatter));
 
@@ -22,13 +29,49 @@
 	let deleteField = $state(initial.deleteRequested);
 	let customField = $state(initial.custom);
 	let bodyField = $state(untrack(() => post.body));
+	let knownHash = $state(untrack(() => post.contentHash ?? ''));
+	const defaultWriter = () => (/iPhone/.test(navigator.userAgent) ? 'ph' : 'mac');
+	const storedWriter = browser ? localStorage.getItem('cms-writer') : null;
+	const writer = storedWriter && isValidWriter(storedWriter) ? storedWriter : browser ? defaultWriter() : 'mac';
+	const sessionId = browser
+		? (sessionStorage.getItem('cms-session') ??
+			(() => {
+				const id = crypto.randomUUID().replaceAll('-', '').slice(0, 8);
+				sessionStorage.setItem('cms-session', id);
+				return id;
+			})())
+		: 'ssrnoop00';
+	let conflictInfo = $state<{ writer: string; currentHash: string; currentFrontmatter: string; currentBody: string } | null>(null);
+	let diverged = $state(false);
+
+	type PaneSource = { id: string; body: string; dismissible: boolean };
+
+	let sources = $derived<PaneSource[]>([
+		...(llmDraft ? [{ id: 'llm', body: llmDraft.body, dismissible: false }] : []),
+		...(versions ?? []).map((v) => ({ id: v.writer, body: v.body, dismissible: true }))
+	]);
+	let selectedSourceId = $state<string | null>(null);
+	let activeSource = $derived(sources.find((s) => s.id === selectedSourceId) ?? sources[0] ?? null);
+
+	async function dismissSource(id: string) {
+		const fd = new FormData();
+		fd.set('path', post.path);
+		fd.set('writer', id);
+		const res = await fetch('?/dismissVersion', { method: 'POST', body: fd }).catch(() => null);
+		if (!res?.ok) {
+			lastError = `Could not dismiss version ${id}`;
+			return;
+		}
+		onSaved?.();
+	}
+
 	let tagsInput = $state<HTMLTextAreaElement | undefined>();
 	let customInput = $state<HTMLTextAreaElement | undefined>();
 	let milkdown = $state<
 		| { setContent: (markdown: string) => void; insertMarkdown: (markdown: string, inline?: boolean) => void }
 		| undefined
 	>();
-	let referenceOpen = $state(untrack(() => Boolean(llmDraft)));
+	let referenceOpen = $state(untrack(() => Boolean(llmDraft) || (versions?.length ?? 0) > 0));
 
 	function insertFromReference(markdown: string, inline: boolean) {
 		milkdown?.insertMarkdown(markdown, inline);
@@ -47,6 +90,19 @@
 			input: () => customField,
 			styleProp: 'minHeight'
 		});
+
+		onDestroy(
+			startPoll(async () => {
+				if (status !== 'saved' || conflictInfo || diverged) return;
+				const res = await fetch(`/api/post?path=${encodeURIComponent(post.path)}`).catch(() => null);
+				if (!res?.ok) return;
+				const latest = (await res.json()) as { contentHash: string; frontmatter: string; body: string };
+				if (latest.contentHash === knownHash) return;
+				if (status !== 'saved' || conflictInfo || diverged) return;
+				adoptContent(latest);
+				onSaved?.();
+			}, 5000)
+		);
 	}
 
 	let status = $state<SaveStatus>('saved');
@@ -73,37 +129,108 @@
 		markDirty();
 	}
 
+	function adoptContent(next: { contentHash: string; frontmatter: string; body: string }) {
+		const fields = parseFrontmatter(next.frontmatter);
+		titleField = fields.title;
+		dateField = fields.date;
+		tagsText = fields.tags.join(', ');
+		publishField = fields.publish;
+		pinField = fields.pin;
+		deleteField = fields.deleteRequested;
+		customField = fields.custom;
+		bodyField = next.body;
+		milkdown?.setContent(next.body);
+		knownHash = next.contentHash;
+		status = 'saved';
+		conflictInfo = null;
+		diverged = false;
+	}
+
+	let saveInFlight = false;
+
 	async function save() {
-		if (saveTimer) {
-			clearTimeout(saveTimer);
-			saveTimer = null;
+		if (saveInFlight) {
+			if (saveTimer) clearTimeout(saveTimer);
+			saveTimer = setTimeout(save, 400);
+			return;
 		}
-		status = 'saving';
-		lastError = null;
-
-		const serialized = serializeFrontmatter({
-			title: titleField,
-			date: dateField,
-			tags: currentTags,
-			publish: publishField,
-			pin: pinField,
-			deleteRequested: deleteField,
-			custom: customField
-		});
-
-		const fd = new FormData();
-		fd.set('path', post.path);
-		fd.set('frontmatter', serialized);
-		fd.set('body', bodyField);
+		saveInFlight = true;
 
 		try {
+			if (saveTimer) {
+				clearTimeout(saveTimer);
+				saveTimer = null;
+			}
+			status = 'saving';
+			lastError = null;
+
+			const serialized = serializeFrontmatter({
+				title: titleField,
+				date: dateField,
+				tags: currentTags,
+				publish: publishField,
+				pin: pinField,
+				deleteRequested: deleteField,
+				custom: customField
+			});
+
+			const fd = new FormData();
+			fd.set('path', post.path);
+			fd.set('frontmatter', serialized);
+			fd.set('body', bodyField);
+			fd.set('baseHash', knownHash);
+			fd.set('writer', writer);
+			fd.set('sessionId', sessionId);
+
 			const res = await fetch('?/save', { method: 'POST', body: fd });
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			status = 'saved';
-			onSaved?.();
+			const result = deserialize(await res.text());
+
+			if (result.type === 'success') {
+				const data = result.data as
+					| {
+							savedHash?: string;
+							conflict?: boolean;
+							writer?: string;
+							currentHash?: string;
+							currentFrontmatter?: string;
+							currentBody?: string;
+					  }
+					| undefined;
+
+				if (data?.conflict && data.writer && data.currentHash) {
+					conflictInfo = {
+						writer: data.writer,
+						currentHash: data.currentHash,
+						currentFrontmatter: data.currentFrontmatter ?? '',
+						currentBody: data.currentBody ?? ''
+					};
+					status = 'saved';
+					diverged = true;
+					onSaved?.();
+					return;
+				}
+
+				if (data?.savedHash) knownHash = data.savedHash;
+				status = 'saved';
+				conflictInfo = null;
+				diverged = false;
+				onSaved?.();
+				return;
+			}
+
+			if (result.type === 'failure') {
+				const data = result.data as { message?: string; conflict?: boolean } | undefined;
+				status = 'error';
+				lastError = data?.message ?? 'Save failed';
+				return;
+			}
+
+			throw new Error(`Unexpected action result: ${result.type}`);
 		} catch (err) {
 			status = 'error';
 			lastError = err instanceof Error ? err.message : String(err);
+		} finally {
+			saveInFlight = false;
 		}
 	}
 
@@ -139,7 +266,7 @@
 				<button class="fork-button">Start your version</button>
 			</form>
 		{/if}
-		{#if llmDraft}
+		{#if sources.length > 0}
 			<button
 				class="reference-toggle"
 				type="button"
@@ -181,9 +308,49 @@
 	<p class="error-banner">{lastError}</p>
 {/if}
 
-<div class="workspace" class:split={referenceOpen && llmDraft}>
-	{#if referenceOpen && llmDraft}
-		<ReferencePane path={llmDraft.path} body={llmDraft.body} userBody={bodyField} onInsert={insertFromReference} />
+{#if conflictInfo}
+	<p class="conflict-banner">
+		Changed elsewhere — your text is safe as the <b>{conflictInfo.writer}</b> version.
+		<button
+			type="button"
+			onclick={() =>
+				conflictInfo &&
+				adoptContent({
+					contentHash: conflictInfo.currentHash,
+					frontmatter: conflictInfo.currentFrontmatter,
+					body: conflictInfo.currentBody
+				})}>Load theirs</button
+		>
+		<button type="button" onclick={() => (conflictInfo = null)}>Keep typing</button>
+	</p>
+{/if}
+
+<div class="workspace" class:split={referenceOpen && activeSource}>
+	{#if referenceOpen && activeSource}
+		<div class="reference-stack">
+			{#if sources.length > 1 || activeSource.dismissible}
+				<div class="source-tabs">
+					{#each sources as source (source.id)}
+						<button
+							type="button"
+							class="source-tab"
+							class:active={source.id === activeSource.id}
+							onclick={() => (selectedSourceId = source.id)}
+						>
+							{source.id}
+						</button>
+					{/each}
+					{#if activeSource.dismissible}
+						<button type="button" class="source-dismiss" onclick={() => activeSource && dismissSource(activeSource.id)}>
+							dismiss
+						</button>
+					{/if}
+				</div>
+			{/if}
+			{#key activeSource.id}
+				<ReferencePane label={activeSource.id} body={activeSource.body} userBody={bodyField} onInsert={insertFromReference} />
+			{/key}
+		</div>
 	{/if}
 
 	<div class="draft">
@@ -345,6 +512,47 @@
 		gap: 36px;
 	}
 
+	.reference-stack {
+		min-width: 0;
+	}
+
+	.source-tabs {
+		display: flex;
+		gap: 4px;
+		margin-bottom: 8px;
+	}
+
+	.source-tab {
+		background: transparent;
+		border: none;
+		border-radius: 6px;
+		color: var(--ink-3);
+		cursor: pointer;
+		font: inherit;
+		font-size: 12px;
+		padding: 3px 9px;
+	}
+
+	.source-tab.active {
+		background: var(--hover);
+		color: var(--accent-ink);
+	}
+
+	.source-dismiss {
+		background: transparent;
+		border: none;
+		color: var(--ink-3);
+		cursor: pointer;
+		font: inherit;
+		font-size: 11px;
+		margin-left: auto;
+		padding: 3px 6px;
+	}
+
+	.source-dismiss:hover {
+		color: var(--danger);
+	}
+
 	@media (max-width: 960px) {
 		.workspace.split {
 			grid-template-columns: 1fr;
@@ -412,6 +620,28 @@
 		margin: 0 auto 14px;
 		max-width: 68ch;
 		padding: 8px 12px;
+	}
+
+	.conflict-banner {
+		background: color-mix(in srgb, var(--warn) 12%, transparent);
+		border-radius: var(--radius);
+		color: var(--ink);
+		font-size: 13px;
+		margin: 0 auto 14px;
+		max-width: 68ch;
+		padding: 8px 12px;
+	}
+
+	.conflict-banner button {
+		background: transparent;
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		color: var(--ink-2);
+		cursor: pointer;
+		font: inherit;
+		font-size: 12px;
+		margin-left: 8px;
+		padding: 3px 9px;
 	}
 
 	.frontmatter {
