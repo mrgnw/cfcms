@@ -1,3 +1,6 @@
+import type { Segment } from '$lib/segment-diff';
+export type { Segment };
+
 export type DeployStatus = 'draft' | 'ready' | 'live' | 'changed' | 'unpublish' | 'delete' | 'deleted';
 
 export type PostListItem = {
@@ -27,10 +30,14 @@ export type LlmDraft = {
 	body: string;
 };
 
+export type FieldSegment = { name: string; yours: string; theirs: string };
+
 export type WriterVersion = {
 	writer: string;
 	body: string;
 	updatedAt: string;
+	segments: Segment[] | null;
+	fields: FieldSegment[] | null;
 };
 
 export type PublishResult = {

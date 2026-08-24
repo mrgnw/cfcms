@@ -32,6 +32,11 @@ export type Post = PostSummary & {
 
 const frontmatterPattern = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
+export const splitRawPost = (raw: string) => {
+	const match = raw.match(frontmatterPattern);
+	return { frontmatter: match?.[1] ?? '', body: match ? raw.slice(match[0].length) : raw };
+};
+
 const isMarkdownFile = (filePath: string) => filePath.endsWith('.md');
 
 const normalizePostPath = (postPath: string) => postPath.replaceAll('\\', '/');
@@ -85,9 +90,7 @@ const parsePost = async (
 	editingOrder: Map<string, number>
 ): Promise<Post> => {
 	const raw = await readFile(filePath, 'utf8');
-	const match = raw.match(frontmatterPattern);
-	const frontmatter = match?.[1] ?? '';
-	const body = match ? raw.slice(match[0].length) : raw;
+	const { frontmatter, body } = splitRawPost(raw);
 	const metadata = await stat(filePath);
 	const postPath = normalizePostPath(relative(contentDirectory, filePath));
 	const fallbackTitle = postPath.replace(/\.md$/, '').split('/').at(-1)?.replaceAll('-', ' ') ?? 'Untitled';

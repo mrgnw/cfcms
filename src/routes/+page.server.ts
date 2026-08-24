@@ -19,9 +19,10 @@ import {
 	reorderEditing,
 	upsertVersion
 } from '$lib/server/db';
-import { commitPost, diffNumstat } from '$lib/server/git';
+import { commitPost, diffNumstat, findRevisionByHash } from '$lib/server/git';
 import { runPublish } from '$lib/server/publish';
-import { setDeleteFlag } from '$lib/frontmatter';
+import { parseFrontmatter, setDeleteFlag } from '$lib/frontmatter';
+import { diffSegments } from '$lib/segment-diff';
 import { isValidWriter } from '$lib/save-rules';
 import { isPending, statusOf } from '$lib/types';
 
@@ -45,6 +46,33 @@ const getPendingChanges = async (posts: Awaited<ReturnType<typeof listPosts>>) =
 	);
 };
 
+const diffFields = (mainFrontmatter: string, versionFrontmatter: string) => {
+	const yours = parseFrontmatter(mainFrontmatter);
+	const theirs = parseFrontmatter(versionFrontmatter);
+	const pairs: [string, string, string][] = [
+		['title', yours.title, theirs.title],
+		['date', yours.date, theirs.date],
+		['tags', yours.tags.join(', '), theirs.tags.join(', ')],
+		['custom', yours.custom, theirs.custom]
+	];
+	const fields = pairs.filter(([, a, b]) => a !== b).map(([name, a, b]) => ({ name, yours: a, theirs: b }));
+	return fields.length ? fields : null;
+};
+
+const versionsFor = async (post: Awaited<ReturnType<typeof getPost>>) =>
+	Promise.all(
+		listVersions(post.path).map(async (version) => {
+			const base = await findRevisionByHash(post.path, version.baseHash);
+			return {
+				writer: version.writer,
+				body: version.body,
+				updatedAt: version.updatedAt,
+				segments: base ? diffSegments(base.body, post.body, version.body) : null,
+				fields: diffFields(post.frontmatter, version.frontmatter)
+			};
+		})
+	);
+
 export const load = async ({ url }) => {
 	const posts = await listPosts();
 	const selectedPath = url.searchParams.get('post') ?? '';
@@ -57,7 +85,7 @@ export const load = async ({ url }) => {
 		postsRev: postsRev(posts),
 		post,
 		llmDraft,
-		versions: post ? listVersions(post.path).map(({ writer, body, updatedAt }) => ({ writer, body, updatedAt })) : null,
+		versions: post ? await versionsFor(post) : null,
 		view: view === 'publish' || view === 'deleted' ? view : null,
 		pendingChanges: view === 'publish' ? await getPendingChanges(posts) : null,
 		lastPublishedAt: getLastPublishedAt()
