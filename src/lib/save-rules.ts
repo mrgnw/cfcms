@@ -6,6 +6,8 @@ export const decideSave = (baseHash: string, currentHash: string, incomingHash: 
 	return 'conflict';
 };
 
+export const normalizeNewlines = (text: string) => text.replaceAll('\r\n', '\n');
+
 export const reservedWriters = new Set(['llm', 'ext']);
 
 export const isValidWriter = (writer: string) => /^[a-z][a-z0-9]{0,7}$/.test(writer) && !reservedWriters.has(writer);

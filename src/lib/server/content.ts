@@ -5,7 +5,7 @@ import { formatYamlScalar, parseYamlScalar } from '$lib/frontmatter';
 import { getEditingOrder, pruneMissingPosts, seedEditingQueue } from './db';
 import { getDeployStatus, hashPostContent, readDeployState, type DeployState, type DeployStatus } from './deploy-state';
 import { contentBaseDirectory, contentDirectory } from './paths';
-import { decideSave, storedBodyForm, type SaveDecision } from '$lib/save-rules';
+import { decideSave, normalizeNewlines, storedBodyForm, type SaveDecision } from '$lib/save-rules';
 
 export type PostSummary = {
 	path: string;
@@ -249,8 +249,10 @@ const chainSave = <T>(postPath: string, work: () => Promise<T>): Promise<T> => {
 
 export type SaveResult = { outcome: SaveDecision; post: Post };
 
-export const savePost = (postPath: string, frontmatter: string, body: string, baseHash: string): Promise<SaveResult> =>
+export const savePost = (postPath: string, rawFrontmatter: string, rawBody: string, baseHash: string): Promise<SaveResult> =>
 	chainSave(postPath, async () => {
+		const frontmatter = normalizeNewlines(rawFrontmatter);
+		const body = normalizeNewlines(rawBody);
 		const current = await getPost(postPath);
 		const incomingHash = hashPostContent(frontmatter, storedBodyForm(frontmatter, body));
 		const outcome = decideSave(baseHash, current.contentHash, incomingHash);

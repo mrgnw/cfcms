@@ -23,7 +23,7 @@ import { commitPost, diffNumstat, findRevisionByHash } from '$lib/server/git';
 import { runPublish } from '$lib/server/publish';
 import { parseFrontmatter, setDeleteFlag } from '$lib/frontmatter';
 import { diffSegments } from '$lib/segment-diff';
-import { isValidWriter } from '$lib/save-rules';
+import { isValidWriter, normalizeNewlines } from '$lib/save-rules';
 import { isPending, statusOf } from '$lib/types';
 
 const getPendingChanges = async (posts: Awaited<ReturnType<typeof listPosts>>) => {
@@ -107,8 +107,8 @@ export const actions = {
 	save: async ({ request }) => {
 		const form = await request.formData();
 		const postPath = String(form.get('path') ?? '');
-		const frontmatter = String(form.get('frontmatter') ?? '');
-		const body = String(form.get('body') ?? '');
+		const frontmatter = normalizeNewlines(String(form.get('frontmatter') ?? ''));
+		const body = normalizeNewlines(String(form.get('body') ?? ''));
 		const baseHash = String(form.get('baseHash') ?? '');
 		const writer = String(form.get('writer') ?? '');
 		const sessionId = String(form.get('sessionId') ?? '');
