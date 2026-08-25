@@ -2,11 +2,10 @@ import { fail, redirect } from '@sveltejs/kit';
 import {
 	createPost,
 	createUserVersion,
-	deletePostFile,
-	getLlmDraft,
 	getPost,
 	listPosts,
 	postsRev,
+	purgePost,
 	savePost
 } from '$lib/server/content';
 import {
@@ -78,13 +77,12 @@ export const load = async ({ url }) => {
 	const selectedPath = url.searchParams.get('post') ?? '';
 	const view = url.searchParams.get('view');
 	const post = selectedPath ? await getPost(selectedPath).catch(() => null) : null;
-	const llmDraft = post ? await getLlmDraft(post.path) : null;
 
 	return {
 		posts: posts.map(({ frontmatter, body, ...summary }) => summary),
 		postsRev: postsRev(posts),
 		post,
-		llmDraft,
+		llmDraft: null,
 		versions: post ? await versionsFor(post) : null,
 		view: view === 'publish' || view === 'deleted' ? view : null,
 		pendingChanges: view === 'publish' ? await getPendingChanges(posts) : null,
@@ -123,7 +121,7 @@ export const actions = {
 		}
 
 		const grantedWriter = claimWriter(writer, sessionId);
-		const result = await savePost(postPath, frontmatter, body, baseHash);
+		const result = await savePost(postPath, frontmatter, body, baseHash, grantedWriter);
 
 		if (result.outcome === 'conflict') {
 			const storedWriter = upsertVersion({
@@ -239,7 +237,7 @@ export const actions = {
 
 		const post = await getPost(path);
 
-		const result = await savePost(path, setDeleteFlag(post.frontmatter, true), post.body, post.contentHash);
+		const result = await savePost(path, setDeleteFlag(post.frontmatter, true), post.body, post.contentHash, 'cms');
 		if (result.outcome === 'conflict') return fail(409, { message: 'Post changed while trashing — retry' });
 
 		await commitPost(path, 'save');
@@ -254,7 +252,7 @@ export const actions = {
 
 		const post = await getPost(path);
 
-		const result = await savePost(path, setDeleteFlag(post.frontmatter, false), post.body, post.contentHash);
+		const result = await savePost(path, setDeleteFlag(post.frontmatter, false), post.body, post.contentHash, 'cms');
 		if (result.outcome === 'conflict') return fail(409, { message: 'Post changed while restoring — retry' });
 
 		await commitPost(path, 'save');
@@ -266,8 +264,8 @@ export const actions = {
 
 		if (!path) return fail(400, { message: 'Post path is required' });
 
-		await deletePostFile(path);
-		await commitPost(path, 'delete');
+		const hadFile = await purgePost(path);
+		if (hadFile) await commitPost(path, 'delete');
 		return { purged: path };
 	}
 };

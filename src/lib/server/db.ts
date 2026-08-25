@@ -250,17 +250,6 @@ export const seedEditingQueue = (paths: string[]) => {
 	return paths.length > 0;
 };
 
-export const pruneMissingPosts = (existingPaths: Set<string>) => {
-	const rows = db().prepare('SELECT path FROM posts').all() as { path: string }[];
-	const remove = db().prepare('DELETE FROM posts WHERE path = ?');
-
-	db().exec('BEGIN');
-	for (const row of rows) {
-		if (!existingPaths.has(row.path)) remove.run(row.path);
-	}
-	db().exec('COMMIT');
-};
-
 export type WriterVersion = {
 	path: string;
 	writer: string;

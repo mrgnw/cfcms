@@ -1,9 +1,21 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
-import { dirname, relative, resolve, sep } from 'node:path';
+import { existsSync } from 'node:fs';
+import { readdir, readFile, stat, unlink } from 'node:fs/promises';
+import { relative, resolve, sep } from 'node:path';
 import { formatYamlScalar, parseYamlScalar } from '$lib/frontmatter';
-import { canonicalBody, hashPostContent, renderPost, splitRawPost } from '$lib/post-text';
-import { getEditingOrder, pruneMissingPosts, seedEditingQueue } from './db';
+import { canonicalBody, hashPostContent, splitRawPost } from '$lib/post-text';
+import {
+	appendRevision,
+	deletePostRows,
+	getEditingOrder,
+	getStoredPost,
+	listStoredPosts,
+	seedEditingQueue,
+	setExportedState,
+	setLlmState,
+	upsertVersion,
+	type StoredPost
+} from './db';
 import { getDeployStatus, readDeployState, type DeployState, type DeployStatus } from './deploy-state';
 import { contentBaseDirectory, contentDirectory } from './paths';
 import { decideSave, normalizeNewlines, type SaveDecision } from '$lib/save-rules';
@@ -80,7 +92,35 @@ const getExcerpt = (body: string) =>
 		.find((line) => line && !line.startsWith('#'))
 		?.slice(0, 160) ?? '';
 
-const parsePost = async (
+const postFromStored = (stored: StoredPost, deployState: DeployState, editingOrder: Map<string, number>): Post => {
+	const { path, frontmatter, body } = stored;
+	const fallbackTitle = path.replace(/\.md$/, '').split('/').at(-1)?.replaceAll('-', ' ') ?? 'Untitled';
+	const publish = readBoolean(frontmatter, 'publish');
+	const deleteRequested = readBoolean(frontmatter, 'delete') || readBoolean(frontmatter, 'deleted');
+	const deployed = deployState.posts[path];
+
+	return {
+		path,
+		title: readFrontmatterValue(frontmatter, 'title') || fallbackTitle,
+		date: readFrontmatterValue(frontmatter, 'date'),
+		tags: readTags(frontmatter),
+		publish,
+		pin: readBoolean(frontmatter, 'pin') || readBoolean(frontmatter, 'pinned'),
+		editingOrder: editingOrder.get(path) ?? null,
+		deleteRequested,
+		slug: readFrontmatterValue(frontmatter, 'slug') || path.replace(/\.md$/, ''),
+		excerpt: getExcerpt(body),
+		updatedAt: stored.savedAt,
+		contentHash: stored.hash,
+		deployStatus: getDeployStatus({ publish, deleteRequested, contentHash: stored.hash }, deployed),
+		deployedAt: deployed?.deployedAt,
+		baselineCommit: deployed?.commit ?? null,
+		frontmatter,
+		body
+	};
+};
+
+const parseFilePost = async (
 	filePath: string,
 	deployState: DeployState,
 	editingOrder: Map<string, number>
@@ -137,21 +177,89 @@ const slugify = (value: string) =>
 		.replace(/[^a-z0-9]+/g, '-')
 		.replace(/^-+|-+$/g, '') || 'untitled';
 
+const ingestUserFile = async (postPath: string, filePath: string, stored: StoredPost | null) => {
+	const meta = await stat(filePath);
+	if (stored && stored.exportedMtimeMs === meta.mtimeMs) return;
+
+	const raw = normalizeNewlines(await readFile(filePath, 'utf8'));
+	const { frontmatter, body } = splitRawPost(raw);
+	const hash = hashPostContent(frontmatter, body);
+
+	if (!stored) {
+		appendRevision(postPath, frontmatter.trim(), canonicalBody(body), hash, 'import');
+		setExportedState(postPath, hash, meta.mtimeMs);
+		return;
+	}
+
+	if (hash !== stored.exportedHash) {
+		upsertVersion({
+			path: postPath,
+			writer: 'ext',
+			sessionId: 'file',
+			baseHash: stored.exportedHash ?? stored.hash,
+			frontmatter: frontmatter.trim(),
+			body: canonicalBody(body)
+		});
+	}
+	setExportedState(postPath, hash, meta.mtimeMs);
+};
+
+const ingestLlmFile = async (llmPath: string, filePath: string, stored: StoredPost | null) => {
+	if (!stored) return;
+	const meta = await stat(filePath);
+	if (stored.llmMtimeMs === meta.mtimeMs) return;
+
+	const raw = normalizeNewlines(await readFile(filePath, 'utf8'));
+	const { frontmatter, body } = splitRawPost(raw);
+	const hash = hashPostContent(frontmatter, body);
+
+	if (hash !== stored.llmHash) {
+		upsertVersion({
+			path: stored.path,
+			writer: 'llm',
+			sessionId: 'file',
+			baseHash: stored.hash,
+			frontmatter: frontmatter.trim(),
+			body: canonicalBody(body)
+		});
+	}
+	setLlmState(stored.path, hash, meta.mtimeMs);
+};
+
+const scanContentDir = async (): Promise<string[]> => {
+	const files = await listMarkdownFiles(contentDirectory);
+	const stored = new Map(listStoredPosts().map((post) => [post.path, post]));
+
+	for (const filePath of files) {
+		const postPath = normalizePostPath(relative(contentDirectory, filePath));
+		try {
+			if (postPath.endsWith('.llm.md')) {
+				await ingestLlmFile(postPath, filePath, stored.get(postPath.replace(/\.llm\.md$/, '.md')) ?? null);
+			} else {
+				await ingestUserFile(postPath, filePath, stored.get(postPath) ?? null);
+			}
+		} catch {
+			// unreadable file must never block the post list — skipped this tick, retried next
+		}
+	}
+
+	return files;
+};
+
 export const listPosts = async () => {
-	const [files, deployState] = await Promise.all([listMarkdownFiles(contentDirectory), readDeployState()]);
-	const fileSet = new Set(files);
-	const postFiles = files.filter(
-		(file) => !(file.endsWith('.llm.md') && fileSet.has(file.replace(/\.llm\.md$/, '.md')))
-	);
+	const files = await scanContentDir();
+	const deployState = await readDeployState();
 	let order = getEditingOrder();
-	let posts = await Promise.all(postFiles.map((file) => parsePost(file, deployState, order)));
+	let posts = listStoredPosts().map((stored) => postFromStored(stored, deployState, order));
 
-	pruneMissingPosts(new Set(posts.map((post) => post.path)));
+	const fileSet = new Set(files);
+	const standaloneLlm = files.filter(
+		(file) => file.endsWith('.llm.md') && !fileSet.has(file.replace(/\.llm\.md$/, '.md')) &&
+			!posts.some((post) => post.path === normalizePostPath(relative(contentDirectory, file)).replace(/\.llm\.md$/, '.md'))
+	);
+	posts = posts.concat(await Promise.all(standaloneLlm.map((file) => parseFilePost(file, deployState, order))));
 
-	const legacyEditPaths = posts
-		.filter((post) => readBoolean(post.frontmatter, 'edit'))
-		.map((post) => post.path);
-
+	const legacyEditPaths = posts.filter((post) => readBoolean(post.frontmatter, 'edit')).map((post) => post.path);
 	if (seedEditingQueue(legacyEditPaths)) {
 		order = getEditingOrder();
 		posts = posts.map((post) => ({ ...post, editingOrder: order.get(post.path) ?? null }));
@@ -160,7 +268,6 @@ export const listPosts = async () => {
 	return posts.sort((first, second) => {
 		const firstDate = first.date || first.updatedAt;
 		const secondDate = second.date || second.updatedAt;
-
 		return secondDate.localeCompare(firstDate);
 	});
 };
@@ -182,48 +289,13 @@ export const postsRev = (posts: PostSummary[]) =>
 		.digest('hex')
 		.slice(0, 16);
 
-export const getPost = async (postPath: string) =>
-	parsePost(getPostFilePath(postPath), await readDeployState(), getEditingOrder());
-
-export const createUserVersion = async (llmPath: string) => {
-	if (!llmPath.endsWith('.llm.md')) throw new Error('Can only fork .llm.md drafts');
-
-	const userPath = llmPath.replace(/\.llm\.md$/, '.md');
-	const userFilePath = getPostFilePath(userPath);
-
-	try {
-		await stat(userFilePath);
-		return userPath;
-	} catch {
-		// sibling missing — create it below
+export const getPost = async (postPath: string): Promise<Post> => {
+	if (postPath.endsWith('.llm.md')) {
+		return parseFilePost(getPostFilePath(postPath), await readDeployState(), getEditingOrder());
 	}
-
-	const raw = await readFile(getPostFilePath(llmPath), 'utf8');
-	const frontmatter = splitRawPost(raw)
-		.frontmatter.split(/\r?\n/)
-		.filter((line) => !line.match(/^publish:/))
-		.join('\n')
-		.trim();
-
-	await writeFile(userFilePath, frontmatter ? `---\n${frontmatter}\n---\n\n` : '', 'utf8');
-	return userPath;
-};
-
-export const getLlmDraft = async (postPath: string) => {
-	if (postPath.endsWith('.llm.md')) return null;
-
-	const companionPath = postPath.replace(/\.md$/, '.llm.md');
-
-	try {
-		const raw = await readFile(getPostFilePath(companionPath), 'utf8');
-
-		return {
-			path: companionPath,
-			body: splitRawPost(raw).body
-		};
-	} catch {
-		return null;
-	}
+	const stored = getStoredPost(postPath);
+	if (!stored) throw new Error(`Unknown post: ${postPath}`);
+	return postFromStored(stored, await readDeployState(), getEditingOrder());
 };
 
 const saveChains = new Map<string, Promise<unknown>>();
@@ -244,23 +316,26 @@ const chainSave = <T>(postPath: string, work: () => Promise<T>): Promise<T> => {
 
 export type SaveResult = { outcome: SaveDecision; post: Post };
 
-export const savePost = (postPath: string, rawFrontmatter: string, rawBody: string, baseHash: string): Promise<SaveResult> =>
+export const savePost = (
+	postPath: string,
+	rawFrontmatter: string,
+	rawBody: string,
+	baseHash: string,
+	writer: string
+): Promise<SaveResult> =>
 	chainSave(postPath, async () => {
-		const frontmatter = normalizeNewlines(rawFrontmatter);
-		const body = normalizeNewlines(rawBody);
+		if (postPath.endsWith('.llm.md')) throw new Error('Fork the llm draft before editing it');
+		const frontmatter = normalizeNewlines(rawFrontmatter).trim();
+		const body = canonicalBody(normalizeNewlines(rawBody));
 		const current = await getPost(postPath);
-		const incomingHash = hashPostContent(frontmatter, canonicalBody(body));
+		const incomingHash = hashPostContent(frontmatter, body);
 		const outcome = decideSave(baseHash, current.contentHash, incomingHash);
 
 		if (outcome !== 'write') return { outcome, post: current };
 
-		await writeFile(getPostFilePath(postPath), renderPost(frontmatter, body), 'utf8');
+		appendRevision(postPath, frontmatter, body, incomingHash, writer);
 		return { outcome, post: await getPost(postPath) };
 	});
-
-export const deletePostFile = async (postPath: string) => {
-	await unlink(getPostFilePath(postPath));
-};
 
 export const createPost = async (title: string) => {
 	const date = new Date().toISOString().slice(0, 10);
@@ -268,23 +343,38 @@ export const createPost = async (title: string) => {
 	let postPath = `${baseSlug}.md`;
 	let suffix = 2;
 
-	while (true) {
-		try {
-			await stat(getPostFilePath(postPath));
-			postPath = `${baseSlug}-${suffix}.md`;
-			suffix += 1;
-		} catch {
-			break;
-		}
+	while (getStoredPost(postPath) || existsSync(getPostFilePath(postPath))) {
+		postPath = `${baseSlug}-${suffix}.md`;
+		suffix += 1;
 	}
 
-	const filePath = getPostFilePath(postPath);
-	await mkdir(dirname(filePath), { recursive: true });
-	await writeFile(
-		filePath,
-		`---\ntitle: ${formatYamlScalar(title)}\ndate: ${date}\ntags: \npublish: false\n---\n\n`,
-		'utf8'
-	);
-
+	const frontmatter = `title: ${formatYamlScalar(title)}\ndate: ${date}\ntags: \npublish: false`;
+	appendRevision(postPath, frontmatter, '', hashPostContent(frontmatter, ''), 'cms');
 	return getPost(postPath);
+};
+
+export const createUserVersion = async (llmPath: string) => {
+	if (!llmPath.endsWith('.llm.md')) throw new Error('Can only fork .llm.md drafts');
+	const userPath = llmPath.replace(/\.llm\.md$/, '.md');
+	if (getStoredPost(userPath)) return userPath;
+
+	const raw = normalizeNewlines(await readFile(getPostFilePath(llmPath), 'utf8'));
+	const frontmatter = splitRawPost(raw)
+		.frontmatter.split('\n')
+		.filter((line) => !line.match(/^publish:/))
+		.join('\n')
+		.trim();
+
+	appendRevision(userPath, frontmatter, '', hashPostContent(frontmatter, ''), 'cms');
+	return userPath;
+};
+
+export const purgePost = async (postPath: string) => {
+	deletePostRows(postPath);
+	try {
+		await unlink(getPostFilePath(postPath));
+		return true;
+	} catch {
+		return false;
+	}
 };
