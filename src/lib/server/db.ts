@@ -49,7 +49,36 @@ const db = () => {
 			session_id TEXT NOT NULL,
 			seen_at TEXT NOT NULL
 		);
+
+		CREATE TABLE IF NOT EXISTS revisions (
+			path TEXT NOT NULL,
+			rev INTEGER NOT NULL,
+			hash TEXT NOT NULL,
+			frontmatter TEXT NOT NULL,
+			body TEXT NOT NULL,
+			writer TEXT NOT NULL,
+			saved_at TEXT NOT NULL,
+			PRIMARY KEY (path, rev)
+		);
+		CREATE INDEX IF NOT EXISTS revisions_by_hash ON revisions(path, hash);
 	`);
+
+	const postColumns = new Set(
+		(instance.prepare(`SELECT name FROM pragma_table_info('posts')`).all() as { name: string }[]).map(
+			(row) => row.name
+		)
+	);
+	const newColumns: [string, string][] = [
+		['head_rev', 'INTEGER'],
+		['exported_hash', 'TEXT'],
+		['exported_mtime_ms', 'INTEGER'],
+		['llm_hash', 'TEXT'],
+		['llm_mtime_ms', 'INTEGER']
+	];
+	for (const [name, type] of newColumns) {
+		if (!postColumns.has(name)) instance.exec(`ALTER TABLE posts ADD COLUMN ${name} ${type}`);
+	}
+
 	importLegacyDeployState();
 	return instance;
 };
@@ -162,7 +191,9 @@ export const recordPublished = (
 	for (const post of posts) {
 		upsert.run(post.path, post.contentHash, post.title, post.slug, commit, deployedAt);
 	}
-	db().prepare('DELETE FROM posts WHERE published_hash IS NULL AND editing_order IS NULL').run();
+	db()
+		.prepare('DELETE FROM posts WHERE published_hash IS NULL AND editing_order IS NULL AND head_rev IS NULL')
+		.run();
 	setMeta('lastPublishedAt', deployedAt);
 	db().exec('COMMIT');
 
@@ -188,7 +219,9 @@ export const addToEditing = (path: string) => {
 export const removeFromEditing = (path: string) => {
 	db().exec('BEGIN');
 	db().prepare('UPDATE posts SET editing_order = NULL WHERE path = ?').run(path);
-	db().prepare('DELETE FROM posts WHERE published_hash IS NULL AND editing_order IS NULL').run();
+	db()
+		.prepare('DELETE FROM posts WHERE published_hash IS NULL AND editing_order IS NULL AND head_rev IS NULL')
+		.run();
 	db().exec('COMMIT');
 };
 
@@ -320,3 +353,127 @@ export const claimWriter = (requested: string, sessionId: string): string => {
 
 	throw new Error(`No free writer lease for ${requested}`);
 };
+
+export type StoredPost = {
+	path: string;
+	rev: number;
+	hash: string;
+	frontmatter: string;
+	body: string;
+	writer: string;
+	savedAt: string;
+	publishedHash: string | null;
+	exportedHash: string | null;
+	exportedMtimeMs: number | null;
+	llmHash: string | null;
+	llmMtimeMs: number | null;
+};
+
+const revisionCap = 200;
+
+const pruneRevisions = (path: string, headRev: number, publishedHash: string | null) => {
+	const bases = db().prepare('SELECT base_hash FROM versions WHERE path = ?').all(path) as { base_hash: string }[];
+	const anchored = [publishedHash, ...bases.map((row) => row.base_hash)].filter((hash): hash is string => Boolean(hash));
+	const placeholders = anchored.length ? anchored.map(() => '?').join(',') : "''";
+	db()
+		.prepare(`DELETE FROM revisions WHERE path = ? AND rev <= ? AND hash NOT IN (${placeholders})`)
+		.run(path, headRev - revisionCap, ...anchored);
+};
+
+export const appendRevision = (path: string, frontmatter: string, body: string, hash: string, writer: string): number => {
+	const now = new Date().toISOString();
+	db().exec('BEGIN');
+	try {
+		const row = db().prepare('SELECT head_rev, published_hash FROM posts WHERE path = ?').get(path) as
+			| { head_rev: number | null; published_hash: string | null }
+			| undefined;
+		const nextRev = (row?.head_rev ?? 0) + 1;
+		db()
+			.prepare('INSERT INTO posts (path, head_rev) VALUES (?, ?) ON CONFLICT(path) DO UPDATE SET head_rev = ?')
+			.run(path, nextRev, nextRev);
+		db()
+			.prepare('INSERT INTO revisions (path, rev, hash, frontmatter, body, writer, saved_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+			.run(path, nextRev, hash, frontmatter, body, writer, now);
+		pruneRevisions(path, nextRev, row?.published_hash ?? null);
+		db().exec('COMMIT');
+		return nextRev;
+	} catch (caught) {
+		db().exec('ROLLBACK');
+		throw caught;
+	}
+};
+
+const storedPostQuery = `
+	SELECT posts.path, revisions.rev, revisions.hash, revisions.frontmatter, revisions.body,
+		revisions.writer, revisions.saved_at, posts.published_hash, posts.exported_hash,
+		posts.exported_mtime_ms, posts.llm_hash, posts.llm_mtime_ms
+	FROM posts JOIN revisions ON revisions.path = posts.path AND revisions.rev = posts.head_rev
+	WHERE posts.head_rev IS NOT NULL`;
+
+type StoredPostRow = {
+	path: string;
+	rev: number;
+	hash: string;
+	frontmatter: string;
+	body: string;
+	writer: string;
+	saved_at: string;
+	published_hash: string | null;
+	exported_hash: string | null;
+	exported_mtime_ms: number | null;
+	llm_hash: string | null;
+	llm_mtime_ms: number | null;
+};
+
+const toStoredPost = (row: StoredPostRow): StoredPost => ({
+	path: row.path,
+	rev: row.rev,
+	hash: row.hash,
+	frontmatter: row.frontmatter,
+	body: row.body,
+	writer: row.writer,
+	savedAt: row.saved_at,
+	publishedHash: row.published_hash,
+	exportedHash: row.exported_hash,
+	exportedMtimeMs: row.exported_mtime_ms,
+	llmHash: row.llm_hash,
+	llmMtimeMs: row.llm_mtime_ms
+});
+
+export const getStoredPost = (path: string): StoredPost | null => {
+	const row = db().prepare(`${storedPostQuery} AND posts.path = ?`).get(path) as StoredPostRow | undefined;
+	return row ? toStoredPost(row) : null;
+};
+
+export const listStoredPosts = (): StoredPost[] =>
+	(db().prepare(storedPostQuery).all() as StoredPostRow[]).map(toStoredPost);
+
+export const getRevisionByHash = (path: string, hash: string): { frontmatter: string; body: string } | null => {
+	const row = db()
+		.prepare('SELECT frontmatter, body FROM revisions WHERE path = ? AND hash = ? ORDER BY rev DESC LIMIT 1')
+		.get(path, hash) as { frontmatter: string; body: string } | undefined;
+	return row ?? null;
+};
+
+export const setExportedState = (path: string, hash: string | null, mtimeMs: number | null) => {
+	db().prepare('UPDATE posts SET exported_hash = ?, exported_mtime_ms = ? WHERE path = ?').run(hash, mtimeMs, path);
+};
+
+export const setLlmState = (path: string, hash: string, mtimeMs: number) => {
+	db().prepare('UPDATE posts SET llm_hash = ?, llm_mtime_ms = ? WHERE path = ?').run(hash, mtimeMs, path);
+};
+
+export const updatePublishedHash = (path: string, hash: string) => {
+	db().prepare('UPDATE posts SET published_hash = ? WHERE path = ?').run(hash, path);
+};
+
+export const deletePostRows = (path: string) => {
+	db().exec('BEGIN');
+	db().prepare('DELETE FROM revisions WHERE path = ?').run(path);
+	db().prepare('DELETE FROM versions WHERE path = ?').run(path);
+	db().prepare('DELETE FROM posts WHERE path = ?').run(path);
+	db().exec('COMMIT');
+};
+
+export const getMetaValue = (key: string) => getMeta(key);
+export const setMetaValue = (key: string, value: string) => setMeta(key, value);
