@@ -39,6 +39,7 @@ const revisionWalkLimit = 50;
 const baseContentCache = new Map<string, { frontmatter: string; body: string } | null>();
 const baseContentCacheLimit = 200;
 
+// import-corpus only — reconcile now recovers bases from the store
 export const findRevisionByHash = async (postPath: string, wantedHash: string) => {
 	const cacheKey = `${postPath}\n${wantedHash}`;
 	const cached = baseContentCache.get(cacheKey);
@@ -87,18 +88,4 @@ export const pushContent = async () => runGit(['push']);
 export const getHeadCommit = async () => {
 	const result = await runGit(['rev-parse', 'HEAD']);
 	return result.ok ? result.output.trim() : null;
-};
-
-export const diffNumstat = async (commit: string, postPath: string) => {
-	const result = await runGit(['diff', '--numstat', commit, 'HEAD', '--', getPostGitPath(postPath)]);
-
-	if (!result.ok) return null;
-
-	const line = result.output.trim().split('\n').filter(Boolean).at(0);
-	if (!line) return { added: 0, deleted: 0 };
-
-	const [added, deleted] = line.split('\t');
-	if (added === '-' || deleted === '-') return { added: 0, deleted: 0 };
-
-	return { added: Number(added), deleted: Number(deleted) };
 };

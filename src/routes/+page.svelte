@@ -13,7 +13,6 @@
 		isEditing,
 		isPending,
 		statusOf,
-		type LlmDraft,
 		type PendingChange,
 		type Post,
 		type PostFilter,
@@ -25,7 +24,6 @@
 		posts: PostListItem[];
 		postsRev: string;
 		post: Post | null;
-		llmDraft: LlmDraft | null;
 		versions: WriterVersion[] | null;
 		view: 'publish' | 'deleted' | null;
 		pendingChanges: PendingChange[] | null;
@@ -93,7 +91,6 @@
 				<div class="post-enter">
 					<PostEditor
 						post={data.post}
-						llmDraft={data.llmDraft}
 						versions={data.versions}
 						onSaved={() => invalidateAll()}
 					/>

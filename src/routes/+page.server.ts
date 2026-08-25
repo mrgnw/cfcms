@@ -13,36 +13,40 @@ import {
 	claimWriter,
 	deleteVersion,
 	getLastPublishedAt,
+	getPublishedPosts,
+	getRevisionByHash,
 	listVersions,
 	removeFromEditing,
 	reorderEditing,
 	upsertVersion
 } from '$lib/server/db';
-import { commitPost, diffNumstat, findRevisionByHash } from '$lib/server/git';
+import { commitPost } from '$lib/server/git';
 import { runPublish } from '$lib/server/publish';
 import { parseFrontmatter, setDeleteFlag } from '$lib/frontmatter';
-import { diffSegments } from '$lib/segment-diff';
+import { diffSegments, lineDiffCounts } from '$lib/segment-diff';
 import { isValidWriter, normalizeNewlines } from '$lib/save-rules';
 import { isPending, statusOf } from '$lib/types';
 
 const getPendingChanges = async (posts: Awaited<ReturnType<typeof listPosts>>) => {
 	const pending = posts.filter((post) => isPending(statusOf(post)));
+	const published = getPublishedPosts();
 
-	return Promise.all(
-		pending.map(async (post) => {
-			const diff = post.baselineCommit ? await diffNumstat(post.baselineCommit, post.path) : null;
+	return pending.map((post) => {
+		const publishedRevision = published[post.path]
+			? getRevisionByHash(post.path, published[post.path].hash)
+			: null;
+		const diff = publishedRevision ? lineDiffCounts(publishedRevision.body, post.body) : null;
 
-			return {
-				path: post.path,
-				title: post.title,
-				date: post.date,
-				status: statusOf(post),
-				words: post.body.split(/\s+/).filter(Boolean).length,
-				added: diff?.added ?? null,
-				deleted: diff?.deleted ?? null
-			};
-		})
-	);
+		return {
+			path: post.path,
+			title: post.title,
+			date: post.date,
+			status: statusOf(post),
+			words: post.body.split(/\s+/).filter(Boolean).length,
+			added: diff?.added ?? null,
+			deleted: diff?.deleted ?? null
+		};
+	});
 };
 
 const diffFields = (mainFrontmatter: string, versionFrontmatter: string) => {
@@ -61,7 +65,7 @@ const diffFields = (mainFrontmatter: string, versionFrontmatter: string) => {
 const versionsFor = async (post: Awaited<ReturnType<typeof getPost>>) =>
 	Promise.all(
 		listVersions(post.path).map(async (version) => {
-			const base = await findRevisionByHash(post.path, version.baseHash);
+			const base = getRevisionByHash(post.path, version.baseHash);
 			return {
 				writer: version.writer,
 				body: version.body,
@@ -82,7 +86,6 @@ export const load = async ({ url }) => {
 		posts: posts.map(({ frontmatter, body, ...summary }) => summary),
 		postsRev: postsRev(posts),
 		post,
-		llmDraft: null,
 		versions: post ? await versionsFor(post) : null,
 		view: view === 'publish' || view === 'deleted' ? view : null,
 		pendingChanges: view === 'publish' ? await getPendingChanges(posts) : null,
@@ -98,7 +101,6 @@ export const actions = {
 		if (!title) return fail(400, { message: 'Title is required' });
 
 		const post = await createPost(title);
-		await commitPost(post.path, 'create');
 
 		throw redirect(303, `/?post=${encodeURIComponent(post.path)}`);
 	},
@@ -142,19 +144,10 @@ export const actions = {
 			};
 		}
 
-		const commit = result.outcome === 'write' ? await commitPost(postPath, 'save') : null;
-
 		return {
-			message: !commit
-				? 'Already saved'
-				: commit.ok
-					? commit.committed
-						? 'Saved and committed'
-						: 'Saved; no git changes'
-					: 'Saved; git backup failed',
+			message: result.outcome === 'write' ? 'Saved' : 'Already saved',
 			savedPath: postPath,
 			savedHash: result.post.contentHash,
-			backup: commit,
 			writer: grantedWriter
 		};
 	},
@@ -175,7 +168,6 @@ export const actions = {
 		if (!llmPath.endsWith('.llm.md')) return fail(400, { message: 'Not an .llm.md draft' });
 
 		const userPath = await createUserVersion(llmPath);
-		await commitPost(userPath, 'create');
 
 		throw redirect(303, `/?post=${encodeURIComponent(userPath)}`);
 	},
@@ -240,7 +232,6 @@ export const actions = {
 		const result = await savePost(path, setDeleteFlag(post.frontmatter, true), post.body, post.contentHash, 'cms');
 		if (result.outcome === 'conflict') return fail(409, { message: 'Post changed while trashing — retry' });
 
-		await commitPost(path, 'save');
 		removeFromEditing(path);
 		return { trashed: path };
 	},
@@ -255,7 +246,6 @@ export const actions = {
 		const result = await savePost(path, setDeleteFlag(post.frontmatter, false), post.body, post.contentHash, 'cms');
 		if (result.outcome === 'conflict') return fail(409, { message: 'Post changed while restoring — retry' });
 
-		await commitPost(path, 'save');
 		return { restored: path };
 	},
 	purge: async ({ request }) => {

@@ -25,11 +25,6 @@ export type Post = PostListItem & {
 	body: string;
 };
 
-export type LlmDraft = {
-	path: string;
-	body: string;
-};
-
 export type FieldSegment = { name: string; yours: string; theirs: string };
 
 export type WriterVersion = {

@@ -9,16 +9,15 @@
 	import ReferencePane from './ReferencePane.svelte';
 	import { parseFrontmatter, serializeFrontmatter } from '$lib/frontmatter';
 	import { splitBlocks, normalizeBlock } from '$lib/blocks';
-	import type { FieldSegment, LlmDraft, Post, Segment, WriterVersion } from '$lib/types';
+	import type { FieldSegment, Post, Segment, WriterVersion } from '$lib/types';
 
 	type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error';
 
 	let {
 		post,
-		llmDraft = null,
 		versions = null,
 		onSaved
-	}: { post: Post; llmDraft?: LlmDraft | null; versions?: WriterVersion[] | null; onSaved?: () => void } = $props();
+	}: { post: Post; versions?: WriterVersion[] | null; onSaved?: () => void } = $props();
 
 	const initial = untrack(() => parseFrontmatter(post.frontmatter));
 
@@ -73,7 +72,6 @@
 	};
 
 	let sources = $derived<PaneSource[]>([
-		...(llmDraft ? [{ id: 'llm', body: llmDraft.body, dismissible: false }] : []),
 		...(versions ?? []).map((v) => ({
 			id: v.writer,
 			body: v.body,
@@ -105,7 +103,7 @@
 		| { setContent: (markdown: string) => void; insertMarkdown: (markdown: string, inline?: boolean) => void }
 		| undefined
 	>();
-	let referenceOpen = $state(untrack(() => Boolean(llmDraft) || (versions?.length ?? 0) > 0));
+	let referenceOpen = $state(untrack(() => (versions?.length ?? 0) > 0));
 
 	function insertFromReference(markdown: string, inline: boolean) {
 		milkdown?.insertMarkdown(markdown, inline);
