@@ -17,6 +17,7 @@ import {
 	type StoredPost
 } from './db';
 import { getDeployStatus, readDeployState, type DeployState, type DeployStatus } from './deploy-state';
+import { ensureCorpusImported } from './import-corpus';
 import { contentBaseDirectory, contentDirectory } from './paths';
 import { decideSave, normalizeNewlines, type SaveDecision } from '$lib/save-rules';
 
@@ -156,6 +157,8 @@ const parseFilePost = async (
 	};
 };
 
+export const listContentFiles = () => listMarkdownFiles(contentDirectory);
+
 const listMarkdownFiles = async (directory: string): Promise<string[]> => {
 	const entries = await readdir(directory, { withFileTypes: true });
 	const files = await Promise.all(
@@ -247,6 +250,7 @@ const scanContentDir = async (): Promise<string[]> => {
 };
 
 export const listPosts = async () => {
+	await ensureCorpusImported();
 	const files = await scanContentDir();
 	const deployState = await readDeployState();
 	let order = getEditingOrder();
