@@ -466,3 +466,7 @@ export const deletePostRows = (path: string) => {
 
 export const getMetaValue = (key: string) => getMeta(key);
 export const setMetaValue = (key: string, value: string) => setMeta(key, value);
+
+export const vacuumInto = (targetPath: string) => {
+	db().exec(`VACUUM INTO '${targetPath.replaceAll("'", "''")}'`);
+};

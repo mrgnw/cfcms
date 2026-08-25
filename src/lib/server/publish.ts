@@ -1,9 +1,14 @@
 import { env } from '$env/dynamic/private';
+import { renderPost } from '$lib/post-text';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { listPosts } from './content';
+import { mkdir, stat, unlink, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+import { runBackup } from './backup';
+import { getPostFilePath, getPostGitPath, listPosts, type Post } from './content';
+import { setExportedState } from './db';
 import { recordPublishedState } from './deploy-state';
-import { getHeadCommit, pushContent } from './git';
+import { commitPaths, getHeadCommit, pushContent } from './git';
 
 type PublishTarget = {
 	name: string;
@@ -72,6 +77,27 @@ const runTarget = (target: PublishTarget): Promise<PublishTargetResult> =>
 		});
 	});
 
+const renderBoundary = async (posts: Post[]) => {
+	const touched: string[] = [];
+
+	for (const post of posts) {
+		const filePath = getPostFilePath(post.path);
+		if (post.deployStatus === 'ready' || post.deployStatus === 'changed') {
+			await mkdir(dirname(filePath), { recursive: true });
+			await writeFile(filePath, renderPost(post.frontmatter, post.body), 'utf8');
+			const meta = await stat(filePath);
+			setExportedState(post.path, post.contentHash, meta.mtimeMs);
+			touched.push(getPostGitPath(post.path));
+		} else if (post.deployStatus === 'delete' || post.deployStatus === 'unpublish') {
+			await unlink(filePath).catch(() => undefined);
+			setExportedState(post.path, null, null);
+			touched.push(getPostGitPath(post.path));
+		}
+	}
+
+	return touched;
+};
+
 export const runPublish = async () => {
 	const targets = getTargets();
 
@@ -83,9 +109,15 @@ export const runPublish = async () => {
 	const pendingPosts = posts.filter((post) =>
 		['ready', 'changed', 'unpublish', 'delete'].includes(post.deployStatus)
 	);
+
+	const touched = await renderBoundary(posts);
+	await commitPaths(touched, 'cms: publish');
+
 	const [push, results] = await Promise.all([pushContent(), Promise.all(targets.map(runTarget))]);
 	const ok = results.every((result) => result.ok);
 	const deployment = ok ? await recordPublishedState(posts, await getHeadCommit()) : null;
+
+	runBackup().catch(() => undefined);
 
 	return {
 		ok,

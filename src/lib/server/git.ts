@@ -83,6 +83,16 @@ export const commitPost = async (postPath: string, action: 'create' | 'save' | '
 	return { ...commit, committed: commit.ok, path: gitPath };
 };
 
+export const commitPaths = async (paths: string[], message: string) => {
+	if (paths.length === 0) return { ok: true, status: 0, output: 'Nothing to commit', committed: false };
+	const add = await runGit(['add', '--', ...paths]);
+	if (!add.ok) return { ...add, committed: false };
+	const diff = await runGit(['diff', '--cached', '--quiet', '--', ...paths]);
+	if (diff.status === 0) return { ok: true, status: 0, output: 'No changes to commit', committed: false };
+	const commit = await runGit(['commit', '-m', compactMessage(message), '--', ...paths]);
+	return { ...commit, committed: commit.ok };
+};
+
 export const pushContent = async () => runGit(['push']);
 
 export const getHeadCommit = async () => {
