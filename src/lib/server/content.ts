@@ -194,7 +194,7 @@ const ingestUserFile = async (postPath: string, filePath: string, stored: Stored
 		return;
 	}
 
-	if (hash !== stored.exportedHash) {
+	if (hash !== stored.exportedHash && hash !== stored.hash) {
 		upsertVersion({
 			path: postPath,
 			writer: 'ext',

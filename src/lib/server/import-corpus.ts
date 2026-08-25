@@ -1,10 +1,11 @@
+import { existsSync } from 'node:fs';
 import { readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { relative, resolve } from 'node:path';
 import { canonicalBody, hashPostContent, splitRawPost } from '$lib/post-text';
 import { normalizeNewlines } from '$lib/save-rules';
 import {
 	appendRevision, deletePostRows, getMetaValue, getPublishedPosts, getStoredPost,
-	setExportedState, setMetaValue, updatePublishedHash
+	listStoredPosts, setExportedState, setMetaValue, updatePublishedHash
 } from './db';
 import { commitPaths, runGit } from './git';
 import { getPostFilePath, getPostGitPath, listContentFiles } from './content';
@@ -66,7 +67,20 @@ const runImport = async () => {
 	}
 	report.push('', `Deleted ${removedFiles.length} draft files (drafts live in the store now):`, ...removedFiles.map((p) => `- ${p}`));
 
-	const commit = await commitPaths(removedFiles.map((p) => getPostGitPath(p)), 'cms: import corpus - drafts move to store');
+	const commitCandidates = listStoredPosts()
+		.map((post) => post.path)
+		.filter((postPath) => !published[postPath] && !existsSync(getPostFilePath(postPath)));
+	if (!existsSync(getPostFilePath(demoPath))) commitCandidates.push(demoPath);
+
+	const gitPaths = commitCandidates.map((p) => getPostGitPath(p));
+	const trackedSet = new Set<string>();
+	if (gitPaths.length) {
+		const tracked = await runGit(['ls-files', '--', ...gitPaths]);
+		if (tracked.ok) tracked.output.split('\n').filter(Boolean).forEach((p) => trackedSet.add(p));
+	}
+	const commitTargets = gitPaths.filter((p) => trackedSet.has(p));
+
+	const commit = await commitPaths(commitTargets, 'cms: import corpus - drafts move to store');
 	if (!commit.ok) throw new Error(`Import commit failed: ${commit.output}`);
 	await writeFile(resolve(process.cwd(), '.data/import-report.md'), `${report.join('\n')}\n`, 'utf8');
 	setMetaValue('importedCorpus', new Date().toISOString());

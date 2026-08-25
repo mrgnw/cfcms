@@ -7,7 +7,7 @@ import { contentBaseDirectory } from './paths';
 const backupRelativePath = '.cms/cms-backup.db';
 const dailyMs = 24 * 60 * 60 * 1000;
 
-export const runBackup = async () => {
+const performBackup = async () => {
 	const target = resolve(contentBaseDirectory, backupRelativePath);
 	const temp = `${target}.tmp`;
 	await mkdir(dirname(target), { recursive: true });
@@ -17,6 +17,15 @@ export const runBackup = async () => {
 	await commitPaths([backupRelativePath], 'cms: db backup');
 	await pushContent();
 	setMetaValue('lastBackupAt', new Date().toISOString());
+};
+
+let running: Promise<void> | null = null;
+
+export const runBackup = () => {
+	running ??= performBackup().finally(() => {
+		running = null;
+	});
+	return running;
 };
 
 export const maybeDailyBackup = () => {
