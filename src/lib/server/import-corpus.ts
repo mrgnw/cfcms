@@ -76,7 +76,8 @@ const runImport = async () => {
 	const trackedSet = new Set<string>();
 	if (gitPaths.length) {
 		const tracked = await runGit(['ls-files', '--', ...gitPaths]);
-		if (tracked.ok) tracked.output.split('\n').filter(Boolean).forEach((p) => trackedSet.add(p));
+		if (!tracked.ok) throw new Error(`Import ls-files failed: ${tracked.output}`);
+		tracked.output.split('\n').filter(Boolean).forEach((p) => trackedSet.add(p));
 	}
 	const commitTargets = gitPaths.filter((p) => trackedSet.has(p));
 
