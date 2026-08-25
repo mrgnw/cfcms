@@ -66,7 +66,8 @@ const runImport = async () => {
 	}
 	report.push('', `Deleted ${removedFiles.length} draft files (drafts live in the store now):`, ...removedFiles.map((p) => `- ${p}`));
 
-	await commitPaths(removedFiles.map((p) => getPostGitPath(p)), 'cms: import corpus - drafts move to store');
+	const commit = await commitPaths(removedFiles.map((p) => getPostGitPath(p)), 'cms: import corpus - drafts move to store');
+	if (!commit.ok) throw new Error(`Import commit failed: ${commit.output}`);
 	await writeFile(resolve(process.cwd(), '.data/import-report.md'), `${report.join('\n')}\n`, 'utf8');
 	setMetaValue('importedCorpus', new Date().toISOString());
 	await runBackup().catch(() => undefined);
