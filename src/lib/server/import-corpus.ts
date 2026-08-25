@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { relative, resolve } from 'node:path';
@@ -13,6 +14,25 @@ import { runBackup } from './backup';
 import { contentDirectory } from './paths';
 
 const demoPath = 'sync-demo.md';
+
+// Legacy rows imported from deploy-state.json carry no commit, so the published revision can only be
+// identified by re-deriving the hash the old parser produced (it kept the blank line after the fence).
+const legacyPattern = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
+
+const legacyHash = (raw: string) => {
+	const match = raw.match(legacyPattern);
+	const frontmatter = match?.[1] ?? '';
+	const body = match ? raw.slice(match[0].length) : raw;
+	return createHash('sha256').update(`${frontmatter.trim()}\n---\n${body.replace(/\s+$/, '')}`).digest('hex');
+};
+
+const recoverPublishedFromFile = async (postPath: string, publishedHash: string) => {
+	const raw = await readFile(getPostFilePath(postPath), 'utf8').then(normalizeNewlines, () => null);
+	if (raw === null || legacyHash(raw) !== publishedHash) return null;
+
+	const { frontmatter, body } = splitRawPost(raw);
+	return hashPostContent(frontmatter, body);
+};
 
 const runImport = async () => {
 	if (getMetaValue('importedCorpus')) return;
@@ -44,11 +64,23 @@ const runImport = async () => {
 	const misses: string[] = [];
 	const shifted: string[] = [];
 	for (const [postPath, state] of Object.entries(published)) {
-		if (!state.commit) { misses.push(`${postPath} (no published commit recorded)`); continue; }
-		const shown = await runGit(['show', `${state.commit}:${getPostGitPath(postPath)}`]);
-		if (!shown.ok) { misses.push(`${postPath} (git show failed)`); continue; }
-		const split = splitRawPost(normalizeNewlines(shown.output));
-		const newHash = hashPostContent(split.frontmatter, split.body);
+		let newHash: string | null = null;
+
+		if (state.commit) {
+			const shown = await runGit(['show', `${state.commit}:${getPostGitPath(postPath)}`]);
+			if (shown.ok) {
+				const split = splitRawPost(normalizeNewlines(shown.output));
+				newHash = hashPostContent(split.frontmatter, split.body);
+			}
+		} else {
+			newHash = await recoverPublishedFromFile(postPath, state.hash);
+		}
+
+		if (!newHash) {
+			misses.push(`${postPath} (${state.commit ? 'git show failed' : 'no commit recorded, file differs from published'})`);
+			continue;
+		}
+
 		updatePublishedHash(postPath, newHash);
 		const current = getStoredPost(postPath);
 		if (current && current.hash !== newHash) shifted.push(postPath);
