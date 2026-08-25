@@ -1,6 +1,7 @@
-import { createHash } from 'node:crypto';
 import { getLastPublishedAt, getPublishedPosts, recordPublished, type PublishedPostState } from './db';
 import type { DeployStatus } from '$lib/types';
+
+export { hashPostContent } from '$lib/post-text';
 
 export type { DeployStatus };
 
@@ -19,11 +20,6 @@ type PublishedPost = {
 	deleteRequested: boolean;
 	contentHash: string;
 };
-
-export const hashPostContent = (frontmatter: string, body: string) =>
-	createHash('sha256')
-		.update(`${frontmatter.trim()}\n---\n${body.replace(/\s+$/, '')}`)
-		.digest('hex');
 
 export const readDeployState = async (): Promise<DeployState> => ({
 	lastPublishedAt: getLastPublishedAt(),

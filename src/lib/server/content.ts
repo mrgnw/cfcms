@@ -2,10 +2,13 @@ import { createHash } from 'node:crypto';
 import { mkdir, readdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 import { formatYamlScalar, parseYamlScalar } from '$lib/frontmatter';
+import { canonicalBody, hashPostContent, renderPost, splitRawPost } from '$lib/post-text';
 import { getEditingOrder, pruneMissingPosts, seedEditingQueue } from './db';
-import { getDeployStatus, hashPostContent, readDeployState, type DeployState, type DeployStatus } from './deploy-state';
+import { getDeployStatus, readDeployState, type DeployState, type DeployStatus } from './deploy-state';
 import { contentBaseDirectory, contentDirectory } from './paths';
-import { decideSave, normalizeNewlines, storedBodyForm, type SaveDecision } from '$lib/save-rules';
+import { decideSave, normalizeNewlines, type SaveDecision } from '$lib/save-rules';
+
+export { splitRawPost };
 
 export type PostSummary = {
 	path: string;
@@ -28,13 +31,6 @@ export type PostSummary = {
 export type Post = PostSummary & {
 	frontmatter: string;
 	body: string;
-};
-
-const frontmatterPattern = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
-
-export const splitRawPost = (raw: string) => {
-	const match = raw.match(frontmatterPattern);
-	return { frontmatter: match?.[1] ?? '', body: match ? raw.slice(match[0].length) : raw };
 };
 
 const isMarkdownFile = (filePath: string) => filePath.endsWith('.md');
@@ -203,8 +199,8 @@ export const createUserVersion = async (llmPath: string) => {
 	}
 
 	const raw = await readFile(getPostFilePath(llmPath), 'utf8');
-	const frontmatter = (raw.match(frontmatterPattern)?.[1] ?? '')
-		.split(/\r?\n/)
+	const frontmatter = splitRawPost(raw)
+		.frontmatter.split(/\r?\n/)
 		.filter((line) => !line.match(/^publish:/))
 		.join('\n')
 		.trim();
@@ -220,11 +216,10 @@ export const getLlmDraft = async (postPath: string) => {
 
 	try {
 		const raw = await readFile(getPostFilePath(companionPath), 'utf8');
-		const match = raw.match(frontmatterPattern);
 
 		return {
 			path: companionPath,
-			body: match ? raw.slice(match[0].length) : raw
+			body: splitRawPost(raw).body
 		};
 	} catch {
 		return null;
@@ -254,18 +249,12 @@ export const savePost = (postPath: string, rawFrontmatter: string, rawBody: stri
 		const frontmatter = normalizeNewlines(rawFrontmatter);
 		const body = normalizeNewlines(rawBody);
 		const current = await getPost(postPath);
-		const incomingHash = hashPostContent(frontmatter, storedBodyForm(frontmatter, body));
+		const incomingHash = hashPostContent(frontmatter, canonicalBody(body));
 		const outcome = decideSave(baseHash, current.contentHash, incomingHash);
 
 		if (outcome !== 'write') return { outcome, post: current };
 
-		const normalizedFrontmatter = frontmatter.trim();
-		const normalizedBody = body.replace(/\s+$/, '');
-		const content = normalizedFrontmatter
-			? `---\n${normalizedFrontmatter}\n---\n\n${normalizedBody}\n`
-			: `${normalizedBody}\n`;
-
-		await writeFile(getPostFilePath(postPath), content, 'utf8');
+		await writeFile(getPostFilePath(postPath), renderPost(frontmatter, body), 'utf8');
 		return { outcome, post: await getPost(postPath) };
 	});
 

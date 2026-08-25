@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { diffSegments } from './segment-diff.ts';
+import { diffSegments, lineDiffCounts } from './segment-diff.ts';
 
 const base = 'Alpha paragraph.\n\nBeta paragraph.\n\nGamma paragraph.';
 
@@ -54,5 +54,9 @@ assert.deepEqual(
 
 const big = Array.from({ length: 501 }, (_, i) => `Block ${i}.`).join('\n\n');
 assert.equal(diffSegments(big, big, big), null, 'over the block cap → null fallback');
+
+assert.deepEqual(lineDiffCounts('a\nb\nc', 'a\nx\nc\nd'), { added: 2, deleted: 1 }, 'line counts via LCS');
+assert.deepEqual(lineDiffCounts('same', 'same'), { added: 0, deleted: 0 });
+assert.equal(lineDiffCounts(Array.from({ length: 4001 }, () => 'l').join('\n'), 'x'), null, 'over the line cap → null');
 
 console.log('segment-diff.check: ok');

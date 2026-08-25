@@ -105,3 +105,13 @@ export const diffSegments = (baseBody: string, mainBody: string, versionBody: st
 
 	return segments;
 };
+
+const maxDiffLines = 4000;
+
+export const lineDiffCounts = (before: string, after: string): { added: number; deleted: number } | null => {
+	const a = before.split('\n');
+	const b = after.split('\n');
+	if (Math.max(a.length, b.length) > maxDiffLines) return null;
+	const common = lcsPairs(a, b).length;
+	return { added: b.length - common, deleted: a.length - common };
+};
