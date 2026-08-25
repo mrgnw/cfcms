@@ -77,8 +77,11 @@ const runTarget = (target: PublishTarget): Promise<PublishTargetResult> =>
 		});
 	});
 
+type PendingExport = { path: string; hash: string | null; mtimeMs: number | null };
+
 const renderBoundary = async (posts: Post[]) => {
-	const touched: string[] = [];
+	const gitPaths: string[] = [];
+	const exports: PendingExport[] = [];
 
 	for (const post of posts) {
 		const filePath = getPostFilePath(post.path);
@@ -86,16 +89,16 @@ const renderBoundary = async (posts: Post[]) => {
 			await mkdir(dirname(filePath), { recursive: true });
 			await writeFile(filePath, renderPost(post.frontmatter, post.body), 'utf8');
 			const meta = await stat(filePath);
-			setExportedState(post.path, post.contentHash, meta.mtimeMs);
-			touched.push(getPostGitPath(post.path));
+			exports.push({ path: post.path, hash: post.contentHash, mtimeMs: meta.mtimeMs });
+			gitPaths.push(getPostGitPath(post.path));
 		} else if (post.deployStatus === 'delete' || post.deployStatus === 'unpublish') {
 			await unlink(filePath).catch(() => undefined);
-			setExportedState(post.path, null, null);
-			touched.push(getPostGitPath(post.path));
+			exports.push({ path: post.path, hash: null, mtimeMs: null });
+			gitPaths.push(getPostGitPath(post.path));
 		}
 	}
 
-	return touched;
+	return { gitPaths, exports };
 };
 
 export const runPublish = async () => {
@@ -110,14 +113,18 @@ export const runPublish = async () => {
 		['ready', 'changed', 'unpublish', 'delete'].includes(post.deployStatus)
 	);
 
-	const touched = await renderBoundary(posts);
-	await commitPaths(touched, 'cms: publish');
+	const { gitPaths, exports } = await renderBoundary(posts);
+	const commit = await commitPaths(gitPaths, 'cms: publish');
+	if (!commit.ok) throw new Error(`Publish commit failed: ${commit.output}`);
+	for (const exported of exports) setExportedState(exported.path, exported.hash, exported.mtimeMs);
 
 	const [push, results] = await Promise.all([pushContent(), Promise.all(targets.map(runTarget))]);
 	const ok = results.every((result) => result.ok);
-	const deployment = ok ? await recordPublishedState(posts, await getHeadCommit()) : null;
-
-	runBackup().catch(() => undefined);
+	let deployment = null;
+	if (ok) {
+		deployment = await recordPublishedState(posts, await getHeadCommit());
+		runBackup().catch(() => undefined);
+	}
 
 	return {
 		ok,
