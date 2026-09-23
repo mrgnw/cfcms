@@ -218,7 +218,7 @@
 				<h3 class="section-label editing-label">Editing</h3>
 				<div
 					class="queue"
-					use:dndzone={{ items: queueItems, flipDurationMs: 150 }}
+					use:dndzone={{ items: queueItems, flipDurationMs: 150, dragHandle: '.grip' }}
 					onconsider={handleDnd}
 					onfinalize={handleDndFinalize}
 				>
