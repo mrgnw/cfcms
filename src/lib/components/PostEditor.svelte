@@ -168,6 +168,10 @@
 				onSaved?.();
 			}, 5000)
 		);
+
+		onDestroy(() => {
+			if (saveTimer) clearTimeout(saveTimer);
+		});
 	}
 
 	let status = $state<SaveStatus>('saved');
@@ -319,9 +323,30 @@
 		markDirty();
 	}
 
-	onDestroy(() => {
-		if (saveTimer) clearTimeout(saveTimer);
-	});
+	function getFullMarkdown(): string {
+		return post.frontmatter + '\n\n' + bodyField;
+	}
+
+	let copyState = $state<'idle' | 'copied'>('idle');
+
+	function copyMarkdown() {
+		const md = getFullMarkdown();
+		navigator.clipboard.writeText(md).catch(() => {});
+		copyState = 'copied';
+		setTimeout(() => { copyState = 'idle'; }, 1500);
+	}
+
+	function downloadMarkdown() {
+		const md = getFullMarkdown();
+		const filename = post.path.replace(/\.md$/, '') + '.md';
+		const blob = new Blob([md], { type: 'text/markdown' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = filename;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
 </script>
 
 <header class="post-head">
@@ -392,6 +417,38 @@
 			<input type="checkbox" bind:checked={autosaveOn} onchange={toggleAutosave} />
 			<span>Auto</span>
 		</label>
+		<div class="export-actions">
+			<button
+				type="button"
+				class="export-btn"
+				class:copied={copyState === 'copied'}
+				title="Copy markdown to clipboard"
+				onclick={copyMarkdown}
+			>
+				{#if copyState === 'copied'}
+					<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M20 6 9 17l-5-5" />
+					</svg>
+				{:else}
+					<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+						<path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+					</svg>
+				{/if}
+			</button>
+			<button
+				type="button"
+				class="export-btn"
+				title="Download markdown"
+				onclick={downloadMarkdown}
+			>
+				<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+					<polyline points="7 10 12 15 17 10"/>
+					<line x1="12" x2="12" y1="15" y2="3"/>
+				</svg>
+			</button>
+		</div>
 	</div>
 </header>
 
@@ -730,6 +787,32 @@
 		color: var(--ink-3);
 		cursor: pointer;
 		user-select: none;
+	}
+
+	.export-actions {
+		display: inline-flex;
+		gap: 2px;
+	}
+
+	.export-btn {
+		background: transparent;
+		border: none;
+		border-radius: 7px;
+		color: var(--ink-3);
+		cursor: pointer;
+		display: inline-grid;
+		place-items: center;
+		padding: 4px;
+		transition: color 0.15s, background 0.15s;
+	}
+
+	.export-btn:hover {
+		background: var(--hover);
+		color: var(--ink);
+	}
+
+	.export-btn.copied {
+		color: var(--ok);
 	}
 
 	.error-banner {
