@@ -4,7 +4,7 @@ import { readdir, readFile, stat, unlink } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
 import { formatYamlScalar, parseYamlScalar } from '$lib/frontmatter';
 import { canonicalBody, hashPostContent, splitRawPost } from '$lib/post-text';
-import { slugify, svxSlug } from '$lib/svx';
+import { slugKey, slugify, svxSlug } from '$lib/svx';
 import {
 	appendRevision,
 	deletePostRows,
@@ -225,15 +225,28 @@ const ingestLlmFile = async (llmPath: string, filePath: string, stored: StoredPo
 	setLlmState(stored.path, hash, meta.mtimeMs);
 };
 
+const baseName = (postPath: string) => postPath.replace(/\.md$/, '').split('/').at(-1) ?? '';
+
+// An llm draft belongs to the post at the same path, else to the one post anywhere whose name matches it.
+const llmOwner = (llmPath: string, stored: StoredPost[]): StoredPost | null => {
+	const samePath = llmPath.replace(/\.llm\.md$/, '.md');
+	const exact = stored.filter((post) => post.path === samePath);
+	if (exact.length) return exact[0];
+	const key = slugKey(baseName(samePath));
+	const byName = stored.filter((post) => slugKey(baseName(post.path)) === key);
+	return byName.length === 1 ? byName[0] : null;
+};
+
 const scanContentDir = async (): Promise<string[]> => {
 	const files = await listMarkdownFiles(contentDirectory);
-	const stored = new Map(listStoredPosts().map((post) => [post.path, post]));
+	const storedList = listStoredPosts();
+	const stored = new Map(storedList.map((post) => [post.path, post]));
 
 	for (const filePath of files) {
 		const postPath = normalizePostPath(relative(contentDirectory, filePath));
 		try {
 			if (postPath.endsWith('.llm.md')) {
-				await ingestLlmFile(postPath, filePath, stored.get(postPath.replace(/\.llm\.md$/, '.md')) ?? null);
+				await ingestLlmFile(postPath, filePath, llmOwner(postPath, storedList));
 			} else {
 				await ingestUserFile(postPath, filePath, stored.get(postPath) ?? null);
 			}
@@ -253,10 +266,9 @@ export const listPosts = async () => {
 	let order = getEditingOrder();
 	let posts = listStoredPosts().map((stored) => postFromStored(stored, deployState, order));
 
-	const fileSet = new Set(files);
+	const storedList = listStoredPosts();
 	const standaloneLlm = files.filter(
-		(file) => file.endsWith('.llm.md') && !fileSet.has(file.replace(/\.llm\.md$/, '.md')) &&
-			!posts.some((post) => post.path === normalizePostPath(relative(contentDirectory, file)).replace(/\.llm\.md$/, '.md'))
+		(file) => file.endsWith('.llm.md') && !llmOwner(normalizePostPath(relative(contentDirectory, file)), storedList)
 	);
 	posts = posts.concat(await Promise.all(standaloneLlm.map((file) => parseFilePost(file, deployState, order))));
 

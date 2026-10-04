@@ -49,8 +49,8 @@
 			})
 		);
 		const outcomes = await Promise.all(responses.map((res) => res.json().catch(() => ({ type: 'error' }))));
-		const refused = outcomes.filter((outcome) => outcome.type !== 'success').length;
-		if (refused) error = `${refused} ${refused === 1 ? 'post' : 'posts'} not staged`;
+		const refused = paths.filter((_, index) => outcomes[index].type !== 'success');
+		if (refused.length) error = `Not staged: ${refused.join(', ')}`;
 		await invalidateAll();
 	}
 
