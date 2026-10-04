@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { getPostGitPath } from './content';
 import { contentBaseDirectory } from './paths';
 
@@ -52,7 +54,16 @@ export const commitPost = async (postPath: string, action: 'create' | 'save' | '
 	return { ...commit, committed: commit.ok, path: gitPath };
 };
 
-export const commitPaths = async (paths: string[], message: string) => {
+const dropVanishedPaths = async (paths: string[]) => {
+	if (paths.length === 0) return paths;
+	const tracked = await runGit(['ls-files', '-z', '--', ...paths]);
+	if (!tracked.ok) throw new Error(`git ls-files failed: ${tracked.output}`);
+	const trackedPaths = new Set(tracked.output.split('\0'));
+	return paths.filter((path) => trackedPaths.has(path) || existsSync(resolve(contentBaseDirectory, path)));
+};
+
+export const commitPaths = async (requestedPaths: string[], message: string) => {
+	const paths = await dropVanishedPaths(requestedPaths);
 	if (paths.length === 0) return { ok: true, status: 0, output: 'Nothing to commit', committed: false };
 	const add = await runGit(['add', '--', ...paths]);
 	if (!add.ok) return { ...add, committed: false };
