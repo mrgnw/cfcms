@@ -180,6 +180,9 @@ export const actions = {
 
 		if (!path) return fail(400, { message: 'Post path is required' });
 		if (path.endsWith('.llm.md')) return fail(400, { message: 'Fork the llm draft before staging it' });
+		if (listVersions(path).some((version) => version.writer === 'live')) {
+			return fail(409, { message: 'Resolve the live version before staging' });
+		}
 
 		setStaged(path, true);
 		return { staged: path };

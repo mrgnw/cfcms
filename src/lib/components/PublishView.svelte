@@ -39,13 +39,16 @@
 	}
 
 	async function setStaged(paths: string[], wanted: boolean) {
-		await Promise.all(
+		error = null;
+		const responses = await Promise.all(
 			paths.map((path) => {
 				const fd = new FormData();
 				fd.set('path', path);
 				return fetch(wanted ? '?/stage' : '?/unstage', { method: 'POST', body: fd });
 			})
 		);
+		const refused = responses.filter((res) => !res.ok).length;
+		if (refused) error = `${refused} ${refused === 1 ? 'post' : 'posts'} not staged: resolve the live version first`;
 		await invalidateAll();
 	}
 

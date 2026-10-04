@@ -1,6 +1,7 @@
 import { env } from '$env/dynamic/private';
 import { renderPost } from '$lib/post-text';
-import { renderSvx } from '$lib/svx';
+import { parseFrontmatter } from '$lib/frontmatter';
+import { renderSvx, svxSlug } from '$lib/svx';
 import { isPending, statusOf } from '$lib/types';
 import { spawn } from 'node:child_process';
 import { mkdir, readdir, stat, unlink, writeFile } from 'node:fs/promises';
@@ -68,7 +69,14 @@ const headEntry = (post: Post): LiveEntry => ({
 const publishedEntry = (post: Post, publishedHash: string): LiveEntry => {
 	const revision = getRevisionByHash(post.path, publishedHash);
 	if (!revision) throw new Error(`Published revision missing for ${post.path}; unstaged post cannot be re-rendered`);
-	return { ...headEntry(post), frontmatter: revision.frontmatter, body: revision.body, contentHash: publishedHash };
+	return {
+		path: post.path,
+		slug: svxSlug(post.path, revision.frontmatter),
+		title: parseFrontmatter(revision.frontmatter).title,
+		frontmatter: revision.frontmatter,
+		body: revision.body,
+		contentHash: publishedHash
+	};
 };
 
 export const buildLiveSet = (
@@ -129,8 +137,8 @@ const renderBoundary = async (posts: Post[]) => {
 	return { gitPaths, exports };
 };
 
-const restoreWorkingTree = async () => {
-	await runGit(['checkout', '--', svxGitDirectory, 'content']);
+const restoreWorkingTree = async (gitPaths: string[]) => {
+	await runGit(['checkout', '--', svxGitDirectory, ...gitPaths]);
 	await runGit(['clean', '-fd', '--', svxGitDirectory]);
 };
 
@@ -148,7 +156,7 @@ export const runPublish = async () => {
 	const build = await runCommand('build', env.BLOG_BUILD_COMMAND ?? 'pnpm build', contentBaseDirectory);
 	const runAt = new Date().toISOString();
 	if (!build.ok) {
-		await restoreWorkingTree();
+		await restoreWorkingTree(gitPaths);
 		return {
 			ok: false,
 			stagedCount: going.length,
@@ -161,24 +169,25 @@ export const runPublish = async () => {
 	}
 
 	const commit = await commitPaths([svxGitDirectory, ...gitPaths], 'cms: publish');
-	if (!commit.ok) throw new Error(`Publish commit failed: ${commit.output}`);
+	if (!commit.ok) {
+		await restoreWorkingTree(gitPaths);
+		throw new Error(`Publish commit failed: ${commit.output}`);
+	}
 	for (const exported of exports) setExportedState(exported.path, exported.hash, exported.mtimeMs);
+	// The commit is what any later push deploys, so the recorded state follows the commit, not the push.
+	const deployment = await recordPublishedState(liveSet, await getHeadCommit());
+	clearStaged(going.map((post) => post.path));
 
 	const push = await pushContent();
-	let deployment = null;
-	if (push.ok) {
-		deployment = await recordPublishedState(liveSet, await getHeadCommit());
-		clearStaged(going.map((post) => post.path));
-		runBackup().catch(() => undefined);
-	}
+	if (push.ok) runBackup().catch(() => undefined);
 
 	return {
 		ok: push.ok,
 		stagedCount: going.length,
 		liveCount: liveSet.length,
-		lastPublishedAt: deployment?.lastPublishedAt ?? null,
+		lastPublishedAt: deployment.lastPublishedAt,
 		runAt,
-		push,
+		push: push.ok ? push : { ...push, output: `Committed but not pushed; publish again to retry the push.\n${push.output}` },
 		results: [build]
 	};
 };

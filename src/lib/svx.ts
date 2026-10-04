@@ -17,14 +17,14 @@ const readSlugField = (frontmatter: string) => {
 };
 
 export const svxSlug = (postPath: string, frontmatter: string) =>
-	readSlugField(frontmatter) || slugify(baseName(postPath));
+	slugify(readSlugField(frontmatter) || baseName(postPath));
 
 const isSlugLine = (line: string) => /^slug:/.test(line);
 
 export const renderSvx = (frontmatter: string, body: string) => {
 	const fields = parseFrontmatter(frontmatter);
-	const lines = [`title: ${formatYamlScalar(fields.title)}`, `date: ${fields.date || '1970-01-01'}`];
-	if (fields.tags[0]) lines.push(`tag: ${formatYamlScalar(fields.tags[0])}`);
+	const lines = [`title: ${JSON.stringify(fields.title)}`, `date: ${JSON.stringify(fields.date || '1970-01-01')}`];
+	if (fields.tags[0]) lines.push(`tag: ${JSON.stringify(fields.tags[0])}`);
 	if (fields.pin) lines.push('pinned: true');
 	lines.push('published: true');
 	const custom = fields.custom
