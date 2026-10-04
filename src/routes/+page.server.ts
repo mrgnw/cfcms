@@ -28,6 +28,10 @@ import { diffSegments, lineDiffCounts } from '$lib/segment-diff';
 import { isValidWriter, normalizeNewlines } from '$lib/save-rules';
 import { isPending, statusOf } from '$lib/types';
 
+const shipsHeadText = (status: ReturnType<typeof statusOf>) => status === 'ready' || status === 'changed';
+
+const hasLiveVersion = (path: string) => listVersions(path).some((version) => version.writer === 'live');
+
 const getPendingChanges = async (posts: Awaited<ReturnType<typeof listPosts>>) => {
 	const pending = posts.filter((post) => isPending(statusOf(post)));
 	const published = getPublishedPosts();
@@ -45,6 +49,7 @@ const getPendingChanges = async (posts: Awaited<ReturnType<typeof listPosts>>) =
 			date: post.date,
 			status: statusOf(post),
 			staged: staged.has(post.path),
+			blocked: shipsHeadText(statusOf(post)) && hasLiveVersion(post.path),
 			words: post.body.split(/\s+/).filter(Boolean).length,
 			added: diff?.added ?? null,
 			deleted: diff?.deleted ?? null
@@ -180,7 +185,9 @@ export const actions = {
 
 		if (!path) return fail(400, { message: 'Post path is required' });
 		if (path.endsWith('.llm.md')) return fail(400, { message: 'Fork the llm draft before staging it' });
-		if (listVersions(path).some((version) => version.writer === 'live')) {
+		const post = await getPost(path).catch(() => null);
+		if (!post) return fail(400, { message: `Unknown post: ${path}` });
+		if (shipsHeadText(statusOf(post)) && hasLiveVersion(path)) {
 			return fail(409, { message: 'Resolve the live version before staging' });
 		}
 

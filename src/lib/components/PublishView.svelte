@@ -10,6 +10,7 @@
 	let error = $state<string | null>(null);
 
 	let staged = $derived(changes.filter((change) => change.staged));
+	let stageable = $derived(changes.filter((change) => !change.blocked));
 
 	let totals = $derived({
 		added: changes.reduce((sum, change) => sum + (change.added ?? 0), 0),
@@ -47,8 +48,9 @@
 				return fetch(wanted ? '?/stage' : '?/unstage', { method: 'POST', body: fd });
 			})
 		);
-		const refused = responses.filter((res) => !res.ok).length;
-		if (refused) error = `${refused} ${refused === 1 ? 'post' : 'posts'} not staged: resolve the live version first`;
+		const outcomes = await Promise.all(responses.map((res) => res.json().catch(() => ({ type: 'error' }))));
+		const refused = outcomes.filter((outcome) => outcome.type !== 'success').length;
+		if (refused) error = `${refused} ${refused === 1 ? 'post' : 'posts'} not staged`;
 		await invalidateAll();
 	}
 
@@ -96,19 +98,28 @@
 	<div class="changes">
 		{#if changes.length}
 			<div class="stage-all">
-				<span>{staged.length} of {changes.length} staged for next publish</span>
-				<button type="button" onclick={() => setStaged(changes.map((change) => change.path), staged.length !== changes.length)}>
-					{staged.length === changes.length ? 'Unstage all' : 'Stage all'}
+				<span>
+					{staged.length} of {changes.length} staged for next publish
+					{#if stageable.length < changes.length}· {changes.length - stageable.length} blocked by a live version{/if}
+				</span>
+				<button
+					type="button"
+					disabled={!stageable.length}
+					onclick={() => setStaged(stageable.map((change) => change.path), staged.length !== stageable.length)}
+				>
+					{staged.length === stageable.length ? 'Unstage all' : 'Stage all'}
 				</button>
 			</div>
 		{/if}
 		{#each changes as change (change.path)}
 			{@const bar = barSegments(change)}
-			<div class="change-row" class:staged={change.staged}>
+			<div class="change-row" class:staged={change.staged} class:blocked={change.blocked}>
 				<input
 					type="checkbox"
 					aria-label="Stage {change.title} for next publish"
 					checked={change.staged}
+					disabled={change.blocked}
+					title={change.blocked ? 'Resolve the live version in the editor first' : undefined}
 					onchange={() => setStaged([change.path], !change.staged)}
 				/>
 				<a class="change-link" href={resolve(`/?post=${encodeURIComponent(change.path)}`)}>
@@ -116,6 +127,9 @@
 					<span class="right">
 						{#if change.status === 'unpublish' || change.status === 'delete'}
 							<span class="badge">{change.status === 'delete' ? 'remove' : 'unpublish'}</span>
+						{/if}
+						{#if change.blocked}
+							<span class="badge live">live version</span>
 						{/if}
 						<span class="bar" aria-hidden="true">
 							{#if bar.add}<i class="add" style:width="{bar.add}%"></i>{/if}
@@ -132,7 +146,7 @@
 						{:else}
 							no baseline to diff
 						{/if}
-						· {change.staged ? 'next' : 'ready'}
+						· {change.blocked ? 'resolve in editor' : change.staged ? 'next' : 'ready'}
 					</span>
 				</a>
 			</div>
@@ -276,6 +290,20 @@
 	.change-row input {
 		accent-color: var(--accent);
 		margin: 0;
+	}
+
+	.change-row.blocked {
+		border-style: dashed;
+	}
+
+	.badge.live {
+		background: color-mix(in srgb, var(--warn) 16%, transparent);
+		color: var(--warn);
+	}
+
+	.stage-all button:disabled {
+		color: var(--ink-3);
+		cursor: not-allowed;
 	}
 
 	.change-link {

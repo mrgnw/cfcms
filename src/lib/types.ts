@@ -61,6 +61,7 @@ export type PendingChange = {
 	date: string;
 	status: DeployStatus;
 	staged: boolean;
+	blocked: boolean;
 	words: number;
 	added: number | null;
 	deleted: number | null;
