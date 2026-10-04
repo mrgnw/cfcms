@@ -8,16 +8,15 @@ mostly structural: the code grew faster than its seams.
 
 ## Now
 
-1. **Publish result surface.** `publish/+server.ts` is 14 lines; the UI shows a
-   pass/fail `<details>` per target but drops `r.output` unless it contains a
-   deploy URL. A failed `wrangler deploy` therefore shows "failed" with no reason.
-   Show the tail of `output` on failure.
+1. **Publish pipeline landed 2026-10-04.** Publish renders the full live set to
+   `src/posts/<slug>.svx` in `~/dev/blog`, gates on `pnpm build`, commits, pushes
+   `main`; Cloudflare builds the push. Pending changes are staged per post. A
+   one-time baseline mapped the 13 live `.svx` files onto store posts. Follow-ons in
+   [todos/publish-progress.md](todos/publish-progress.md).
 
-2. **Tests on the content path.** `blocks.check.ts` is the only check in the repo.
-   `frontmatter.ts` (parse/serialize, 103 lines) and `content.ts` (229 lines,
-   writes files under the blog checkout) have none. One assert-based check each,
-   in the style of `blocks.check.ts` — the frontmatter round-trip is the valuable
-   one, since a parse bug silently rewrites a real post.
+2. **Tests on the content path.** `blocks.check.ts`, `frontmatter.check.ts`,
+   `post-text.check.ts`, `save-rules.check.ts`, `segment-diff.check.ts`, `svx.check.ts`
+   exist. `content.ts` (writes files under the blog checkout) still has none.
 
 ## Later
 
