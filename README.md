@@ -38,6 +38,8 @@ The CMS exposes `POST /publish` and a Publish view in the UI. Pending changes ar
 
 Publish renders the full live set to `src/posts/<slug>.svx` in the blog checkout (the CMS owns that directory: unstaged posts keep their published revision, unpublished posts are removed), writes the staged posts to `content/*.md`, runs the blog build as a gate, commits, and pushes `main`. Cloudflare Workers Builds deploys the push. The CMS never runs `wrangler`.
 
+The site text is tracked by revision: `published_hash` names the revision each `.svx` was rendered from. A `.svx` edited outside the CMS is picked up when the Publish view loads or a publish starts: if the draft did not move, the site text becomes the new head; if both moved, the post shows as blocked with a `live` version to resolve per segment.
+
 ```sh
 BLOG_CONTENT_BASE_DIR=~/dev/blog
 BLOG_BUILD_COMMAND='pnpm build'

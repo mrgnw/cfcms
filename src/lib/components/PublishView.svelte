@@ -111,7 +111,7 @@
 			<div class="stage-all">
 				<span>
 					{staged.length} of {changes.length} staged for next publish
-					{#if stageable.length < changes.length}· {changes.length - stageable.length} blocked by a live version{/if}
+					{#if stageable.length < changes.length}· {changes.length - stageable.length} edited on the site too{/if}
 				</span>
 				<button
 					type="button"
@@ -130,7 +130,7 @@
 					aria-label="Stage {change.title} for next publish"
 					checked={change.staged}
 					disabled={change.blocked}
-					title={change.blocked ? 'Resolve the live version in the editor first' : undefined}
+					title={change.blocked ? 'Edited on the site and in the CMS: resolve first' : undefined}
 					onchange={() => setStaged([change.path], !change.staged)}
 				/>
 				<a class="change-link" href={resolve(`/?post=${encodeURIComponent(change.path)}`)}>
@@ -157,12 +157,12 @@
 						{:else}
 							no baseline to diff
 						{/if}
-						· {change.blocked ? 'site text differs' : change.staged ? 'next' : 'ready'}
+						· {change.blocked ? 'edited on the site too' : change.staged ? 'next' : 'ready'}
 					</span>
 				</a>
 				{#if change.blocked}
 					<span class="resolve">
-						<button type="button" onclick={() => resolveLive(change.path, 'mine')}>keep mine</button>
+						<button type="button" onclick={() => resolveLive(change.path, 'mine')}>keep draft</button>
 						<button type="button" onclick={() => resolveLive(change.path, 'theirs')}>use site text</button>
 						<a href={resolve(`/?post=${encodeURIComponent(change.path)}`)}>compare</a>
 					</span>
