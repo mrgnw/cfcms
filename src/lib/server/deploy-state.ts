@@ -16,8 +16,6 @@ type PublishedPost = {
 	path: string;
 	title: string;
 	slug: string;
-	publish: boolean;
-	deleteRequested: boolean;
 	contentHash: string;
 };
 
@@ -39,10 +37,7 @@ export const getDeployStatus = (
 };
 
 export const recordPublishedState = async (posts: PublishedPost[], commit: string | null) => {
-	const lastPublishedAt = recordPublished(
-		posts.filter((post) => post.publish && !post.deleteRequested),
-		commit
-	);
+	const lastPublishedAt = recordPublished(posts, commit);
 
 	return { lastPublishedAt };
 };

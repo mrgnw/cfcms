@@ -15,8 +15,6 @@ Override the filesystem base if needed:
 
 ```sh
 BLOG_CONTENT_BASE_DIR=~/dev/blog
-SVELTE_BLOG_DIR=~/dev/blog-loke
-ASTRO_BLOG_DIR=~/dev/blog-astro
 ```
 
 ## Development
@@ -36,15 +34,13 @@ pnpm build
 
 ## Publishing
 
-The CMS exposes `POST /publish` and a publish button in the UI. Publishing runs local build/deploy commands for the configured targets against the Mac mini filesystem checkouts. It also attempts `git push` as a backup/version-control step, but deploy success is determined by the local deploy commands, not git.
+The CMS exposes `POST /publish` and a Publish view in the UI. Pending changes are staged per post; only staged posts go out.
 
-Configure these private runtime environment variables:
+Publish renders the full live set to `src/posts/<slug>.svx` in the blog checkout (the CMS owns that directory: unstaged posts keep their published revision, unpublished posts are removed), writes the staged posts to `content/*.md`, runs the blog build as a gate, commits, and pushes `main`. Cloudflare Workers Builds deploys the push. The CMS never runs `wrangler`.
 
 ```sh
-SVELTE_BLOG_DIR=~/dev/blog-loke
-SVELTE_BLOG_DEPLOY_COMMAND='bun run build && bunx wrangler deploy'
-ASTRO_BLOG_DIR=~/dev/blog-astro
-ASTRO_BLOG_DEPLOY_COMMAND='pnpm build && pnpm deploy'
+BLOG_CONTENT_BASE_DIR=~/dev/blog
+BLOG_BUILD_COMMAND='pnpm build'
 ```
 
 Test the endpoint locally:

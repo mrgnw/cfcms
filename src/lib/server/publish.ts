@@ -1,22 +1,22 @@
 import { env } from '$env/dynamic/private';
 import { renderPost } from '$lib/post-text';
+import { renderSvx } from '$lib/svx';
+import { isPending, statusOf } from '$lib/types';
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { mkdir, stat, unlink, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { mkdir, readdir, stat, unlink, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import { runBackup } from './backup';
 import { getPostFilePath, getPostGitPath, listPosts, type Post } from './content';
-import { setExportedState } from './db';
+import { clearStaged, getPublishedPosts, getRevisionByHash, getStagedPaths, setExportedState } from './db';
 import { recordPublishedState } from './deploy-state';
-import { commitPaths, getHeadCommit, pushContent } from './git';
+import { commitPaths, getHeadCommit, pushContent, runGit } from './git';
+import { contentBaseDirectory } from './paths';
 
-type PublishTarget = {
+export const svxDirectory = resolve(contentBaseDirectory, 'src/posts');
+const svxGitDirectory = 'src/posts';
+
+type CommandResult = {
 	name: string;
-	cwd: string;
-	command: string;
-};
-
-type PublishTargetResult = PublishTarget & {
 	ok: boolean;
 	status: number | null;
 	durationMs: number;
@@ -25,29 +25,11 @@ type PublishTargetResult = PublishTarget & {
 
 const outputLimit = 20_000;
 
-const getTargets = () =>
-	[
-		{
-			name: 'svelte',
-			cwd: env.SVELTE_BLOG_DIR ?? '~/dev/blog-loke',
-			command: env.SVELTE_BLOG_DEPLOY_COMMAND ?? 'bun run build && bunx wrangler deploy'
-		},
-		{
-			name: 'astro',
-			cwd: env.ASTRO_BLOG_DIR ?? '~/dev/blog-astro',
-			command: env.ASTRO_BLOG_DEPLOY_COMMAND ?? 'pnpm build && pnpm deploy'
-		}
-	].filter((target) => existsSync(target.cwd));
-
-const runTarget = (target: PublishTarget): Promise<PublishTargetResult> =>
+const runCommand = (name: string, command: string, cwd: string): Promise<CommandResult> =>
 	new Promise((resolveResult) => {
 		const startedAt = Date.now();
 		let output = '';
-		const child = spawn(target.command, {
-			cwd: target.cwd,
-			env: process.env,
-			shell: true
-		});
+		const child = spawn(command, { cwd, env: process.env, shell: true });
 
 		const appendOutput = (chunk: Buffer) => {
 			output = `${output}${chunk.toString()}`.slice(-outputLimit);
@@ -57,25 +39,71 @@ const runTarget = (target: PublishTarget): Promise<PublishTargetResult> =>
 		child.stderr.on('data', appendOutput);
 
 		child.on('close', (status) => {
-			resolveResult({
-				...target,
-				ok: status === 0,
-				status,
-				durationMs: Date.now() - startedAt,
-				output
-			});
+			resolveResult({ name, ok: status === 0, status, durationMs: Date.now() - startedAt, output });
 		});
 
 		child.on('error', (caught) => {
-			resolveResult({
-				...target,
-				ok: false,
-				status: null,
-				durationMs: Date.now() - startedAt,
-				output: caught.message
-			});
+			resolveResult({ name, ok: false, status: null, durationMs: Date.now() - startedAt, output: caught.message });
 		});
 	});
+
+export type LiveEntry = {
+	path: string;
+	slug: string;
+	title: string;
+	frontmatter: string;
+	body: string;
+	contentHash: string;
+};
+
+const headEntry = (post: Post): LiveEntry => ({
+	path: post.path,
+	slug: post.slug,
+	title: post.title,
+	frontmatter: post.frontmatter,
+	body: post.body,
+	contentHash: post.contentHash
+});
+
+const publishedEntry = (post: Post, publishedHash: string): LiveEntry => {
+	const revision = getRevisionByHash(post.path, publishedHash);
+	if (!revision) throw new Error(`Published revision missing for ${post.path}; unstaged post cannot be re-rendered`);
+	return { ...headEntry(post), frontmatter: revision.frontmatter, body: revision.body, contentHash: publishedHash };
+};
+
+export const buildLiveSet = (
+	posts: Post[],
+	published: Record<string, { hash: string }>,
+	staged: Set<string>
+): LiveEntry[] => {
+	const entries: LiveEntry[] = [];
+	for (const post of posts) {
+		const status = statusOf(post);
+		const isStaged = staged.has(post.path);
+		if (isStaged && (status === 'ready' || status === 'changed')) entries.push(headEntry(post));
+		else if (isStaged && (status === 'unpublish' || status === 'delete')) continue;
+		else if (published[post.path]) entries.push(publishedEntry(post, published[post.path].hash));
+	}
+
+	const bySlug = new Map<string, string>();
+	for (const entry of entries) {
+		const other = bySlug.get(entry.slug);
+		if (other) throw new Error(`Slug ${entry.slug} is used by both ${other} and ${entry.path}`);
+		bySlug.set(entry.slug, entry.path);
+	}
+	return entries;
+};
+
+const renderSvxDirectory = async (entries: LiveEntry[]) => {
+	await mkdir(svxDirectory, { recursive: true });
+	const wanted = new Set(entries.map((entry) => `${entry.slug}.svx`));
+	for (const name of await readdir(svxDirectory)) {
+		if (name.endsWith('.svx') && !wanted.has(name)) await unlink(resolve(svxDirectory, name));
+	}
+	for (const entry of entries) {
+		await writeFile(resolve(svxDirectory, `${entry.slug}.svx`), renderSvx(entry.frontmatter, entry.body), 'utf8');
+	}
+};
 
 type PendingExport = { path: string; hash: string | null; mtimeMs: number | null };
 
@@ -101,38 +129,56 @@ const renderBoundary = async (posts: Post[]) => {
 	return { gitPaths, exports };
 };
 
-export const runPublish = async () => {
-	const targets = getTargets();
+const restoreWorkingTree = async () => {
+	await runGit(['checkout', '--', svxGitDirectory, 'content']);
+	await runGit(['clean', '-fd', '--', svxGitDirectory]);
+};
 
-	if (targets.length === 0) {
-		throw new Error('No publish targets configured');
+export const runPublish = async () => {
+	const posts = await listPosts();
+	const published = getPublishedPosts();
+	const staged = getStagedPaths();
+	const going = posts.filter((post) => isPending(statusOf(post)) && staged.has(post.path));
+	if (going.length === 0) throw new Error('Nothing staged for publish');
+
+	const liveSet = buildLiveSet(posts, published, staged);
+	await renderSvxDirectory(liveSet);
+	const { gitPaths, exports } = await renderBoundary(going);
+
+	const build = await runCommand('build', env.BLOG_BUILD_COMMAND ?? 'pnpm build', contentBaseDirectory);
+	const runAt = new Date().toISOString();
+	if (!build.ok) {
+		await restoreWorkingTree();
+		return {
+			ok: false,
+			stagedCount: going.length,
+			liveCount: liveSet.length,
+			lastPublishedAt: null,
+			runAt,
+			push: { ok: false, status: null, output: 'skipped: build failed' },
+			results: [build]
+		};
 	}
 
-	const posts = await listPosts();
-	const pendingPosts = posts.filter((post) =>
-		['ready', 'changed', 'unpublish', 'delete'].includes(post.deployStatus)
-	);
-
-	const { gitPaths, exports } = await renderBoundary(posts);
-	const commit = await commitPaths(gitPaths, 'cms: publish');
+	const commit = await commitPaths([svxGitDirectory, ...gitPaths], 'cms: publish');
 	if (!commit.ok) throw new Error(`Publish commit failed: ${commit.output}`);
 	for (const exported of exports) setExportedState(exported.path, exported.hash, exported.mtimeMs);
 
-	const [push, results] = await Promise.all([pushContent(), Promise.all(targets.map(runTarget))]);
-	const ok = results.every((result) => result.ok);
+	const push = await pushContent();
 	let deployment = null;
-	if (ok) {
-		deployment = await recordPublishedState(posts, await getHeadCommit());
+	if (push.ok) {
+		deployment = await recordPublishedState(liveSet, await getHeadCommit());
+		clearStaged(going.map((post) => post.path));
 		runBackup().catch(() => undefined);
 	}
 
 	return {
-		ok,
-		readyCount: pendingPosts.length,
-		liveCount: posts.filter((post) => post.deployStatus === 'live').length,
+		ok: push.ok,
+		stagedCount: going.length,
+		liveCount: liveSet.length,
 		lastPublishedAt: deployment?.lastPublishedAt ?? null,
-		runAt: new Date().toISOString(),
+		runAt,
 		push,
-		results
+		results: [build]
 	};
 };
