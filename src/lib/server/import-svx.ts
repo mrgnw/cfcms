@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { canonicalBody, hashPostContent, splitRawPost } from '$lib/post-text';
 import { normalizeNewlines } from '$lib/save-rules';
@@ -7,14 +7,17 @@ import {
 	appendRevision,
 	clearStaged,
 	getMetaValue,
+	getRevision,
 	getStagedPaths,
 	listStoredPosts,
+	listVersions,
 	recordPublished,
 	setMetaValue,
 	upsertVersion,
 	type StoredPost
 } from './db';
 import { contentBaseDirectory } from './paths';
+import { fastForwardLive } from './site-text';
 
 const svxDirectory = resolve(contentBaseDirectory, 'src/posts');
 const metaKey = 'importedSvxBaseline';
@@ -96,4 +99,33 @@ export const ensureSvxBaseline = () => {
 		throw caught;
 	});
 	return baselinePromise;
+};
+
+const repairKey = 'repairedLiveBase';
+
+const repairLiveBase = async () => {
+	if (getMetaValue(repairKey)) return;
+
+	const lines: string[] = ['', `## live base repair (${new Date().toISOString()})`, ''];
+	for (const post of listStoredPosts()) {
+		if (!listVersions(post.path).some((version) => version.writer === 'live')) continue;
+		const base = getRevision(post.path, 1);
+		if (!base) throw new Error(`live base repair: ${post.path} has no revision 1`);
+		lines.push(`- ${post.path}: ${fastForwardLive(post.path, base.body)}`);
+	}
+
+	setMetaValue(repairKey, new Date().toISOString());
+	const reportDirectory = resolve(process.cwd(), '.data');
+	await mkdir(reportDirectory, { recursive: true });
+	await appendFile(resolve(reportDirectory, 'svx-baseline-report.md'), `${lines.join('\n')}\n`, 'utf8');
+};
+
+let repairPromise: Promise<void> | null = null;
+
+export const ensureLiveBaseRepaired = () => {
+	repairPromise ??= repairLiveBase().catch((caught) => {
+		repairPromise = null;
+		throw caught;
+	});
+	return repairPromise;
 };
