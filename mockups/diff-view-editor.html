@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Integrated diff view · post editor · cms</title>
+<style>
+	:root {
+		color-scheme: light;
+		--paper: #ffffff;
+		--bg: #f5f4f1;
+		--ink: #1a1c20;
+		--ink-2: #585c64;
+		--ink-3: #9a9ea6;
+		--line: #e4e3de;
+		--hover: #edece7;
+		--accent: #3b6fd4;
+		--accent-ink: #2d57ac;
+		--on-accent: #ffffff;
+		--ok: #2f7d4f;
+		--warn: #8a6512;
+		--danger: #c33c33;
+		--shadow: rgba(0, 0, 0, 0.18);
+		--radius: 10px;
+		--font-display: 'Iowan Old Style', Palatino, Georgia, serif;
+		--font-ui: ui-sans-serif, system-ui, -apple-system, sans-serif;
+		--font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+	}
+	@media (prefers-color-scheme: dark) {
+		:root:not([data-theme='light']) {
+			color-scheme: dark;
+			--paper: #16191f;
+			--bg: #0f1115;
+			--ink: #e4e7ec;
+			--ink-2: #9aa4b2;
+			--ink-3: #6a7484;
+			--line: #262b34;
+			--hover: #1f242c;
+			--accent: #6b9bf0;
+			--accent-ink: #93b6f7;
+			--on-accent: #0f1115;
+			--ok: #5fbd80;
+			--warn: #d9b455;
+			--danger: #ef7f74;
+			--shadow: rgba(0, 0, 0, 0.5);
+		}
+	}
+	:root[data-theme='dark'] {
+		color-scheme: dark;
+		--paper: #16191f;
+		--bg: #0f1115;
+		--ink: #e4e7ec;
+		--ink-2: #9aa4b2;
+		--ink-3: #6a7484;
+		--line: #262b34;
+		--hover: #1f242c;
+		--accent: #6b9bf0;
+		--accent-ink: #93b6f7;
+		--on-accent: #0f1115;
+		--ok: #5fbd80;
+		--warn: #d9b455;
+		--danger: #ef7f74;
+		--shadow: rgba(0, 0, 0, 0.5);
+	}
+
+	* { box-sizing: border-box; }
+	body {
+		background: var(--bg);
+		color: var(--ink);
+		font: 14px/1.5 var(--font-ui);
+		margin: 0;
+		padding: 28px 20px 80px;
+	}
+	.page { margin: 0 auto; max-width: 1100px; }
+	.top { align-items: baseline; display: flex; gap: 14px; margin-bottom: 6px; }
+	h1 { font-size: 19px; font-weight: 700; margin: 0; }
+	.sub { color: var(--ink-2); font-size: 13px; margin: 0 0 30px; }
+	.theme {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 7px;
+		color: var(--ink-2);
+		cursor: pointer;
+		font: inherit;
+		font-size: 11px;
+		margin-left: auto;
+		padding: 3px 9px;
+	}
+
+	section { margin: 0 0 48px; }
+	h2 {
+		border-bottom: 1px solid var(--line);
+		font-size: 12px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		margin: 0 0 14px;
+		padding-bottom: 6px;
+		text-transform: uppercase;
+	}
+	h2 .n { color: var(--accent-ink); margin-right: 6px; }
+	.note { color: var(--ink-2); font-size: 12.5px; margin: 0 0 12px; }
+	.note code { font: 12px var(--font-mono); }
+
+	.frame {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 14px;
+		padding: 16px 18px;
+	}
+
+	.ref-head {
+		align-items: center;
+		color: var(--ink-3);
+		display: flex;
+		gap: 8px;
+		padding: 0 0 6px;
+	}
+	.ref-path { font: 11px var(--font-mono); }
+	.seg {
+		background: var(--bg);
+		border: 1px solid var(--line);
+		border-radius: 7px;
+		display: inline-flex;
+		padding: 2px;
+	}
+	.seg button {
+		background: transparent;
+		border: none;
+		border-radius: 5px;
+		color: var(--ink-3);
+		cursor: pointer;
+		font: inherit;
+		font-size: 11px;
+		padding: 3px 9px;
+	}
+	.seg button.on { background: var(--hover); color: var(--ink); }
+	.count {
+		color: var(--ink-3);
+		font-size: 11px;
+		font-variant-numeric: tabular-nums;
+	}
+	.count b { color: var(--ink-2); font-weight: 600; }
+
+	.toggle-row { display: grid; gap: 24px; grid-template-columns: 1fr 1fr; }
+	.toggle-row .frame { padding: 10px 14px; }
+
+	.workspace {
+		display: grid;
+		gap: 36px;
+		grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+	}
+
+	.index { align-self: start; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+	.index a {
+		align-items: baseline;
+		border-radius: 6px;
+		color: var(--ink-2);
+		display: flex;
+		font-size: 12px;
+		gap: 7px;
+		overflow: hidden;
+		padding: 4px 8px;
+		text-decoration: none;
+		white-space: nowrap;
+	}
+	.index a:hover { background: var(--hover); color: var(--ink); }
+	.index a span { overflow: hidden; text-overflow: ellipsis; }
+	.index a.done { color: var(--ink-3); opacity: 0.55; text-decoration: line-through; }
+	.dot {
+		border-radius: 50%;
+		display: inline-block;
+		flex: none;
+		height: 7px;
+		width: 7px;
+	}
+	.dot.added { background: var(--ok); }
+	.dot.modified { background: var(--accent); }
+	.dot.removed { background: var(--danger); }
+	.dot.conflict { background: var(--warn); }
+	.index .dismiss {
+		color: var(--ink-3);
+		font-size: 11px;
+		margin-top: 8px;
+		padding: 4px 8px;
+	}
+
+	.body {
+		font-family: var(--font-display);
+		font-size: 17px;
+		line-height: 1.7;
+		max-width: 68ch;
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+	.body > * { margin: 0 0 1.1em; }
+	.body h3 { font-size: 1.25em; font-weight: 600; line-height: 1.3; margin-top: 1.4em; }
+	.body h4 { font-size: 1.05em; font-weight: 600; line-height: 1.3; }
+	.body pre {
+		background: #14171d;
+		border: 1px solid var(--line);
+		border-radius: 8px;
+		color: #e4e7ec;
+		font: 13px/1.6 var(--font-mono);
+		margin: 0 0 1.1em;
+		overflow-x: auto;
+		padding: 12px 14px;
+	}
+	.body code { font: 0.85em var(--font-mono); }
+
+	.chg {
+		--kind: var(--accent);
+		border-radius: 0 8px 8px 0;
+		box-shadow: inset 2.5px 0 0 var(--kind);
+		margin-left: -16px;
+		padding: 8px 12px 10px 13px;
+		position: relative;
+	}
+	.chg > * { margin: 0 0 0.6em; }
+	.chg > *:last-child { margin-bottom: 0; }
+	.chg.added { --kind: var(--ok); background: color-mix(in srgb, var(--ok) 7%, transparent); }
+	.chg.modified { --kind: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+	.chg.removed { --kind: var(--danger); background: color-mix(in srgb, var(--danger) 6%, transparent); }
+	.chg.conflict { --kind: var(--warn); background: color-mix(in srgb, var(--warn) 8%, transparent); }
+	.chg.removed .was { color: var(--ink-3); text-decoration: line-through; text-decoration-color: var(--danger); }
+	.chg .yours {
+		color: var(--ink-3);
+		font-family: var(--font-ui);
+		font-size: 12px;
+		line-height: 1.5;
+	}
+	.chg .yours s { text-decoration-color: var(--danger); }
+	.chg .yours b { color: var(--ink-2); font-weight: 600; }
+
+	.head {
+		align-items: center;
+		display: flex;
+		font-family: var(--font-ui);
+		gap: 6px;
+		margin: 0 0 6px;
+	}
+	.kind {
+		color: var(--kind);
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+	.kind small {
+		color: var(--ink-3);
+		font-weight: 600;
+		letter-spacing: 0;
+		text-transform: none;
+	}
+	.acts { display: flex; gap: 5px; margin-left: auto; }
+	.acts button {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		color: var(--ink-2);
+		cursor: pointer;
+		font: 600 11px/1 var(--font-ui);
+		padding: 4px 8px;
+	}
+	.acts button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+	ins {
+		background: color-mix(in srgb, var(--ok) 22%, transparent);
+		border-radius: 3px;
+		padding: 0 2px;
+		text-decoration: none;
+	}
+	del {
+		background: color-mix(in srgb, var(--danger) 16%, transparent);
+		border-radius: 3px;
+		color: var(--ink-3);
+		padding: 0 2px;
+		text-decoration: line-through;
+		text-decoration-color: var(--danger);
+	}
+
+	pre .l { display: block; margin: 0 -14px; padding: 0 14px 0 10px; }
+	pre .l::before { color: #6a7484; content: ' '; display: inline-block; width: 14px; }
+	pre .l.add { background: color-mix(in srgb, #5fbd80 20%, transparent); box-shadow: inset 3px 0 0 #5fbd80; }
+	pre .l.add::before { color: #5fbd80; content: '+'; }
+	pre .l.del { background: color-mix(in srgb, #ef7f74 16%, transparent); box-shadow: inset 3px 0 0 #ef7f74; color: #9aa4b2; text-decoration: line-through; }
+	pre .l.del::before { color: #ef7f74; content: '−'; text-decoration: none; }
+
+	.resolved {
+		align-items: center;
+		background: color-mix(in srgb, var(--ok) 8%, var(--paper));
+		border: 1px solid color-mix(in srgb, var(--ok) 30%, var(--line));
+		border-radius: 8px;
+		display: flex;
+		font-family: var(--font-ui);
+		font-size: 12.5px;
+		gap: 10px;
+		margin-bottom: 18px;
+		padding: 8px 12px;
+	}
+	.resolved .tick { color: var(--ok); font-weight: 700; }
+	.resolved .acts { margin-left: 0; }
+
+	.phone {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 22px;
+		box-shadow: 0 8px 28px var(--shadow);
+		margin: 0 auto;
+		overflow: hidden;
+		max-width: 100%;
+		width: 390px;
+	}
+	.phone-in { padding: 14px 16px 24px; }
+	.phone .ref-head { flex-wrap: wrap; }
+	.phone .index { flex-direction: row; flex-wrap: wrap; gap: 4px 6px; margin-bottom: 14px; }
+	.phone .index a { font-size: 11.5px; padding: 3px 7px; }
+	.phone .index a span { max-width: 9ch; }
+	.phone .body { font-size: 16px; line-height: 1.65; }
+	.phone .chg { margin-left: -8px; padding: 8px 10px 10px 11px; }
+	.phone .head { flex-wrap: wrap; }
+	.phone .acts { flex-basis: 100%; margin-left: 0; margin-top: 6px; }
+	.phone .acts button { flex: 1; padding: 8px 10px; }
+
+	@media (max-width: 760px) {
+		.workspace { grid-template-columns: 1fr; gap: 14px; }
+		.index { flex-direction: row; flex-wrap: wrap; gap: 4px 6px; }
+		.toggle-row { grid-template-columns: 1fr; }
+	}
+</style>
+</head>
+<body>
+<div class="page">
+	<div class="top">
+		<h1>Integrated diff view — post editor</h1>
+		<button class="theme" type="button" onclick="const r=document.documentElement;const d=r.dataset.theme==='dark'||(!r.dataset.theme&&matchMedia('(prefers-color-scheme: dark)').matches);r.dataset.theme=d?'light':'dark'">light / dark</button>
+	</div>
+	<p class="sub">the body rendered once · the other version's changes marked where they sit · one decision per change, at the change</p>
+
+	<section>
+		<h2><span class="n">1</span>The toggle — in the reference head</h2>
+		<p class="note">A second segment beside Insert / Copy. <b>Cards</b> is the list that exists today. <b>Inline</b> hides the Milkdown surface and renders the body with the version's changes in place; the reference column becomes an index of changes. Insert / Copy only applies to the plain version list, so it drops out when segments exist.</p>
+		<div class="toggle-row">
+			<div class="frame">
+				<div class="ref-head">
+					<span class="ref-path">live</span>
+					<span class="count"><b>6</b> changes</span>
+					<span class="seg" style="margin-left:auto"><button class="on">Cards</button><button>Inline</button></span>
+				</div>
+			</div>
+			<div class="frame">
+				<div class="ref-head">
+					<span class="ref-path">live</span>
+					<span class="count"><b>6</b> changes · <b>2</b> decided</span>
+					<span class="seg" style="margin-left:auto"><button>Cards</button><button class="on">Inline</button></span>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<section>
+		<h2><span class="n">2</span>Inline — desktop</h2>
+		<p class="note">Left: the change index, one line per segment, colour by kind, click to scroll. Right: the body where the Milkdown surface normally is. Unchanged blocks are plain. Blocks are shown as the markdown text with block-shape styling (heading, paragraph, fence), the same raw text that <code>applySegment</code> swaps — no second markdown renderer. Labels and verbs are the ones the cards use today.</p>
+		<div class="frame">
+			<div class="ref-head">
+				<span class="ref-path">live</span>
+				<span class="count"><b>6</b> changes · <b>0</b> decided</span>
+				<span class="seg" style="margin-left:auto"><button>Cards</button><button class="on">Inline</button></span>
+			</div>
+			<div class="workspace">
+				<nav class="index" aria-label="Changes">
+					<a href="#c1"><i class="dot modified"></i><span>Clone the template and point…</span></a>
+					<a href="#c2"><i class="dot modified"></i><span>```sh  # Get template files</span></a>
+					<a href="#c3"><i class="dot modified"></i><span>### 2. Create `serve.json`</span></a>
+					<a href="#c4"><i class="dot conflict"></i><span>Only two variables are requ…</span></a>
+					<a href="#c5"><i class="dot added"></i><span>`TS_PORT` has to be unique…</span></a>
+					<a href="#c6"><i class="dot removed"></i><span>If you did the above in you…</span></a>
+					<a href="#" class="dismiss">dismiss version</a>
+				</nav>
+
+				<article class="body">
+					<h3>## Setup</h3>
+
+					<div class="chg modified" id="c1">
+						<div class="head"><span class="kind">modified</span><span class="acts"><button class="primary">take theirs</button><button>keep mine</button></span></div>
+						<p>Clone the template and point the serve config at your tailnet domain. The script below pulls <del>three files</del><ins>the Dockerfile, compose file and serve config</ins> and rewrites <del>`localhost`</del><ins>localhost to your MagicDNS name</ins>.</p>
+					</div>
+
+					<div class="chg modified" id="c2">
+						<div class="head"><span class="kind">modified <small>· code, 2 lines</small></span><span class="acts"><button class="primary">take theirs</button><button>keep mine</button></span></div>
+<pre><span class="l">```sh</span><span class="l"># Get template files</span><span class="l">TAILNET=$(tailscale status --json | jq -r '.MagicDNSSuffix')</span><span class="l">TEMPLATE="https://raw.githubusercontent.com/mrgnw/svelte-docker-tailscale/main"</span><span class="l">curl -O "$TEMPLATE/Dockerfile" &amp; \</span><span class="l">curl -O "$TEMPLATE/compose.yml" &amp; \</span><span class="l del">curl -O "$TEMPLATE/serve.json" &amp; wait</span><span class="l add">curl -O "$TEMPLATE/tailscale_serve.json" &amp; wait</span><span class="l"></span><span class="l"># Set up Tailscale config</span><span class="l">echo "\n/tailscale" &gt;&gt; .gitignore</span><span class="l add">echo "\ntailscale_serve.json" &gt;&gt; .gitignore</span><span class="l">```</span></pre>
+					</div>
+
+					<div class="chg modified" id="c3">
+						<div class="head"><span class="kind">modified <small>· heading → paragraph</small></span><span class="acts"><button class="primary">take theirs</button><button>keep mine</button></span></div>
+						<h4><del>### 2. Create `serve.json`</del></h4>
+						<p><ins>Tailscale needs `network_mode: service:tailscale` on the app container so the sidecar owns the network namespace.</ins></p>
+					</div>
+
+					<p>Get an auth key from the [Tailscale admin console](https://login.tailscale.com/admin/settings/keys)</p>
+
+					<div class="chg conflict" id="c4">
+						<div class="head"><span class="kind">both changed</span><span class="acts"><button class="primary">insert theirs</button><button>keep mine</button></span></div>
+						<p>You need exactly two environment variables:</p>
+						<div class="yours"><b>yours</b> · Only two variables are required:</div>
+					</div>
+
+					<pre><span class="l">```sh</span><span class="l">TS_AUTHKEY=</span><span class="l">TS_PORT=4177 # this needs to be unique for each container</span><span class="l">```</span></pre>
+
+					<div class="chg added" id="c5">
+						<div class="head"><span class="kind">added</span><span class="acts"><button class="primary">accept</button><button>skip</button></span></div>
+						<p>`TS_PORT` has to be unique per container — two sidecars on the same port fight over the tailnet node name.</p>
+					</div>
+
+					<div class="chg removed" id="c6">
+						<div class="head"><span class="kind">removed</span><span class="acts"><button class="primary">remove it</button><button>keep it</button></span></div>
+						<p class="was">If you did the above in your terminal, you can add them to your .env with this:</p>
+					</div>
+
+					<pre><span class="l">```sh</span><span class="l">echo "TS_AUTHKEY=$TS_AUTHKEY" &gt;&gt; .env</span><span class="l">echo "TS_PORT=$TS_PORT" &gt;&gt; .env</span><span class="l">```</span></pre>
+				</article>
+			</div>
+		</div>
+	</section>
+
+	<section>
+		<h2><span class="n">3</span>Mid-way and all resolved</h2>
+		<p class="note">Deciding a change re-renders the body from the new <code>bodyField</code>; the block takes its final shape and the index line strikes through. When every segment is decided the rails are gone, the body is plain, and the only remaining action is to dismiss the version — same end state as the card list.</p>
+		<div class="frame">
+			<div class="ref-head">
+				<span class="ref-path">live</span>
+				<span class="count"><b>6</b> changes · <b>6</b> decided</span>
+				<span class="seg" style="margin-left:auto"><button>Cards</button><button class="on">Inline</button></span>
+			</div>
+			<div class="workspace">
+				<nav class="index" aria-label="Changes">
+					<a href="#" class="done"><i class="dot modified"></i><span>Clone the template and point…</span></a>
+					<a href="#" class="done"><i class="dot modified"></i><span>```sh  # Get template files</span></a>
+					<a href="#" class="done"><i class="dot modified"></i><span>### 2. Create `serve.json`</span></a>
+					<a href="#" class="done"><i class="dot conflict"></i><span>Only two variables are requ…</span></a>
+					<a href="#" class="done"><i class="dot added"></i><span>`TS_PORT` has to be unique…</span></a>
+					<a href="#" class="done"><i class="dot removed"></i><span>If you did the above in you…</span></a>
+				</nav>
+				<article class="body">
+					<div class="resolved"><span class="tick">✓</span><span>All 6 changes decided · 4 taken · 2 kept</span><span class="acts"><button class="primary">dismiss version</button><button>back to editing</button></span></div>
+					<h3>## Setup</h3>
+					<p>Clone the template and point the serve config at your tailnet domain. The script below pulls the Dockerfile, compose file and serve config and rewrites localhost to your MagicDNS name.</p>
+<pre><span class="l">```sh</span><span class="l"># Get template files</span><span class="l">TAILNET=$(tailscale status --json | jq -r '.MagicDNSSuffix')</span><span class="l">TEMPLATE="https://raw.githubusercontent.com/mrgnw/svelte-docker-tailscale/main"</span><span class="l">curl -O "$TEMPLATE/Dockerfile" &amp; \</span><span class="l">curl -O "$TEMPLATE/compose.yml" &amp; \</span><span class="l">curl -O "$TEMPLATE/tailscale_serve.json" &amp; wait</span><span class="l"></span><span class="l"># Set up Tailscale config</span><span class="l">echo "\n/tailscale" &gt;&gt; .gitignore</span><span class="l">echo "\ntailscale_serve.json" &gt;&gt; .gitignore</span><span class="l">```</span></pre>
+					<p>Tailscale needs `network_mode: service:tailscale` on the app container so the sidecar owns the network namespace.</p>
+					<p>Get an auth key from the [Tailscale admin console](https://login.tailscale.com/admin/settings/keys)</p>
+					<p>Only two variables are required:</p>
+					<pre><span class="l">```sh</span><span class="l">TS_AUTHKEY=</span><span class="l">TS_PORT=4177 # this needs to be unique for each container</span><span class="l">```</span></pre>
+					<p>`TS_PORT` has to be unique per container — two sidecars on the same port fight over the tailnet node name.</p>
+					<p>If you did the above in your terminal, you can add them to your .env with this:</p>
+				</article>
+			</div>
+		</div>
+	</section>
+
+	<section>
+		<h2><span class="n">4</span>Mobile · 390px</h2>
+		<p class="note">Index wraps into chips above the body. Actions drop under the change label as full-width buttons so there is no hover dependency. The rail and tints are unchanged.</p>
+		<div class="phone">
+			<div class="phone-in">
+				<div class="ref-head">
+					<span class="ref-path">live</span>
+					<span class="count"><b>6</b> · <b>1</b> decided</span>
+					<span class="seg" style="margin-left:auto"><button>Cards</button><button class="on">Inline</button></span>
+				</div>
+				<nav class="index" aria-label="Changes">
+					<a href="#" class="done"><i class="dot modified"></i><span>Clone the…</span></a>
+					<a href="#"><i class="dot modified"></i><span>```sh</span></a>
+					<a href="#"><i class="dot modified"></i><span>### 2. Cre…</span></a>
+					<a href="#"><i class="dot conflict"></i><span>Only two…</span></a>
+					<a href="#"><i class="dot added"></i><span>`TS_PORT`…</span></a>
+					<a href="#"><i class="dot removed"></i><span>If you did…</span></a>
+				</nav>
+				<article class="body">
+					<p>Clone the template and point the serve config at your tailnet domain. The script below pulls the Dockerfile, compose file and serve config and rewrites localhost to your MagicDNS name.</p>
+					<div class="chg modified">
+						<div class="head"><span class="kind">modified <small>· heading → paragraph</small></span><span class="acts"><button class="primary">take theirs</button><button>keep mine</button></span></div>
+						<h4><del>### 2. Create `serve.json`</del></h4>
+						<p><ins>Tailscale needs `network_mode: service:tailscale` on the app container so the sidecar owns the network namespace.</ins></p>
+					</div>
+					<p>Get an auth key from the [Tailscale admin console](https://login.tailscale.com/admin/settings/keys)</p>
+					<div class="chg added">
+						<div class="head"><span class="kind">added</span><span class="acts"><button class="primary">accept</button><button>skip</button></span></div>
+						<p>`TS_PORT` has to be unique per container — two sidecars on the same port fight over the tailnet node name.</p>
+					</div>
+				</article>
+			</div>
+		</div>
+	</section>
+</div>
+<script>
+	if (location.hash === '#dark' || location.hash === '#light') document.documentElement.dataset.theme = location.hash.slice(1);
+</script>
+</body>
+</html>
