@@ -33,7 +33,8 @@ const shipsHeadText = (status: ReturnType<typeof statusOf>) => status === 'ready
 const hasLiveVersion = (path: string) => listVersions(path).some((version) => version.writer === 'live');
 
 const getPendingChanges = async (posts: Awaited<ReturnType<typeof listPosts>>) => {
-	const pending = posts.filter((post) => isPending(statusOf(post)));
+	// llm drafts are a writing tool; they never publish, so they never pend
+	const pending = posts.filter((post) => isPending(statusOf(post)) && !post.path.endsWith('.llm.md'));
 	const published = getPublishedPosts();
 	const staged = getStagedPaths();
 
