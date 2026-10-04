@@ -15,13 +15,14 @@ import {
 	getLastPublishedAt,
 	getPublishedPosts,
 	getRevisionByHash,
+	getStagedPaths,
 	listVersions,
 	removeFromEditing,
 	reorderEditing,
+	setStaged,
 	upsertVersion
 } from '$lib/server/db';
 import { commitPost } from '$lib/server/git';
-import { runPublish } from '$lib/server/publish';
 import { parseFrontmatter, setDeleteFlag } from '$lib/frontmatter';
 import { diffSegments, lineDiffCounts } from '$lib/segment-diff';
 import { isValidWriter, normalizeNewlines } from '$lib/save-rules';
@@ -30,6 +31,7 @@ import { isPending, statusOf } from '$lib/types';
 const getPendingChanges = async (posts: Awaited<ReturnType<typeof listPosts>>) => {
 	const pending = posts.filter((post) => isPending(statusOf(post)));
 	const published = getPublishedPosts();
+	const staged = getStagedPaths();
 
 	return pending.map((post) => {
 		const publishedRevision = published[post.path]
@@ -42,6 +44,7 @@ const getPendingChanges = async (posts: Awaited<ReturnType<typeof listPosts>>) =
 			title: post.title,
 			date: post.date,
 			status: statusOf(post),
+			staged: staged.has(post.path),
 			words: post.body.split(/\s+/).filter(Boolean).length,
 			added: diff?.added ?? null,
 			deleted: diff?.deleted ?? null
@@ -171,12 +174,24 @@ export const actions = {
 
 		throw redirect(303, `/?post=${encodeURIComponent(userPath)}`);
 	},
-	publish: async () => {
-		try {
-			return { publish: await runPublish() };
-		} catch (caught) {
-			return fail(500, { message: caught instanceof Error ? caught.message : 'Publish failed' });
-		}
+	stage: async ({ request }) => {
+		const form = await request.formData();
+		const path = String(form.get('path') ?? '');
+
+		if (!path) return fail(400, { message: 'Post path is required' });
+		if (path.endsWith('.llm.md')) return fail(400, { message: 'Fork the llm draft before staging it' });
+
+		setStaged(path, true);
+		return { staged: path };
+	},
+	unstage: async ({ request }) => {
+		const form = await request.formData();
+		const path = String(form.get('path') ?? '');
+
+		if (!path) return fail(400, { message: 'Post path is required' });
+
+		setStaged(path, false);
+		return { unstaged: path };
 	},
 	queueAdd: async ({ request }) => {
 		const form = await request.formData();

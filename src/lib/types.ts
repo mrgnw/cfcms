@@ -45,7 +45,7 @@ export type PublishResult = {
 
 export type PublishData = {
 	ok: boolean;
-	readyCount: number;
+	stagedCount: number;
 	liveCount: number;
 	lastPublishedAt: string | null;
 	runAt: string;
@@ -60,6 +60,7 @@ export type PendingChange = {
 	title: string;
 	date: string;
 	status: DeployStatus;
+	staged: boolean;
 	words: number;
 	added: number | null;
 	deleted: number | null;

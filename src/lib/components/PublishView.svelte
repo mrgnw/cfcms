@@ -9,6 +9,8 @@
 	let result = $state<PublishData | null>(null);
 	let error = $state<string | null>(null);
 
+	let staged = $derived(changes.filter((change) => change.staged));
+
 	let totals = $derived({
 		added: changes.reduce((sum, change) => sum + (change.added ?? 0), 0),
 		deleted: changes.reduce((sum, change) => sum + (change.deleted ?? 0), 0)
@@ -34,6 +36,17 @@
 			add: Math.round((added / touched) * span),
 			del: Math.round((deleted / touched) * span)
 		};
+	}
+
+	async function setStaged(paths: string[], wanted: boolean) {
+		await Promise.all(
+			paths.map((path) => {
+				const fd = new FormData();
+				fd.set('path', path);
+				return fetch(wanted ? '?/stage' : '?/unstage', { method: 'POST', body: fd });
+			})
+		);
+		await invalidateAll();
 	}
 
 	async function runPublish() {
@@ -78,42 +91,59 @@
 	</header>
 
 	<div class="changes">
+		{#if changes.length}
+			<div class="stage-all">
+				<span>{staged.length} of {changes.length} staged for next publish</span>
+				<button type="button" onclick={() => setStaged(changes.map((change) => change.path), staged.length !== changes.length)}>
+					{staged.length === changes.length ? 'Unstage all' : 'Stage all'}
+				</button>
+			</div>
+		{/if}
 		{#each changes as change (change.path)}
 			{@const bar = barSegments(change)}
-			<a class="change-row" href={resolve(`/?post=${encodeURIComponent(change.path)}`)}>
-				<span class="title">{change.title} <span class="date">{change.date}</span></span>
-				<span class="right">
-					{#if change.status === 'unpublish' || change.status === 'delete'}
-						<span class="badge">{change.status === 'delete' ? 'remove' : 'unpublish'}</span>
-					{/if}
-					<span class="bar" aria-hidden="true">
-						{#if bar.add}<i class="add" style:width="{bar.add}%"></i>{/if}
-						{#if bar.del}<i class="del" style:width="{bar.del}%"></i>{/if}
+			<div class="change-row" class:staged={change.staged}>
+				<input
+					type="checkbox"
+					aria-label="Stage {change.title} for next publish"
+					checked={change.staged}
+					onchange={() => setStaged([change.path], !change.staged)}
+				/>
+				<a class="change-link" href={resolve(`/?post=${encodeURIComponent(change.path)}`)}>
+					<span class="title">{change.title} <span class="date">{change.date}</span></span>
+					<span class="right">
+						{#if change.status === 'unpublish' || change.status === 'delete'}
+							<span class="badge">{change.status === 'delete' ? 'remove' : 'unpublish'}</span>
+						{/if}
+						<span class="bar" aria-hidden="true">
+							{#if bar.add}<i class="add" style:width="{bar.add}%"></i>{/if}
+							{#if bar.del}<i class="del" style:width="{bar.del}%"></i>{/if}
+						</span>
 					</span>
-				</span>
-				<span class="delta">
-					{#if change.status === 'ready'}
-						<em class="add">+{change.words} words</em>
-					{:else if change.added != null && change.deleted != null}
-						<em class="add">+{change.added}</em>
-						<em class="del">−{change.deleted}</em>
-						{#if scaleWord(change)}· {scaleWord(change)}{/if}
-					{:else}
-						no baseline to diff
-					{/if}
-				</span>
-			</a>
+					<span class="delta">
+						{#if change.status === 'ready'}
+							<em class="add">+{change.words} words</em>
+						{:else if change.added != null && change.deleted != null}
+							<em class="add">+{change.added}</em>
+							<em class="del">−{change.deleted}</em>
+							{#if scaleWord(change)}· {scaleWord(change)}{/if}
+						{:else}
+							no baseline to diff
+						{/if}
+						· {change.staged ? 'next' : 'ready'}
+					</span>
+				</a>
+			</div>
 		{:else}
 			<p class="empty">Nothing pending — everything live matches the content files.</p>
 		{/each}
 	</div>
 
-	<button class="publish-btn" type="button" onclick={runPublish} disabled={publishing || !changes.length}>
+	<button class="publish-btn" type="button" onclick={runPublish} disabled={publishing || !staged.length}>
 		{publishing
 			? 'Publishing…'
-			: changes.length
-				? `Publish ${changes.length} ${changes.length === 1 ? 'change' : 'changes'}`
-				: 'Nothing to publish'}
+			: staged.length
+				? `Publish ${staged.length} staged ${staged.length === 1 ? 'change' : 'changes'}`
+				: 'Nothing staged'}
 	</button>
 
 	{#if lastPublishedAt}
@@ -201,21 +231,56 @@
 		gap: 6px;
 	}
 
+	.stage-all {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		color: var(--ink-3);
+		font-size: 11.5px;
+		padding: 0 2px;
+	}
+
+	.stage-all button {
+		background: none;
+		border: none;
+		color: var(--accent-ink);
+		cursor: pointer;
+		font: inherit;
+		font-size: 11.5px;
+		padding: 0;
+	}
+
 	.change-row {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto;
-		gap: 4px 10px;
+		grid-template-columns: auto minmax(0, 1fr);
+		gap: 10px;
+		align-items: center;
 		background: var(--bg);
 		border: 1px solid var(--line);
 		border-radius: 10px;
-		color: inherit;
 		padding: 10px 12px;
 		font-size: 13px;
-		text-decoration: none;
+	}
+
+	.change-row.staged {
+		border-color: var(--accent);
 	}
 
 	.change-row:hover {
 		border-color: var(--ink-3);
+	}
+
+	.change-row input {
+		accent-color: var(--accent);
+		margin: 0;
+	}
+
+	.change-link {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 4px 10px;
+		color: inherit;
+		text-decoration: none;
 	}
 
 	.title {

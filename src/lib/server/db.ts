@@ -73,7 +73,8 @@ const db = () => {
 		['exported_hash', 'TEXT'],
 		['exported_mtime_ms', 'INTEGER'],
 		['llm_hash', 'TEXT'],
-		['llm_mtime_ms', 'INTEGER']
+		['llm_mtime_ms', 'INTEGER'],
+		['staged', 'INTEGER']
 	];
 	for (const [name, type] of newColumns) {
 		if (!postColumns.has(name)) instance.exec(`ALTER TABLE posts ADD COLUMN ${name} ${type}`);
@@ -450,6 +451,20 @@ export const setExportedState = (path: string, hash: string | null, mtimeMs: num
 
 export const setLlmState = (path: string, hash: string, mtimeMs: number) => {
 	db().prepare('UPDATE posts SET llm_hash = ?, llm_mtime_ms = ? WHERE path = ?').run(hash, mtimeMs, path);
+};
+
+export const setStaged = (path: string, staged: boolean) => {
+	db().prepare('UPDATE posts SET staged = ? WHERE path = ? AND head_rev IS NOT NULL').run(staged ? 1 : 0, path);
+};
+
+export const getStagedPaths = (): Set<string> =>
+	new Set(
+		(db().prepare('SELECT path FROM posts WHERE staged = 1').all() as { path: string }[]).map((row) => row.path)
+	);
+
+export const clearStaged = (paths: string[]) => {
+	const clear = db().prepare('UPDATE posts SET staged = 0 WHERE path = ?');
+	for (const path of paths) clear.run(path);
 };
 
 export const updatePublishedHash = (path: string, hash: string) => {
