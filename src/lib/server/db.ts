@@ -485,3 +485,10 @@ export const setMetaValue = (key: string, value: string) => setMeta(key, value);
 export const vacuumInto = (targetPath: string) => {
 	db().exec(`VACUUM INTO '${targetPath.replaceAll("'", "''")}'`);
 };
+
+export const getRevision = (path: string, rev: number): { hash: string; frontmatter: string; body: string } | null => {
+	const row = db()
+		.prepare('SELECT hash, frontmatter, body FROM revisions WHERE path = ? AND rev = ?')
+		.get(path, rev) as { hash: string; frontmatter: string; body: string } | undefined;
+	return row ?? null;
+};

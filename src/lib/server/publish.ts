@@ -11,9 +11,9 @@ import { getPostFilePath, getPostGitPath, listPosts, type Post } from './content
 import { clearStaged, getPublishedPosts, getRevisionByHash, getStagedPaths, setExportedState } from './db';
 import { recordPublishedState } from './deploy-state';
 import { commitPaths, getHeadCommit, pushContent, runGit } from './git';
-import { contentBaseDirectory } from './paths';
+import { contentBaseDirectory, svxDirectory } from './paths';
+import { syncSiteText } from './site-text';
 
-export const svxDirectory = resolve(contentBaseDirectory, 'src/posts');
 const svxGitDirectory = 'src/posts';
 
 type CommandResult = {
@@ -143,6 +143,7 @@ const restoreWorkingTree = async (gitPaths: string[]) => {
 };
 
 export const runPublish = async () => {
+	await syncSiteText();
 	const posts = await listPosts();
 	const published = getPublishedPosts();
 	const staged = getStagedPaths();

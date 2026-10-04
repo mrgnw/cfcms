@@ -23,6 +23,7 @@ import {
 	upsertVersion
 } from '$lib/server/db';
 import { commitPost } from '$lib/server/git';
+import { syncSiteText } from '$lib/server/site-text';
 import { parseFrontmatter, setDeleteFlag } from '$lib/frontmatter';
 import { diffSegments, lineDiffCounts } from '$lib/segment-diff';
 import { isValidWriter, normalizeNewlines } from '$lib/save-rules';
@@ -34,6 +35,7 @@ const hasLiveVersion = (path: string) => listVersions(path).some((version) => ve
 
 const getPendingChanges = async (posts: Awaited<ReturnType<typeof listPosts>>) => {
 	// llm drafts are a writing tool; they never publish, so they never pend
+	await syncSiteText();
 	const pending = posts.filter((post) => isPending(statusOf(post)) && !post.path.endsWith('.llm.md'));
 	const published = getPublishedPosts();
 	const staged = getStagedPaths();
