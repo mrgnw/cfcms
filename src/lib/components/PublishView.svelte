@@ -54,6 +54,17 @@
 		await invalidateAll();
 	}
 
+	async function resolveLive(path: string, choice: 'mine' | 'theirs') {
+		error = null;
+		const fd = new FormData();
+		fd.set('path', path);
+		fd.set('choice', choice);
+		const res = await fetch('?/resolveLive', { method: 'POST', body: fd });
+		const outcome = await res.json().catch(() => ({ type: 'error' }));
+		if (outcome.type !== 'success') error = `Could not resolve ${path}`;
+		await invalidateAll();
+	}
+
 	async function runPublish() {
 		publishing = true;
 		error = null;
@@ -107,7 +118,7 @@
 					disabled={!stageable.length}
 					onclick={() => setStaged(stageable.map((change) => change.path), staged.length !== stageable.length)}
 				>
-					{staged.length === stageable.length ? 'Unstage all' : 'Stage all'}
+					{stageable.length && staged.length === stageable.length ? 'Unstage all' : 'Stage all'}
 				</button>
 			</div>
 		{/if}
@@ -146,9 +157,16 @@
 						{:else}
 							no baseline to diff
 						{/if}
-						· {change.blocked ? 'resolve in editor' : change.staged ? 'next' : 'ready'}
+						· {change.blocked ? 'site text differs' : change.staged ? 'next' : 'ready'}
 					</span>
 				</a>
+				{#if change.blocked}
+					<span class="resolve">
+						<button type="button" onclick={() => resolveLive(change.path, 'mine')}>keep mine</button>
+						<button type="button" onclick={() => resolveLive(change.path, 'theirs')}>use site text</button>
+						<a href={resolve(`/?post=${encodeURIComponent(change.path)}`)}>compare</a>
+					</span>
+				{/if}
 			</div>
 		{:else}
 			<p class="empty">Nothing pending — everything live matches the content files.</p>
@@ -294,6 +312,34 @@
 
 	.change-row.blocked {
 		border-style: dashed;
+	}
+
+	.resolve {
+		grid-column: 2;
+		display: flex;
+		gap: 6px;
+		align-items: baseline;
+		font-size: 11.5px;
+	}
+
+	.resolve button {
+		background: var(--hover);
+		border: 1px solid var(--line);
+		border-radius: 999px;
+		color: inherit;
+		cursor: pointer;
+		font: inherit;
+		font-size: 11.5px;
+		padding: 2px 9px;
+	}
+
+	.resolve button:hover {
+		border-color: var(--ink-3);
+	}
+
+	.resolve a {
+		color: var(--ink-3);
+		margin-left: auto;
 	}
 
 	.badge.live {

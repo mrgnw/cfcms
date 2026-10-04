@@ -195,6 +195,26 @@ export const actions = {
 		setStaged(path, true);
 		return { staged: path };
 	},
+	resolveLive: async ({ request }) => {
+		const form = await request.formData();
+		const path = String(form.get('path') ?? '');
+		const choice = String(form.get('choice') ?? '');
+
+		if (!path) return fail(400, { message: 'Post path is required' });
+		if (choice !== 'mine' && choice !== 'theirs') return fail(400, { message: 'choice must be mine or theirs' });
+
+		const live = listVersions(path).find((version) => version.writer === 'live');
+		if (!live) return fail(404, { message: 'No live version to resolve' });
+
+		if (choice === 'theirs') {
+			const post = await getPost(path);
+			const result = await savePost(path, live.frontmatter, live.body, post.contentHash, 'cms');
+			if (result.outcome === 'conflict') return fail(409, { message: 'Post changed while resolving — retry' });
+		}
+
+		deleteVersion(path, 'live');
+		return { resolved: path };
+	},
 	unstage: async ({ request }) => {
 		const form = await request.formData();
 		const path = String(form.get('path') ?? '');
