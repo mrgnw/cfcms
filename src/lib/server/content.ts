@@ -4,6 +4,7 @@ import { readdir, readFile, stat, unlink } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
 import { formatYamlScalar, parseYamlScalar } from '$lib/frontmatter';
 import { canonicalBody, hashPostContent, splitRawPost } from '$lib/post-text';
+import { slugify, svxSlug } from '$lib/svx';
 import {
 	appendRevision,
 	deletePostRows,
@@ -109,7 +110,7 @@ const postFromStored = (stored: StoredPost, deployState: DeployState, editingOrd
 		pin: readBoolean(frontmatter, 'pin') || readBoolean(frontmatter, 'pinned'),
 		editingOrder: editingOrder.get(path) ?? null,
 		deleteRequested,
-		slug: readFrontmatterValue(frontmatter, 'slug') || path.replace(/\.md$/, ''),
+		slug: svxSlug(path, frontmatter),
 		excerpt: getExcerpt(body),
 		updatedAt: stored.savedAt,
 		contentHash: stored.hash,
@@ -145,7 +146,7 @@ const parseFilePost = async (
 		pin: readBoolean(frontmatter, 'pin') || readBoolean(frontmatter, 'pinned'),
 		editingOrder: editingOrder.get(postPath) ?? null,
 		deleteRequested,
-		slug: readFrontmatterValue(frontmatter, 'slug') || postPath.replace(/\.md$/, ''),
+		slug: svxSlug(postPath, frontmatter),
 		excerpt: getExcerpt(body),
 		updatedAt: metadata.mtime.toISOString(),
 		contentHash,
@@ -173,12 +174,6 @@ const listMarkdownFiles = async (directory: string): Promise<string[]> => {
 
 	return files.flat();
 };
-
-const slugify = (value: string) =>
-	value
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/^-+|-+$/g, '') || 'untitled';
 
 const ingestUserFile = async (postPath: string, filePath: string, stored: StoredPost | null) => {
 	const meta = await stat(filePath);
