@@ -15,6 +15,8 @@ import { contentBaseDirectory, svxDirectory } from './paths';
 import { syncSiteText } from './site-text';
 
 const svxGitDirectory = 'src/posts';
+// The blog build vendors icons used by posts here on first use (remark-icons.js in the blog repo).
+const iconGitDirectory = 'src/lib/icons';
 
 type CommandResult = {
 	name: string;
@@ -169,7 +171,7 @@ export const runPublish = async () => {
 		};
 	}
 
-	const commit = await commitPaths([svxGitDirectory, ...gitPaths], 'cms: publish');
+	const commit = await commitPaths([svxGitDirectory, iconGitDirectory, ...gitPaths], 'cms: publish');
 	if (!commit.ok) {
 		await restoreWorkingTree(gitPaths);
 		throw new Error(`Publish commit failed: ${commit.output}`);
