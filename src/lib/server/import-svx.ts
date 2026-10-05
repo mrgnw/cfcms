@@ -17,7 +17,7 @@ import {
 	type StoredPost
 } from './db';
 import { contentBaseDirectory } from './paths';
-import { fastForwardLive } from './site-text';
+import { fastForwardSite } from './site-text';
 
 const svxDirectory = resolve(contentBaseDirectory, 'src/posts');
 const metaKey = 'importedSvxBaseline';
@@ -72,7 +72,7 @@ const runBaseline = async () => {
 		const headHash = hashPostContent(mapped, match.body);
 		appendRevision(match.path, mapped, match.body, headHash, 'import');
 		if (!sameBody) {
-			upsertVersion({ path: match.path, writer: 'live', sessionId: 'svx', baseHash: headHash, frontmatter: mapped, body: svxBody });
+			upsertVersion({ path: match.path, writer: 'site', sessionId: 'svx', baseHash: headHash, frontmatter: mapped, body: svxBody });
 		}
 		live.push({ path: match.path, title: readTitle(mapped), slug, contentHash: liveHash });
 		report.push(`- ${match.path} → ${name} (${sameBody ? 'live' : 'changed: head body differs from live'})`);
@@ -101,17 +101,17 @@ export const ensureSvxBaseline = () => {
 	return baselinePromise;
 };
 
-const repairKey = 'repairedLiveBase';
+const repairKey = 'repairedSiteBase';
 
-const repairLiveBase = async () => {
+const repairSiteBase = async () => {
 	if (getMetaValue(repairKey)) return;
 
-	const lines: string[] = ['', `## live base repair (${new Date().toISOString()})`, ''];
+	const lines: string[] = ['', `## site base repair (${new Date().toISOString()})`, ''];
 	for (const post of listStoredPosts()) {
-		if (!listVersions(post.path).some((version) => version.writer === 'live')) continue;
+		if (!listVersions(post.path).some((version) => version.writer === 'site')) continue;
 		const base = getRevision(post.path, 1);
-		if (!base) throw new Error(`live base repair: ${post.path} has no revision 1`);
-		lines.push(`- ${post.path}: ${fastForwardLive(post.path, base.body)}`);
+		if (!base) throw new Error(`site base repair: ${post.path} has no revision 1`);
+		lines.push(`- ${post.path}: ${fastForwardSite(post.path, base.body)}`);
 	}
 
 	setMetaValue(repairKey, new Date().toISOString());
@@ -122,8 +122,8 @@ const repairLiveBase = async () => {
 
 let repairPromise: Promise<void> | null = null;
 
-export const ensureLiveBaseRepaired = () => {
-	repairPromise ??= repairLiveBase().catch((caught) => {
+export const ensureSiteBaseRepaired = () => {
+	repairPromise ??= repairSiteBase().catch((caught) => {
 		repairPromise = null;
 		throw caught;
 	});

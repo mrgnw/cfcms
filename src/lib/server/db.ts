@@ -80,6 +80,7 @@ const db = () => {
 		if (!postColumns.has(name)) instance.exec(`ALTER TABLE posts ADD COLUMN ${name} ${type}`);
 	}
 
+	instance.exec("UPDATE versions SET writer = 'site' WHERE writer = 'live'; UPDATE revisions SET writer = 'site' WHERE writer = 'live'");
 	importLegacyDeployState();
 	return instance;
 };

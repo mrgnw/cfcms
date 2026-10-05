@@ -19,7 +19,7 @@ import {
 } from './db';
 import { getDeployStatus, readDeployState, type DeployState, type DeployStatus } from './deploy-state';
 import { ensureCorpusImported } from './import-corpus';
-import { ensureLiveBaseRepaired, ensureSvxBaseline } from './import-svx';
+import { ensureSiteBaseRepaired, ensureSvxBaseline } from './import-svx';
 import { contentBaseDirectory, contentDirectory } from './paths';
 import { decideSave, normalizeNewlines, type SaveDecision } from '$lib/save-rules';
 
@@ -261,7 +261,7 @@ const scanContentDir = async (): Promise<string[]> => {
 export const listPosts = async () => {
 	await ensureCorpusImported();
 	await ensureSvxBaseline();
-	await ensureLiveBaseRepaired();
+	await ensureSiteBaseRepaired();
 	const files = await scanContentDir();
 	const deployState = await readDeployState();
 	let order = getEditingOrder();

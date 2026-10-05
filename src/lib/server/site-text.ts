@@ -17,20 +17,20 @@ import { svxDirectory } from './paths';
 export type FastForward = 'head' | 'site' | 'conflict';
 
 // ponytail: body only; frontmatter edits made on the site are not detected
-export const fastForwardLive = (path: string, baseBody: string): FastForward => {
-	const live = listVersions(path).find((version) => version.writer === 'live');
+export const fastForwardSite = (path: string, baseBody: string): FastForward => {
+	const site = listVersions(path).find((version) => version.writer === 'site');
 	const head = getStoredPost(path);
-	if (!live || !head) throw new Error(`fastForwardLive: ${path} has no live version or no head`);
+	if (!site || !head) throw new Error(`fastForwardSite: ${path} has no site version or no head`);
 
 	if (head.body === baseBody) {
-		const hash = hashPostContent(head.frontmatter, live.body);
-		appendRevision(path, head.frontmatter, live.body, hash, 'live');
+		const hash = hashPostContent(head.frontmatter, site.body);
+		appendRevision(path, head.frontmatter, site.body, hash, 'site');
 		updatePublishedHash(path, hash);
-		deleteVersion(path, 'live');
+		deleteVersion(path, 'site');
 		return 'site';
 	}
-	if (live.body === baseBody) {
-		deleteVersion(path, 'live');
+	if (site.body === baseBody) {
+		deleteVersion(path, 'site');
 		return 'head';
 	}
 	return 'conflict';
@@ -54,12 +54,12 @@ export const syncSiteText = async () => {
 
 		upsertVersion({
 			path,
-			writer: 'live',
+			writer: 'site',
 			sessionId: 'svx',
 			baseHash: published.hash,
 			frontmatter: head.frontmatter,
 			body: siteBody
 		});
-		fastForwardLive(path, publishedRevision.body);
+		fastForwardSite(path, publishedRevision.body);
 	}
 };

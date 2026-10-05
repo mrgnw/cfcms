@@ -54,12 +54,12 @@
 		await invalidateAll();
 	}
 
-	async function resolveLive(path: string, choice: 'mine' | 'theirs') {
+	async function resolveSite(path: string, choice: 'mine' | 'theirs') {
 		error = null;
 		const fd = new FormData();
 		fd.set('path', path);
 		fd.set('choice', choice);
-		const res = await fetch('?/resolveLive', { method: 'POST', body: fd });
+		const res = await fetch('?/resolveSite', { method: 'POST', body: fd });
 		const outcome = await res.json().catch(() => ({ type: 'error' }));
 		if (outcome.type !== 'success') error = `Could not resolve ${path}`;
 		await invalidateAll();
@@ -140,7 +140,7 @@
 							<span class="badge">{change.status === 'delete' ? 'remove' : 'unpublish'}</span>
 						{/if}
 						{#if change.blocked}
-							<span class="badge live">live version</span>
+							<span class="badge site">site version</span>
 						{/if}
 						<span class="bar" aria-hidden="true">
 							{#if bar.add}<i class="add" style:width="{bar.add}%"></i>{/if}
@@ -162,8 +162,8 @@
 				</a>
 				{#if change.blocked}
 					<span class="resolve">
-						<button type="button" onclick={() => resolveLive(change.path, 'mine')}>keep draft</button>
-						<button type="button" onclick={() => resolveLive(change.path, 'theirs')}>use site text</button>
+						<button type="button" onclick={() => resolveSite(change.path, 'mine')}>keep draft</button>
+						<button type="button" onclick={() => resolveSite(change.path, 'theirs')}>use site text</button>
 						<a href={resolve(`/?post=${encodeURIComponent(change.path)}`)}>compare</a>
 					</span>
 				{/if}
@@ -342,7 +342,7 @@
 		margin-left: auto;
 	}
 
-	.badge.live {
+	.badge.site {
 		background: color-mix(in srgb, var(--warn) 16%, transparent);
 		color: var(--warn);
 	}

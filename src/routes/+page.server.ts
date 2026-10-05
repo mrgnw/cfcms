@@ -31,7 +31,7 @@ import { isPending, statusOf } from '$lib/types';
 
 const shipsHeadText = (status: ReturnType<typeof statusOf>) => status === 'ready' || status === 'changed';
 
-const hasLiveVersion = (path: string) => listVersions(path).some((version) => version.writer === 'live');
+const hasSiteVersion = (path: string) => listVersions(path).some((version) => version.writer === 'site');
 
 const getPendingChanges = async (posts: Awaited<ReturnType<typeof listPosts>>) => {
 	// llm drafts are a writing tool; they never publish, so they never pend
@@ -52,7 +52,7 @@ const getPendingChanges = async (posts: Awaited<ReturnType<typeof listPosts>>) =
 			date: post.date,
 			status: statusOf(post),
 			staged: staged.has(post.path),
-			blocked: shipsHeadText(statusOf(post)) && hasLiveVersion(post.path),
+			blocked: shipsHeadText(statusOf(post)) && hasSiteVersion(post.path),
 			words: post.body.split(/\s+/).filter(Boolean).length,
 			added: diff?.added ?? null,
 			deleted: diff?.deleted ?? null
@@ -190,14 +190,14 @@ export const actions = {
 		if (path.endsWith('.llm.md')) return fail(400, { message: 'Fork the llm draft before staging it' });
 		const post = await getPost(path).catch(() => null);
 		if (!post) return fail(400, { message: `Unknown post: ${path}` });
-		if (shipsHeadText(statusOf(post)) && hasLiveVersion(path)) {
-			return fail(409, { message: 'Resolve the live version before staging' });
+		if (shipsHeadText(statusOf(post)) && hasSiteVersion(path)) {
+			return fail(409, { message: 'Resolve the site version before staging' });
 		}
 
 		setStaged(path, true);
 		return { staged: path };
 	},
-	resolveLive: async ({ request }) => {
+	resolveSite: async ({ request }) => {
 		const form = await request.formData();
 		const path = String(form.get('path') ?? '');
 		const choice = String(form.get('choice') ?? '');
@@ -205,16 +205,16 @@ export const actions = {
 		if (!path) return fail(400, { message: 'Post path is required' });
 		if (choice !== 'mine' && choice !== 'theirs') return fail(400, { message: 'choice must be mine or theirs' });
 
-		const live = listVersions(path).find((version) => version.writer === 'live');
-		if (!live) return fail(404, { message: 'No live version to resolve' });
+		const site = listVersions(path).find((version) => version.writer === 'site');
+		if (!site) return fail(404, { message: 'No site version to resolve' });
 
 		if (choice === 'theirs') {
 			const post = await getPost(path);
-			const result = await savePost(path, live.frontmatter, live.body, post.contentHash, 'cms');
+			const result = await savePost(path, site.frontmatter, site.body, post.contentHash, 'cms');
 			if (result.outcome === 'conflict') return fail(409, { message: 'Post changed while resolving — retry' });
 		}
 
-		deleteVersion(path, 'live');
+		deleteVersion(path, 'site');
 		return { resolved: path };
 	},
 	unstage: async ({ request }) => {
