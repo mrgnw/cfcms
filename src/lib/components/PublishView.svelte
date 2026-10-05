@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { foldContext } from '$lib/segment-diff';
 	import type { PendingChange, PublishData } from '$lib/types';
 
 	let { changes, lastPublishedAt }: { changes: PendingChange[]; lastPublishedAt: string | null } = $props();
@@ -8,6 +9,7 @@
 	let publishing = $state(false);
 	let result = $state<PublishData | null>(null);
 	let error = $state<string | null>(null);
+	let context = $state(0);
 
 	let staged = $derived(changes.filter((change) => change.staged));
 	let stageable = $derived(changes.filter((change) => !change.blocked));
@@ -113,6 +115,9 @@
 					{staged.length} of {changes.length} staged for next publish
 					{#if stageable.length < changes.length}· {changes.length - stageable.length} edited on the site too{/if}
 				</span>
+				<button type="button" class="context" onclick={() => (context = context ? 0 : 3)}>
+					{context ? 'less context' : 'more context'}
+				</button>
 				<button
 					type="button"
 					disabled={!stageable.length}
@@ -160,6 +165,14 @@
 						· {change.blocked ? 'edited on the site too' : change.staged ? 'next' : 'ready'}
 					</span>
 				</a>
+				{#if change.lines?.some((line) => line.kind !== 'same')}
+					<details class="hunks">
+						<summary>changes</summary>
+						<pre>{#each foldContext(change.lines, context) as line}{#if line.kind === 'skip'}<i>⋯ {line.count} unchanged</i>
+{:else}<span class={line.kind}>{line.kind === 'add' ? '+' : line.kind === 'del' ? '−' : ' '} {line.text}</span>
+{/if}{/each}</pre>
+					</details>
+				{/if}
 				{#if change.blocked}
 					<span class="resolve">
 						<button type="button" onclick={() => resolveSite(change.path, 'mine')}>keep draft</button>
@@ -273,6 +286,53 @@
 		color: var(--ink-3);
 		font-size: 11.5px;
 		padding: 0 2px;
+	}
+
+	.stage-all .context {
+		margin-left: auto;
+		margin-right: 12px;
+		color: var(--ink-3);
+	}
+
+	.hunks {
+		grid-column: 2;
+		font-size: 11.5px;
+	}
+
+	.hunks summary {
+		color: var(--ink-3);
+		cursor: pointer;
+		width: max-content;
+	}
+
+	.hunks pre {
+		margin: 6px 0 0;
+		padding: 6px 8px;
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		font-size: 11px;
+		line-height: 1.5;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		max-height: 60vh;
+		overflow: auto;
+	}
+
+	.hunks .add {
+		background: color-mix(in srgb, var(--ok) 14%, transparent);
+	}
+
+	.hunks .del {
+		background: color-mix(in srgb, var(--warn) 14%, transparent);
+		text-decoration: line-through;
+	}
+
+	.hunks .same {
+		color: var(--ink-3);
+	}
+
+	.hunks i {
+		color: var(--ink-3);
 	}
 
 	.stage-all button {

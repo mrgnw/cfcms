@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { diffSegments, lineDiffCounts } from './segment-diff.ts';
+import { diffSegments, foldContext, lineDiff, lineDiffCounts } from './segment-diff.ts';
 
 const base = 'Alpha paragraph.\n\nBeta paragraph.\n\nGamma paragraph.';
 
@@ -60,3 +60,29 @@ assert.deepEqual(lineDiffCounts('same', 'same'), { added: 0, deleted: 0 });
 assert.equal(lineDiffCounts(Array.from({ length: 4001 }, () => 'l').join('\n'), 'x'), null, 'over the line cap → null');
 
 console.log('segment-diff.check: ok');
+
+assert.deepEqual(
+	lineDiff('a\nb\nc', 'a\nx\nc\nd'),
+	[
+		{ kind: 'same', text: 'a' },
+		{ kind: 'del', text: 'b' },
+		{ kind: 'add', text: 'x' },
+		{ kind: 'same', text: 'c' },
+		{ kind: 'add', text: 'd' }
+	],
+	'line diff via LCS'
+);
+assert.deepEqual(lineDiff('', 'new'), [{ kind: 'add', text: 'new' }], 'empty before is all added');
+assert.deepEqual(
+	foldContext(lineDiff('1\n2\n3\n4\n5\n6', '1\n2\n3\nX\n5\n6')!, 1),
+	[
+		{ kind: 'skip', count: 2 },
+		{ kind: 'same', text: '3' },
+		{ kind: 'del', text: '4' },
+		{ kind: 'add', text: 'X' },
+		{ kind: 'same', text: '5' },
+		{ kind: 'skip', count: 1 }
+	],
+	'fold keeps one line of context'
+);
+assert.deepEqual(foldContext(lineDiff('a\nb', 'a\nb')!, 0), [{ kind: 'skip', count: 2 }], 'identical folds to one skip');

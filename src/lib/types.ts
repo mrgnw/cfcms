@@ -1,5 +1,5 @@
-import type { Segment } from '$lib/segment-diff';
-export type { Segment };
+import type { DiffLine, Segment } from '$lib/segment-diff';
+export type { DiffLine, Segment };
 
 export type DeployStatus = 'draft' | 'ready' | 'live' | 'changed' | 'unpublish' | 'delete' | 'deleted';
 
@@ -65,6 +65,7 @@ export type PendingChange = {
 	words: number;
 	added: number | null;
 	deleted: number | null;
+	lines: DiffLine[] | null;
 };
 
 export type PostCounts = { all: number; drafts: number; ready: number; live: number; deleted: number };
