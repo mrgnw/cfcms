@@ -41,14 +41,20 @@ Why: Crepe's code blocks are CodeMirror, which ships its own highlighter (lezer)
 Two Crepe details in `MilkdownEditor.svelte`:
 
 - Crepe merges `featureConfigs` into its defaults with lodash `defaultsDeep`. An array is merged entry by entry, so `theme: []` still gets One Dark. The value of `EditorView.theme(...)` is not a plain object, so passing one replaces One Dark. Ours (`theme` in `twinkleplop.ts`) colours the cursor, gutter, active line and selection from the same `--twp-*` variables, so they follow light and dark mode.
-- The same merge appends Crepe's 143 lezer languages after ours, and those take over aliases such as `bash`. Setting `languages` in a separate `editor.config` call after `new Crepe(...)` replaces the list outright. Only the blog's languages remain in the picker.
+- The same merge appends Crepe's 143 lezer languages after ours, and those take over aliases such as `bash`. Setting `languages` in a separate `editor.config` call after `new Crepe(...)` replaces the list outright.
 
-Two files are copies from the blog repo (`~/dev/blog`). Copy them again when the blog's versions change:
+### Languages
 
-- `src/lib/code/code-theme.css` from `src/lib/styles/code-theme.css` (generated there by `scripts/gen-code-theme.mjs`)
-- `src/lib/code/shell-words.js` from `src/lib/shell-words.js`, keeping the `// @ts-nocheck` first line (the blog's file has no type annotations)
+The picker lists every language the blog's posts use. Those with a twinkleplop grammar are highlighted the same way the blog highlights them (the list mirrors the blog's `mdsvex.config.js`). `text`, `lua`, `nginx` and `caddy` have no grammar, so they are listed but stay plain, as on the site. Typing a fence such as ```` ```sh ```` followed by a space starts a code block in that language. A fence language not in the list is kept as written and shown as plain text.
 
-The language list in `src/lib/code/twinkleplop.ts` mirrors the blog's `mdsvex.config.js`.
+### Files copied from the blog
+
+Two files are copies from the blog repo (`~/dev/blog`):
+
+- `src/lib/code/code-theme.css` from `src/lib/styles/code-theme.css`: the colours. It only changes when the blog's code colours change (a twinkleplop theme upgrade, or editing `scripts/gen-code-theme.mjs`).
+- `src/lib/code/shell-words.js` from `src/lib/shell-words.js`: the shell recolouring. It only changes when the blog changes how shell commands are coloured. Keep the `// @ts-nocheck` first line; the blog's file has no type annotations.
+
+If the blog changes either file, copy it here again, or the editor's colours drift from the site's.
 
 ## Publishing
 

@@ -54,6 +54,10 @@ function language(name: string, alias: string[], load: () => Promise<LanguageFn>
 	});
 }
 
+function plain(name: string, alias: string[]) {
+	return LanguageDescription.of({ name, alias, support: new LanguageSupport(plainText) });
+}
+
 async function shell(): Promise<LanguageFn> {
 	const [{ create_language }, { grammar, reclassifiers }, { shellWords }] = await Promise.all([
 		import('@twinkleplop/core'),
@@ -74,5 +78,11 @@ export const languages = [
 	language('JSON', ['json'], async () => (await import('@twinkleplop/json')).tokenize()),
 	language('JSONC', ['jsonc'], async () => (await import('@twinkleplop/jsonc')).tokenize()),
 	language('Svelte', ['svelte'], async () => (await import('@twinkleplop/svelte')).tokenize()),
-	language('TOML', ['toml'], async () => (await import('@twinkleplop/toml')).tokenize())
+	language('TOML', ['toml'], async () => (await import('@twinkleplop/toml')).tokenize()),
+	language('JavaScript', ['js', 'javascript'], async () => (await import('@twinkleplop/javascript')).tokenize()),
+	language('Rust', ['rust', 'rs'], async () => (await import('@twinkleplop/rust')).tokenize()),
+	plain('Text', ['text']),
+	plain('Lua', ['lua']),
+	plain('Nginx', ['nginx']),
+	plain('Caddy', ['caddy'])
 ];

@@ -41,6 +41,9 @@ importers:
       '@twinkleplop/ini':
         specifier: ^0.1.7
         version: 0.1.7
+      '@twinkleplop/javascript':
+        specifier: ^0.1.7
+        version: 0.1.7
       '@twinkleplop/json':
         specifier: ^0.1.7
         version: 0.1.7
@@ -51,6 +54,9 @@ importers:
         specifier: ^0.2.1
         version: 0.2.1
       '@twinkleplop/python':
+        specifier: ^0.1.7
+        version: 0.1.7
+      '@twinkleplop/rust':
         specifier: ^0.1.7
         version: 0.1.7
       '@twinkleplop/svelte':
@@ -744,6 +750,9 @@ packages:
 
   '@twinkleplop/python@0.1.7':
     resolution: {integrity: sha512-C3DJhERSppC9qUoux4l+b88Jv0PXEkooSuYcbqTsQ3FKRALu+Ksy2ukqs9ncVkk/gVqgHT21xnR+udMR/3y+1g==}
+
+  '@twinkleplop/rust@0.1.7':
+    resolution: {integrity: sha512-xCSZtBzqrtg9ZTp4rBI/Wj+SezlQgC33JD5rokTpjiOJCgkCRudHvHqMpp8JUN+n1rN3evqe+HVRQNvuU5xhIw==}
 
   '@twinkleplop/svelte@0.1.7':
     resolution: {integrity: sha512-8Zz7WYm7ERGNTZeCjiceRWDB+spcrDA9ToUV/AtavMl68ZM28E1AIPOdo2ddKkBDnHim8Vs7tVlFr9T3Mq1NlA==}
@@ -2481,6 +2490,10 @@ snapshots:
       '@twinkleplop/core': 0.3.1
 
   '@twinkleplop/python@0.1.7':
+    dependencies:
+      '@twinkleplop/core': 0.3.1
+
+  '@twinkleplop/rust@0.1.7':
     dependencies:
       '@twinkleplop/core': 0.3.1
 
