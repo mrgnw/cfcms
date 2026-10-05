@@ -477,7 +477,7 @@
 		<div class="cols">
 			<div class="frame" style="padding: 10px 14px">
 				<div class="ref-head">
-					<span class="ref-path">live</span>
+					<span class="ref-path">site</span>
 					<span class="count"><b>6</b> changes · <b>1</b> decided</span>
 					<span class="seg"><button>Cards</button><button class="on">Inline</button></span>
 					<span class="keys"><kbd>Tab</kbd> next mark <kbd>↵</kbd> open <kbd>Esc</kbd> close</span>
@@ -492,7 +492,7 @@
 		<p class="note">The margin takes the reference-pane column (left, where <code>ReferencePane</code> already sits in the 2fr / 3fr split). Each card's top is pinned to its mark with CSS anchor positioning (<code>anchor-name</code> on the mark, <code>position-anchor</code> + <code>top: anchor(top)</code> on the card). The DOM order is body then margin so the anchors precede the positioned cards; the grid puts the margin on the left. Focusing or hovering a mark highlights its card; the card's actions are the next Tab stops after the mark. Below: change 1 is decided, change 4 (both changed) is the active pair with the keyboard focus ring on the mark.</p>
 		<div class="frame">
 			<div class="ref-head">
-				<span class="ref-path">live</span>
+				<span class="ref-path">site</span>
 				<span class="count"><b>6</b> changes · <b>1</b> decided</span>
 				<span class="seg"><button>Cards</button><button class="on">Inline</button></span>
 				<span class="keys"><kbd>Tab</kbd> next mark <kbd>↵</kbd> open <kbd>Esc</kbd> close</span>
@@ -503,23 +503,23 @@
 
 					<p><button class="mark modified done m1" type="button" data-id="1" aria-describedby="k1" aria-label="Decided: took theirs">Clone the template and point the serve config at your tailnet domain. The script below pulls <u>the Dockerfile, compose file and serve config</u> and rewrites <u>localhost to your MagicDNS name</u>.</button></p>
 
-<pre><span class="l">```sh</span><span class="l"># Get template files</span><span class="l">TAILNET=$(tailscale status --json | jq -r '.MagicDNSSuffix')</span><span class="l">TEMPLATE="https://raw.githubusercontent.com/mrgnw/svelte-docker-tailscale/main"</span><span class="l">curl -O "$TEMPLATE/Dockerfile" &amp; \</span><span class="l">curl -O "$TEMPLATE/compose.yml" &amp; \</span><button class="mark modified m2" type="button" data-id="2" aria-describedby="k2" aria-label="Modified in live: 2 lines in this code block. Open change"><span class="l"><u>curl -O "$TEMPLATE/serve.json" &amp; wait</u></span><span class="l"></span><span class="l"># Set up Tailscale config</span><span class="l"><u>echo "\n/tailscale" &gt;&gt; .gitignore</u></span></button><span class="l">```</span></pre>
+<pre><span class="l">```sh</span><span class="l"># Get template files</span><span class="l">TAILNET=$(tailscale status --json | jq -r '.MagicDNSSuffix')</span><span class="l">TEMPLATE="https://raw.githubusercontent.com/mrgnw/svelte-docker-tailscale/main"</span><span class="l">curl -O "$TEMPLATE/Dockerfile" &amp; \</span><span class="l">curl -O "$TEMPLATE/compose.yml" &amp; \</span><button class="mark modified m2" type="button" data-id="2" aria-describedby="k2" aria-label="Modified in site: 2 lines in this code block. Open change"><span class="l"><u>curl -O "$TEMPLATE/serve.json" &amp; wait</u></span><span class="l"></span><span class="l"># Set up Tailscale config</span><span class="l"><u>echo "\n/tailscale" &gt;&gt; .gitignore</u></span></button><span class="l">```</span></pre>
 
-					<h4><button class="mark modified m3" type="button" data-id="3" aria-describedby="k3" aria-label="Modified in live: this heading became a paragraph. Open change"><u>### 2. Create `serve.json`</u></button></h4>
+					<h4><button class="mark modified m3" type="button" data-id="3" aria-describedby="k3" aria-label="Modified in site: this heading became a paragraph. Open change"><u>### 2. Create `serve.json`</u></button></h4>
 
 					<p>Get an auth key from the [Tailscale admin console](https://login.tailscale.com/admin/settings/keys)</p>
 
-					<p><button class="mark conflict active focus m4" type="button" data-id="4" aria-describedby="k4" aria-label="Both changed: you and live edited this paragraph. Open change"><u>Only two variables are required:</u></button></p>
+					<p><button class="mark conflict active focus m4" type="button" data-id="4" aria-describedby="k4" aria-label="Both changed: you and site edited this paragraph. Open change"><u>Only two variables are required:</u></button></p>
 
 <pre><span class="l">```sh</span><span class="l">TS_AUTHKEY=</span><span class="l">TS_PORT=4177 # this needs to be unique for each container</span><span class="l">```</span></pre>
 
-					<p class="caret-row"><button class="mark added caret m5" type="button" data-id="5" aria-describedby="k5" aria-label="Added in live: a paragraph after this code block. Open change"></button></p>
-					<p><button class="mark removed m6" type="button" data-id="6" aria-describedby="k6" aria-label="Removed in live: this paragraph. Open change"><u>If you did the above in your terminal, you can add them to your .env with this:</u></button></p>
+					<p class="caret-row"><button class="mark added caret m5" type="button" data-id="5" aria-describedby="k5" aria-label="Added in site: a paragraph after this code block. Open change"></button></p>
+					<p><button class="mark removed m6" type="button" data-id="6" aria-describedby="k6" aria-label="Removed in site: this paragraph. Open change"><u>If you did the above in your terminal, you can add them to your .env with this:</u></button></p>
 
 <pre><span class="l">```sh</span><span class="l">echo "TS_AUTHKEY=$TS_AUTHKEY" &gt;&gt; .env</span><span class="l">echo "TS_PORT=$TS_PORT" &gt;&gt; .env</span><span class="l">```</span></pre>
 				</article>
 
-				<aside class="margin" aria-label="Changes from live">
+				<aside class="margin" aria-label="Changes from site">
 					<p class="fallback-note">no anchor positioning in this browser — cards flow in order instead of aligning to their marks</p>
 					<div class="card modified done k1" id="k1" data-id="1">
 						<div class="head"><span class="kind">modified</span><span class="where">¶ 1</span></div>
@@ -548,7 +548,7 @@
 					</div>
 					<div class="card removed k6" id="k6" data-id="6">
 						<div class="head"><span class="kind">removed</span></div>
-						<div class="yours">live dropped this paragraph</div>
+						<div class="yours">site dropped this paragraph</div>
 						<div class="acts"><button class="primary">remove it</button><button>keep it</button></div>
 					</div>
 				</aside>
@@ -561,7 +561,7 @@
 		<p class="note">Under the margin's breakpoint the cards leave the page. The mark is the trigger: <code>&lt;button popovertarget&gt;</code> on the mark, <code>popover</code> on the same card markup, so one component renders both. Native light-dismiss: click outside or <kbd>Esc</kbd> closes it and focus returns to the mark. Positioned with <code>top: anchor(bottom)</code> and <code>justify-self: anchor-center</code>, flipping above when there is no room below. Change 3 is open here (it really opens — click any mark).</p>
 		<div class="frame narrow">
 			<div class="ref-head">
-				<span class="ref-path">live</span>
+				<span class="ref-path">site</span>
 				<span class="count"><b>6</b> changes · <b>1</b> decided</span>
 				<span class="seg"><button>Cards</button><button class="on">Inline</button></span>
 				<span class="keys"><kbd>Tab</kbd> next mark <kbd>↵</kbd> open <kbd>Esc</kbd> close</span>
@@ -570,13 +570,13 @@
 				<article class="body">
 					<h3>## Setup</h3>
 					<p><button class="mark modified done n1" type="button" popovertarget="p1" aria-label="Decided: took theirs">Clone the template and point the serve config at your tailnet domain. The script below pulls <u>the Dockerfile, compose file and serve config</u> and rewrites <u>localhost to your MagicDNS name</u>.</button></p>
-<pre><span class="l">```sh</span><span class="l"># Get template files</span><span class="l">TAILNET=$(tailscale status --json | jq -r '.MagicDNSSuffix')</span><span class="l">TEMPLATE="https://raw.githubusercontent.com/mrgnw/svelte-docker-tailscale/main"</span><span class="l">curl -O "$TEMPLATE/Dockerfile" &amp; \</span><span class="l">curl -O "$TEMPLATE/compose.yml" &amp; \</span><button class="mark modified n2" type="button" popovertarget="p2" aria-label="Modified in live: 2 lines in this code block. Open change"><span class="l"><u>curl -O "$TEMPLATE/serve.json" &amp; wait</u></span><span class="l"></span><span class="l"># Set up Tailscale config</span><span class="l"><u>echo "\n/tailscale" &gt;&gt; .gitignore</u></span></button><span class="l">```</span></pre>
-					<h4><button class="mark modified focus n3" type="button" popovertarget="p3" aria-label="Modified in live: this heading became a paragraph. Open change"><u>### 2. Create `serve.json`</u></button></h4>
+<pre><span class="l">```sh</span><span class="l"># Get template files</span><span class="l">TAILNET=$(tailscale status --json | jq -r '.MagicDNSSuffix')</span><span class="l">TEMPLATE="https://raw.githubusercontent.com/mrgnw/svelte-docker-tailscale/main"</span><span class="l">curl -O "$TEMPLATE/Dockerfile" &amp; \</span><span class="l">curl -O "$TEMPLATE/compose.yml" &amp; \</span><button class="mark modified n2" type="button" popovertarget="p2" aria-label="Modified in site: 2 lines in this code block. Open change"><span class="l"><u>curl -O "$TEMPLATE/serve.json" &amp; wait</u></span><span class="l"></span><span class="l"># Set up Tailscale config</span><span class="l"><u>echo "\n/tailscale" &gt;&gt; .gitignore</u></span></button><span class="l">```</span></pre>
+					<h4><button class="mark modified focus n3" type="button" popovertarget="p3" aria-label="Modified in site: this heading became a paragraph. Open change"><u>### 2. Create `serve.json`</u></button></h4>
 					<p>Get an auth key from the [Tailscale admin console](https://login.tailscale.com/admin/settings/keys)</p>
-					<p><button class="mark conflict n4" type="button" popovertarget="p4" aria-label="Both changed: you and live edited this paragraph. Open change"><u>Only two variables are required:</u></button></p>
+					<p><button class="mark conflict n4" type="button" popovertarget="p4" aria-label="Both changed: you and site edited this paragraph. Open change"><u>Only two variables are required:</u></button></p>
 <pre><span class="l">```sh</span><span class="l">TS_AUTHKEY=</span><span class="l">TS_PORT=4177 # this needs to be unique for each container</span><span class="l">```</span></pre>
-					<p class="caret-row"><button class="mark added caret n5" type="button" popovertarget="p5" aria-label="Added in live: a paragraph after this code block. Open change"></button></p>
-					<p><button class="mark removed n6" type="button" popovertarget="p6" aria-label="Removed in live: this paragraph. Open change"><u>If you did the above in your terminal, you can add them to your .env with this:</u></button></p>
+					<p class="caret-row"><button class="mark added caret n5" type="button" popovertarget="p5" aria-label="Added in site: a paragraph after this code block. Open change"></button></p>
+					<p><button class="mark removed n6" type="button" popovertarget="p6" aria-label="Removed in site: this paragraph. Open change"><u>If you did the above in your terminal, you can add them to your .env with this:</u></button></p>
 				</article>
 			</div>
 			<div class="card modified done p1" id="p1" popover>
@@ -606,7 +606,7 @@
 			</div>
 			<div class="card removed p6" id="p6" popover>
 				<div class="head"><span class="kind">removed</span><button class="close" popovertarget="p6" popovertargetaction="hide" aria-label="Close">✕</button></div>
-				<div class="yours">live dropped this paragraph</div>
+				<div class="yours">site dropped this paragraph</div>
 				<div class="acts"><button class="primary">remove it</button><button>keep it</button></div>
 			</div>
 		</div>
@@ -618,18 +618,18 @@
 		<div class="phone">
 			<div class="phone-in">
 				<div class="ref-head">
-					<span class="ref-path">live</span>
+					<span class="ref-path">site</span>
 					<span class="count"><b>6</b> · <b>1</b> decided</span>
 					<span class="seg" style="margin-left:auto"><button>Cards</button><button class="on">Inline</button></span>
 				</div>
 				<div class="inline">
 					<article class="body">
 						<p><span class="mark done" aria-hidden="true">Clone the template and point the serve config at your tailnet domain. The script below pulls the Dockerfile, compose file and serve config and rewrites localhost to your MagicDNS name.</span></p>
-						<h4><button class="mark modified" type="button" aria-label="Modified in live: this heading became a paragraph. Open change"><u>### 2. Create `serve.json`</u></button></h4>
+						<h4><button class="mark modified" type="button" aria-label="Modified in site: this heading became a paragraph. Open change"><u>### 2. Create `serve.json`</u></button></h4>
 						<p>Get an auth key from the [Tailscale admin console](https://login.tailscale.com/admin/settings/keys)</p>
-						<p><button class="mark conflict" type="button" aria-label="Both changed: you and live edited this paragraph. Open change"><u>Only two variables are required:</u></button></p>
+						<p><button class="mark conflict" type="button" aria-label="Both changed: you and site edited this paragraph. Open change"><u>Only two variables are required:</u></button></p>
 <pre><span class="l">```sh</span><span class="l">TS_AUTHKEY=</span><span class="l">TS_PORT=4177 # this needs to be unique for each container</span><span class="l">```</span></pre>
-						<p class="caret-row"><button class="mark added caret active focus" type="button" aria-expanded="true" aria-label="Added in live: a paragraph after this code block. Open change"></button></p>
+						<p class="caret-row"><button class="mark added caret active focus" type="button" aria-expanded="true" aria-label="Added in site: a paragraph after this code block. Open change"></button></p>
 						<div class="static-pop">
 							<div class="card added">
 								<div class="head"><span class="kind">added</span><button class="close" type="button" aria-label="Close" style="background:none;border:none;color:var(--ink-3);margin-left:auto;padding:2px 4px;font:600 12px/1 var(--font-ui)">✕</button></div>
@@ -637,7 +637,7 @@
 								<div class="acts"><button class="primary">accept</button><button>skip</button></div>
 							</div>
 						</div>
-						<p><button class="mark removed" type="button" aria-label="Removed in live: this paragraph. Open change"><u>If you did the above in your terminal, you can add them to your .env with this:</u></button></p>
+						<p><button class="mark removed" type="button" aria-label="Removed in site: this paragraph. Open change"><u>If you did the above in your terminal, you can add them to your .env with this:</u></button></p>
 <pre><span class="l">```sh</span><span class="l">echo "TS_AUTHKEY=$TS_AUTHKEY" &gt;&gt; .env</span><span class="l">echo "TS_PORT=$TS_PORT" &gt;&gt; .env</span><span class="l">```</span></pre>
 					</article>
 				</div>
@@ -650,7 +650,7 @@
 		<p class="note">The body is plain text again, each decided range keeps its faint tick until the version is dismissed, and the margin holds only the summary. Same end state as the card list and the first mockup.</p>
 		<div class="frame">
 			<div class="ref-head">
-				<span class="ref-path">live</span>
+				<span class="ref-path">site</span>
 				<span class="count"><b>6</b> changes · <b>6</b> decided</span>
 				<span class="seg"><button>Cards</button><button class="on">Inline</button></span>
 			</div>
@@ -666,7 +666,7 @@
 					<p><span class="mark done" aria-hidden="true">`TS_PORT` has to be unique per container — two sidecars on the same port fight over the tailnet node name.</span></p>
 					<p><span class="mark done" aria-hidden="true">If you did the above in your terminal, you can add them to your .env with this:</span></p>
 				</article>
-				<aside class="margin" aria-label="Changes from live">
+				<aside class="margin" aria-label="Changes from site">
 					<div class="summary"><span class="tick">✓</span><span>All 6 decided · 4 taken · 2 kept</span></div>
 					<div class="acts"><button class="primary">dismiss version</button><button>back to editing</button></div>
 				</aside>
