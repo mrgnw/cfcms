@@ -3,6 +3,9 @@
 	import { Crepe, CrepeFeature } from '@milkdown/crepe';
 	import { replaceAll, insert, insertPos } from '@milkdown/kit/utils';
 	import { editorViewCtx } from '@milkdown/kit/core';
+	import { codeBlockConfig } from '@milkdown/kit/component/code-block';
+	import { languages, theme } from '$lib/code/twinkleplop';
+	import '$lib/code/code-theme.css';
 	import type { EditorView } from '@milkdown/kit/prose/view';
 	import '@milkdown/crepe/theme/common/style.css';
 	import '@milkdown/crepe/theme/frame.css';
@@ -26,9 +29,12 @@
 				[CrepeFeature.Placeholder]: {
 					text: 'Write the post...',
 					mode: 'doc'
-				}
+				},
+				[CrepeFeature.CodeMirror]: { theme }
 			}
 		});
+		// README.md "Code blocks": why One Dark is replaced via theme and languages are set here
+		crepe.editor.config((ctx) => ctx.update(codeBlockConfig.key, (config) => ({ ...config, languages })));
 		crepe.on((listener) => {
 			listener.markdownUpdated((_, md) => {
 				onChange?.(md);
@@ -146,17 +152,9 @@
 		background: color-mix(in srgb, var(--accent) 18%, transparent);
 	}
 
-	/* crepe hardcodes One Dark syntax colors and its config merge (defaultsDeep) makes them
-	   impossible to replace cleanly, so code blocks keep the dark surface those colors need */
 	.milkdown-host :global(.milkdown-code-block) {
-		--crepe-color-surface: #14171d;
-		--crepe-color-surface-low: #1f242c;
-		--crepe-color-on-surface: #e4e7ec;
-		--crepe-color-on-surface-variant: #9aa4b2;
-		--crepe-color-outline: #6a7484;
-		--crepe-color-hover: #1f242c;
-		--crepe-color-secondary: #262b34;
-		--crepe-color-on-secondary: #e4e7ec;
+		--crepe-color-surface: var(--twp-background);
+		--crepe-color-on-surface: var(--twp-identifier);
 		border: 1px solid var(--line);
 		border-radius: 8px;
 	}

@@ -32,6 +32,24 @@ pnpm check
 pnpm build
 ```
 
+## Code blocks
+
+Code blocks in the editor are coloured by twinkleplop, the same highlighter the blog uses, so a block looks the same here as on the site.
+
+Why: Crepe's code blocks are CodeMirror, which ships its own highlighter (lezer) and a One Dark theme. Lezer names tokens differently from twinkleplop, so its colours could only ever approximate the blog's. Instead, `src/lib/code/twinkleplop.ts` runs twinkleplop on the block's text and marks each token with its twinkleplop name (`keyword`, `string`, ...). The blog's stylesheet then colours those names directly. Tokenizing a 500-line block takes about 1 ms, so it reruns on every edit.
+
+Two Crepe details in `MilkdownEditor.svelte`:
+
+- Crepe merges `featureConfigs` into its defaults with lodash `defaultsDeep`. An array is merged entry by entry, so `theme: []` still gets One Dark. The value of `EditorView.theme(...)` is not a plain object, so passing one replaces One Dark. Ours (`theme` in `twinkleplop.ts`) colours the cursor, gutter, active line and selection from the same `--twp-*` variables, so they follow light and dark mode.
+- The same merge appends Crepe's 143 lezer languages after ours, and those take over aliases such as `bash`. Setting `languages` in a separate `editor.config` call after `new Crepe(...)` replaces the list outright. Only the blog's languages remain in the picker.
+
+Two files are copies from the blog repo (`~/dev/blog`). Copy them again when the blog's versions change:
+
+- `src/lib/code/code-theme.css` from `src/lib/styles/code-theme.css` (generated there by `scripts/gen-code-theme.mjs`)
+- `src/lib/code/shell-words.js` from `src/lib/shell-words.js`, keeping the `// @ts-nocheck` first line (the blog's file has no type annotations)
+
+The language list in `src/lib/code/twinkleplop.ts` mirrors the blog's `mdsvex.config.js`.
+
 ## Publishing
 
 The CMS exposes `POST /publish` and a Publish view in the UI. Pending changes are staged per post; only staged posts go out.
