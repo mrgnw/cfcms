@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Inline diff · margin / popover variant · post editor · cms</title>
+<style>
+	:root {
+		color-scheme: light;
+		--paper: #ffffff;
+		--bg: #f5f4f1;
+		--ink: #1a1c20;
+		--ink-2: #585c64;
+		--ink-3: #9a9ea6;
+		--line: #e4e3de;
+		--hover: #edece7;
+		--accent: #3b6fd4;
+		--accent-ink: #2d57ac;
+		--on-accent: #ffffff;
+		--ok: #2f7d4f;
+		--warn: #8a6512;
+		--danger: #c33c33;
+		--shadow: rgba(0, 0, 0, 0.18);
+		--radius: 10px;
+		--font-display: 'Iowan Old Style', Palatino, Georgia, serif;
+		--font-ui: ui-sans-serif, system-ui, -apple-system, sans-serif;
+		--font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+	}
+	@media (prefers-color-scheme: dark) {
+		:root:not([data-theme='light']) {
+			color-scheme: dark;
+			--paper: #16191f;
+			--bg: #0f1115;
+			--ink: #e4e7ec;
+			--ink-2: #9aa4b2;
+			--ink-3: #6a7484;
+			--line: #262b34;
+			--hover: #1f242c;
+			--accent: #6b9bf0;
+			--accent-ink: #93b6f7;
+			--on-accent: #0f1115;
+			--ok: #5fbd80;
+			--warn: #d9b455;
+			--danger: #ef7f74;
+			--shadow: rgba(0, 0, 0, 0.5);
+		}
+	}
+	:root[data-theme='dark'] {
+		color-scheme: dark;
+		--paper: #16191f;
+		--bg: #0f1115;
+		--ink: #e4e7ec;
+		--ink-2: #9aa4b2;
+		--ink-3: #6a7484;
+		--line: #262b34;
+		--hover: #1f242c;
+		--accent: #6b9bf0;
+		--accent-ink: #93b6f7;
+		--on-accent: #0f1115;
+		--ok: #5fbd80;
+		--warn: #d9b455;
+		--danger: #ef7f74;
+		--shadow: rgba(0, 0, 0, 0.5);
+	}
+
+	* { box-sizing: border-box; }
+	body {
+		background: var(--bg);
+		color: var(--ink);
+		font: 14px/1.5 var(--font-ui);
+		margin: 0;
+		padding: 28px 20px 80px;
+	}
+	.page { margin: 0 auto; max-width: 1160px; }
+	.top { align-items: baseline; display: flex; gap: 14px; margin-bottom: 6px; }
+	h1 { font-size: 19px; font-weight: 700; margin: 0; }
+	.sub { color: var(--ink-2); font-size: 13px; margin: 0 0 30px; }
+	.theme {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 7px;
+		color: var(--ink-2);
+		cursor: pointer;
+		font: inherit;
+		font-size: 11px;
+		margin-left: auto;
+		padding: 3px 9px;
+	}
+
+	section { margin: 0 0 48px; }
+	h2 {
+		border-bottom: 1px solid var(--line);
+		font-size: 12px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		margin: 0 0 14px;
+		padding-bottom: 6px;
+		text-transform: uppercase;
+	}
+	h2 .n { color: var(--accent-ink); margin-right: 6px; }
+	.note { color: var(--ink-2); font-size: 12.5px; margin: 0 0 12px; }
+	.note code, .legend code { font: 12px var(--font-mono); }
+
+	.frame {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 14px;
+		padding: 16px 18px;
+	}
+
+	.ref-head {
+		align-items: center;
+		color: var(--ink-3);
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px 10px;
+		padding: 0 0 10px;
+	}
+	.ref-path { font: 11px var(--font-mono); }
+	.seg {
+		background: var(--bg);
+		border: 1px solid var(--line);
+		border-radius: 7px;
+		display: inline-flex;
+		padding: 2px;
+	}
+	.seg button {
+		background: transparent;
+		border: none;
+		border-radius: 5px;
+		color: var(--ink-3);
+		cursor: pointer;
+		font: inherit;
+		font-size: 11px;
+		padding: 3px 9px;
+	}
+	.seg button.on { background: var(--hover); color: var(--ink); }
+	.count { color: var(--ink-3); font-size: 11px; font-variant-numeric: tabular-nums; }
+	.count b { color: var(--ink-2); font-weight: 600; }
+	.keys { color: var(--ink-3); display: flex; font-size: 11px; gap: 6px; margin-left: auto; }
+	kbd {
+		background: var(--bg);
+		border: 1px solid var(--line);
+		border-bottom-width: 2px;
+		border-radius: 4px;
+		color: var(--ink-2);
+		font: 10.5px var(--font-ui);
+		padding: 0 5px;
+	}
+
+	/* legend — one mark system: an underline on my text, coloured by kind */
+	.legend {
+		align-items: center;
+		color: var(--ink-2);
+		display: flex;
+		flex-wrap: wrap;
+		font-size: 12.5px;
+		gap: 10px 22px;
+		margin: 0 0 14px;
+	}
+	.legend span { align-items: baseline; display: inline-flex; gap: 7px; }
+	.legend .sw {
+		border-bottom: 2px solid var(--k);
+		color: var(--ink);
+		font-family: var(--font-display);
+		font-size: 15px;
+		line-height: 1.1;
+	}
+	.legend .sw.caret { border: none; color: var(--k); font-weight: 700; }
+	.legend .sw.tick { border: none; color: var(--ok); opacity: 0.55; }
+
+	/* the workspace: body in the editor column, margin where the reference pane is */
+	.inline {
+		display: grid;
+		gap: 36px;
+		grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+		position: relative;
+	}
+	.body { grid-column: 2; grid-row: 1; }
+	.margin { grid-column: 1; grid-row: 1; min-width: 0; }
+
+	.body {
+		font-family: var(--font-display);
+		font-size: 17px;
+		line-height: 1.7;
+		max-width: 66ch;
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+	.body > * { margin: 0 0 1.1em; }
+	.body h3 { font-size: 1.25em; font-weight: 600; line-height: 1.3; margin-top: 1.4em; }
+	.body h4 { font-size: 1.05em; font-weight: 600; line-height: 1.3; }
+	.body pre {
+		background: #14171d;
+		border: 1px solid var(--line);
+		border-radius: 8px;
+		color: #e4e7ec;
+		font: 13px/1.6 var(--font-mono);
+		overflow-x: auto;
+		padding: 12px 14px;
+	}
+	.body code { font: 0.85em var(--font-mono); }
+	pre .l { display: block; }
+	pre .mark { display: block; }
+
+	/* the mark: my text, a button, underline only on the words that differ */
+	.mark {
+		--k: var(--accent);
+		all: unset;
+		border-radius: 3px;
+		cursor: pointer;
+		display: inline;
+		text-decoration: none;
+	}
+	.mark.added { --k: var(--ok); }
+	.mark.modified { --k: var(--accent); }
+	.mark.removed { --k: var(--danger); }
+	.mark.conflict { --k: var(--warn); }
+	.mark u {
+		text-decoration: underline;
+		text-decoration-color: var(--k);
+		text-decoration-thickness: 2px;
+		text-underline-offset: 3px;
+	}
+	.mark:hover, .mark.active { background: color-mix(in srgb, var(--k) 10%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--k) 10%, transparent); }
+	.mark:focus-visible, .mark.focus { outline: 2px solid var(--k); outline-offset: 3px; }
+	.mark.caret {
+		color: var(--k);
+		display: inline-block;
+		font-size: 1.15em;
+		font-weight: 700;
+		line-height: 1;
+		padding: 0 4px;
+		vertical-align: -0.1em;
+	}
+	.mark.caret::before { content: '‸'; }
+	.caret-row { line-height: 1; margin: -0.5em 0 0.5em; }
+	.mark.caret:hover, .mark.caret.active { box-shadow: 0 0 0 3px color-mix(in srgb, var(--k) 12%, transparent); }
+	.mark.done { color: inherit; cursor: default; }
+	.mark.done u { text-decoration: none; }
+	.mark.done::after {
+		color: var(--ok);
+		content: '✓';
+		font: 600 0.65em var(--font-ui);
+		margin-left: 4px;
+		opacity: 0.5;
+		vertical-align: 0.25em;
+	}
+	.mark.done:hover { background: none; box-shadow: none; }
+	.mark.caret.done::before { content: ''; }
+	.mark.caret.done { padding: 0; }
+	pre .mark.done::after { opacity: 0.8; }
+	pre .mark.caret { color: #5fbd80; }
+
+	/* the card: what changed and the two actions — margin or popover, same markup */
+	.card {
+		--k: var(--accent);
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 8px;
+		box-shadow: inset 2.5px 0 0 var(--k);
+		color: var(--ink);
+		font: 13px/1.45 var(--font-ui);
+		padding: 8px 10px 9px 12px;
+	}
+	.card.added { --k: var(--ok); }
+	.card.modified { --k: var(--accent); }
+	.card.removed { --k: var(--danger); }
+	.card.conflict { --k: var(--warn); }
+	.card.active { border-color: color-mix(in srgb, var(--k) 55%, var(--line)); box-shadow: inset 2.5px 0 0 var(--k), 0 0 0 3px color-mix(in srgb, var(--k) 12%, transparent); }
+	.card.done { opacity: 0.45; }
+	.card.done .acts, .card.done .text { display: none; }
+	.card .head { align-items: baseline; display: flex; gap: 6px; margin-bottom: 4px; }
+	.kind {
+		color: var(--k);
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+	.kind small { color: var(--ink-3); font-weight: 600; letter-spacing: 0; text-transform: none; }
+	.card .where { color: var(--ink-3); font-size: 11px; margin-left: auto; }
+	.card .text { color: var(--ink); margin: 0 0 7px; }
+	.card .text.theirs { font-family: var(--font-display); font-size: 14px; line-height: 1.45; }
+	.card .yours { color: var(--ink-3); font-size: 12px; margin: 0 0 7px; }
+	.card .yours b { color: var(--ink-2); font-weight: 600; }
+	.card .yours s { text-decoration-color: var(--danger); }
+	.card pre {
+		background: #14171d;
+		border-radius: 6px;
+		color: #e4e7ec;
+		font: 11.5px/1.5 var(--font-mono);
+		margin: 0 0 7px;
+		overflow-x: auto;
+		padding: 6px 8px;
+	}
+	.card pre .l { display: block; padding-left: 12px; position: relative; }
+	.card pre .l::before { left: 0; position: absolute; }
+	.card pre .l.add { color: #5fbd80; }
+	.card pre .l.add::before { content: '+'; }
+	.card pre .l.del { color: #ef7f74; text-decoration: line-through; }
+	.card pre .l.del::before { content: '−'; text-decoration: none; }
+	.card .done-line { color: var(--ink-2); font-size: 12px; }
+	.card .done-line::before { color: var(--ok); content: '✓ '; font-weight: 700; }
+	ins {
+		background: color-mix(in srgb, var(--ok) 22%, transparent);
+		border-radius: 3px;
+		padding: 0 2px;
+		text-decoration: none;
+	}
+	del {
+		background: color-mix(in srgb, var(--danger) 16%, transparent);
+		border-radius: 3px;
+		color: var(--ink-3);
+		padding: 0 2px;
+		text-decoration: line-through;
+		text-decoration-color: var(--danger);
+	}
+
+	.acts { display: flex; gap: 5px; }
+	.acts button {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		color: var(--ink-2);
+		cursor: pointer;
+		font: 600 11px/1 var(--font-ui);
+		padding: 5px 9px;
+	}
+	.acts button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+	.acts button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+	/* margin: one card per mark, top aligned to the mark via anchor positioning */
+	.margin .card { left: 0; position: absolute; width: 280px; }
+	.margin .card.flow, .margin .summary { position: static; }
+	.margin .summary { margin-bottom: 8px; }
+	.m1 { anchor-name: --m1; } .k1 { position-anchor: --m1; }
+	.m2 { anchor-name: --m2; } .k2 { position-anchor: --m2; }
+	.m3 { anchor-name: --m3; } .k3 { position-anchor: --m3; }
+	.m4 { anchor-name: --m4; } .k4 { position-anchor: --m4; }
+	.m5 { anchor-name: --m5; } .k5 { position-anchor: --m5; }
+	.m6 { anchor-name: --m6; } .k6 { position-anchor: --m6; }
+	.margin .card:not(.flow) { top: calc(anchor(top) - 6px + var(--push, 0px)); }
+	.margin .dismiss { color: var(--ink-3); font-size: 11px; margin-top: 8px; }
+	@supports not (anchor-name: --x) {
+		.margin .card { margin-bottom: 8px; position: static; }
+		.margin .fallback-note { display: block; }
+	}
+	.fallback-note { color: var(--warn); display: none; font-size: 11px; margin-bottom: 8px; }
+
+	/* popover: the same card, anchored under the mark */
+	.card[popover] {
+		border: 1px solid var(--line);
+		box-shadow: inset 2.5px 0 0 var(--k), 0 10px 30px var(--shadow);
+		inset: auto;
+		margin: 6px 0 0;
+		max-width: calc(100vw - 24px);
+		padding: 8px 10px 9px 12px;
+		position: fixed;
+		width: 340px;
+	}
+	.card[popover]::backdrop { background: transparent; }
+	.p1 { position-anchor: --n1; } .n1 { anchor-name: --n1; }
+	.p2 { position-anchor: --n2; } .n2 { anchor-name: --n2; }
+	.p3 { position-anchor: --n3; } .n3 { anchor-name: --n3; }
+	.p4 { position-anchor: --n4; } .n4 { anchor-name: --n4; }
+	.p5 { position-anchor: --n5; } .n5 { anchor-name: --n5; }
+	.p6 { position-anchor: --n6; } .n6 { anchor-name: --n6; }
+	.card[popover] {
+		justify-self: anchor-center;
+		position-try-fallbacks: flip-block;
+		top: anchor(bottom);
+	}
+	.card[popover] .close {
+		background: none;
+		border: none;
+		color: var(--ink-3);
+		cursor: pointer;
+		font: 600 12px/1 var(--font-ui);
+		margin-left: auto;
+		padding: 2px 4px;
+	}
+	.card[popover] .close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+	@supports not (anchor-name: --x) {
+		.card[popover] {
+			border-radius: 14px 14px 0 0;
+			bottom: 0;
+			left: 0;
+			margin: 0;
+			max-width: none;
+			right: 0;
+			top: auto;
+			width: auto;
+		}
+	}
+
+	/* narrow desktop */
+	.narrow { margin: 0 auto; max-width: 860px; }
+	.narrow .inline { display: block; }
+	.narrow .body { max-width: none; }
+	.narrow .margin { display: none; }
+
+	/* phone */
+	.phone {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 22px;
+		box-shadow: 0 8px 28px var(--shadow);
+		margin: 0 auto;
+		max-width: 100%;
+		overflow: hidden;
+		position: relative;
+		width: 390px;
+	}
+	.phone-in { padding: 14px 16px 24px; }
+	.phone .inline { display: block; }
+	.phone .body { font-size: 16px; line-height: 1.65; max-width: none; }
+	.phone .static-pop {
+		margin: 6px 0 14px;
+		position: relative;
+	}
+	.phone .static-pop .card { box-shadow: inset 2.5px 0 0 var(--k), 0 10px 30px var(--shadow); }
+	.phone .static-pop::before {
+		background: var(--paper);
+		border-left: 1px solid var(--line);
+		border-top: 1px solid var(--line);
+		content: '';
+		height: 10px;
+		left: 24px;
+		position: absolute;
+		top: -6px;
+		transform: rotate(45deg);
+		width: 10px;
+	}
+	.phone .acts button { flex: 1; padding: 8px 10px; }
+	.phone .static-pop .acts { margin-top: 2px; }
+
+	.summary {
+		align-items: center;
+		background: color-mix(in srgb, var(--ok) 8%, var(--paper));
+		border: 1px solid color-mix(in srgb, var(--ok) 30%, var(--line));
+		border-radius: 8px;
+		display: flex;
+		flex-wrap: wrap;
+		font-size: 12.5px;
+		gap: 8px 10px;
+		padding: 8px 12px;
+	}
+	.summary .tick { color: var(--ok); font-weight: 700; }
+
+	.cols { display: grid; gap: 24px; grid-template-columns: 1fr 1fr; }
+	@media (max-width: 760px) {
+		.inline { display: block; }
+		.margin { display: none; }
+		.cols { grid-template-columns: 1fr; }
+	}
+</style>
+</head>
+<body>
+<div class="page">
+	<div class="top">
+		<h1>Inline diff — margin / popover variant</h1>
+		<button class="theme" type="button" onclick="const r=document.documentElement;const d=r.dataset.theme==='dark'||(!r.dataset.theme&&matchMedia('(prefers-color-scheme: dark)').matches);r.dataset.theme=d?'light':'dark'">light / dark</button>
+	</div>
+	<p class="sub">the body is my text, clean · each place the other version differs is only marked · their text, the diff and the decision live beside the body, or in a popover when there is no room</p>
+
+	<section>
+		<h2><span class="n">1</span>The mark system</h2>
+		<p class="note">One system: an <b>underline</b> on my own words, coloured by kind. The underline sits on the exact tokens that differ (word diff in prose, changed lines in a fence); the whole range from first to last differing token is one <code>&lt;button&gt;</code>. Content that exists only in their version has nothing of mine to underline, so it gets a <b>caret</b> at the insertion point. A decided change drops its underline and keeps a faint tick. Nothing of theirs is ever rendered inside the body.</p>
+		<div class="legend" aria-label="Legend">
+			<span><span class="sw" style="--k: var(--accent)">modified</span>theirs differs from mine</span>
+			<span><span class="sw" style="--k: var(--danger)">removed</span>mine, not in theirs</span>
+			<span><span class="sw" style="--k: var(--warn)">both changed</span>we both edited the base</span>
+			<span><span class="sw caret" style="--k: var(--ok)">‸</span>added — only in theirs, nothing to underline</span>
+			<span><span class="sw tick">✓</span>decided</span>
+		</div>
+		<div class="cols">
+			<div class="frame" style="padding: 10px 14px">
+				<div class="ref-head">
+					<span class="ref-path">live</span>
+					<span class="count"><b>6</b> changes · <b>1</b> decided</span>
+					<span class="seg"><button>Cards</button><button class="on">Inline</button></span>
+					<span class="keys"><kbd>Tab</kbd> next mark <kbd>↵</kbd> open <kbd>Esc</kbd> close</span>
+				</div>
+			</div>
+			<p class="note" style="margin: 0">The head is the first mockup's, plus the key hints. Marks are in the Tab order of the body; the index column is gone because the margin cards <i>are</i> the index.</p>
+		</div>
+	</section>
+
+	<section>
+		<h2><span class="n">2</span>1200px — marks in the body, cards in the margin</h2>
+		<p class="note">The margin takes the reference-pane column (left, where <code>ReferencePane</code> already sits in the 2fr / 3fr split). Each card's top is pinned to its mark with CSS anchor positioning (<code>anchor-name</code> on the mark, <code>position-anchor</code> + <code>top: anchor(top)</code> on the card). The DOM order is body then margin so the anchors precede the positioned cards; the grid puts the margin on the left. Focusing or hovering a mark highlights its card; the card's actions are the next Tab stops after the mark. Below: change 1 is decided, change 4 (both changed) is the active pair with the keyboard focus ring on the mark.</p>
+		<div class="frame">
+			<div class="ref-head">
+				<span class="ref-path">live</span>
+				<span class="count"><b>6</b> changes · <b>1</b> decided</span>
+				<span class="seg"><button>Cards</button><button class="on">Inline</button></span>
+				<span class="keys"><kbd>Tab</kbd> next mark <kbd>↵</kbd> open <kbd>Esc</kbd> close</span>
+			</div>
+			<div class="inline" id="wide">
+				<article class="body">
+					<h3>## Setup</h3>
+
+					<p><button class="mark modified done m1" type="button" data-id="1" aria-describedby="k1" aria-label="Decided: took theirs">Clone the template and point the serve config at your tailnet domain. The script below pulls <u>the Dockerfile, compose file and serve config</u> and rewrites <u>localhost to your MagicDNS name</u>.</button></p>
+
+<pre><span class="l">```sh</span><span class="l"># Get template files</span><span class="l">TAILNET=$(tailscale status --json | jq -r '.MagicDNSSuffix')</span><span class="l">TEMPLATE="https://raw.githubusercontent.com/mrgnw/svelte-docker-tailscale/main"</span><span class="l">curl -O "$TEMPLATE/Dockerfile" &amp; \</span><span class="l">curl -O "$TEMPLATE/compose.yml" &amp; \</span><button class="mark modified m2" type="button" data-id="2" aria-describedby="k2" aria-label="Modified in live: 2 lines in this code block. Open change"><span class="l"><u>curl -O "$TEMPLATE/serve.json" &amp; wait</u></span><span class="l"></span><span class="l"># Set up Tailscale config</span><span class="l"><u>echo "\n/tailscale" &gt;&gt; .gitignore</u></span></button><span class="l">```</span></pre>
+
+					<h4><button class="mark modified m3" type="button" data-id="3" aria-describedby="k3" aria-label="Modified in live: this heading became a paragraph. Open change"><u>### 2. Create `serve.json`</u></button></h4>
+
+					<p>Get an auth key from the [Tailscale admin console](https://login.tailscale.com/admin/settings/keys)</p>
+
+					<p><button class="mark conflict active focus m4" type="button" data-id="4" aria-describedby="k4" aria-label="Both changed: you and live edited this paragraph. Open change"><u>Only two variables are required:</u></button></p>
+
+<pre><span class="l">```sh</span><span class="l">TS_AUTHKEY=</span><span class="l">TS_PORT=4177 # this needs to be unique for each container</span><span class="l">```</span></pre>
+
+					<p class="caret-row"><button class="mark added caret m5" type="button" data-id="5" aria-describedby="k5" aria-label="Added in live: a paragraph after this code block. Open change"></button></p>
+					<p><button class="mark removed m6" type="button" data-id="6" aria-describedby="k6" aria-label="Removed in live: this paragraph. Open change"><u>If you did the above in your terminal, you can add them to your .env with this:</u></button></p>
+
+<pre><span class="l">```sh</span><span class="l">echo "TS_AUTHKEY=$TS_AUTHKEY" &gt;&gt; .env</span><span class="l">echo "TS_PORT=$TS_PORT" &gt;&gt; .env</span><span class="l">```</span></pre>
+				</article>
+
+				<aside class="margin" aria-label="Changes from live">
+					<p class="fallback-note">no anchor positioning in this browser — cards flow in order instead of aligning to their marks</p>
+					<div class="card modified done k1" id="k1" data-id="1">
+						<div class="head"><span class="kind">modified</span><span class="where">¶ 1</span></div>
+						<div class="done-line">took theirs</div>
+					</div>
+					<div class="card modified k2" id="k2" data-id="2">
+						<div class="head"><span class="kind">modified <small>· code, 2 lines</small></span><span class="where">fence</span></div>
+<pre><span class="l del">curl -O "$TEMPLATE/serve.json" &amp; wait</span><span class="l add">curl -O "$TEMPLATE/tailscale_serve.json" &amp; wait</span><span class="l add">echo "\ntailscale_serve.json" &gt;&gt; .gitignore</span></pre>
+						<div class="acts"><button class="primary">take theirs</button><button>keep mine</button></div>
+					</div>
+					<div class="card modified k3" id="k3" data-id="3">
+						<div class="head"><span class="kind">modified <small>· heading → paragraph</small></span></div>
+						<p class="text theirs">Tailscale needs `network_mode: service:tailscale` on the app container so the sidecar owns the network namespace.</p>
+						<div class="acts"><button class="primary">take theirs</button><button>keep mine</button></div>
+					</div>
+					<div class="card conflict active k4" id="k4" data-id="4">
+						<div class="head"><span class="kind">both changed</span></div>
+						<p class="text theirs">You need exactly two environment variables:</p>
+						<div class="yours"><b>base</b> · Two variables:</div>
+						<div class="acts"><button class="primary">insert theirs</button><button>keep mine</button></div>
+					</div>
+					<div class="card added k5" id="k5" data-id="5">
+						<div class="head"><span class="kind">added</span><span class="where">after fence</span></div>
+						<p class="text theirs">`TS_PORT` has to be unique per container — two sidecars on the same port fight over the tailnet node name.</p>
+						<div class="acts"><button class="primary">accept</button><button>skip</button></div>
+					</div>
+					<div class="card removed k6" id="k6" data-id="6">
+						<div class="head"><span class="kind">removed</span></div>
+						<div class="yours">live dropped this paragraph</div>
+						<div class="acts"><button class="primary">remove it</button><button>keep it</button></div>
+					</div>
+				</aside>
+			</div>
+		</div>
+	</section>
+
+	<section>
+		<h2><span class="n">3</span>~900px — no margin, the mark opens a popover</h2>
+		<p class="note">Under the margin's breakpoint the cards leave the page. The mark is the trigger: <code>&lt;button popovertarget&gt;</code> on the mark, <code>popover</code> on the same card markup, so one component renders both. Native light-dismiss: click outside or <kbd>Esc</kbd> closes it and focus returns to the mark. Positioned with <code>top: anchor(bottom)</code> and <code>justify-self: anchor-center</code>, flipping above when there is no room below. Change 3 is open here (it really opens — click any mark).</p>
+		<div class="frame narrow">
+			<div class="ref-head">
+				<span class="ref-path">live</span>
+				<span class="count"><b>6</b> changes · <b>1</b> decided</span>
+				<span class="seg"><button>Cards</button><button class="on">Inline</button></span>
+				<span class="keys"><kbd>Tab</kbd> next mark <kbd>↵</kbd> open <kbd>Esc</kbd> close</span>
+			</div>
+			<div class="inline">
+				<article class="body">
+					<h3>## Setup</h3>
+					<p><button class="mark modified done n1" type="button" popovertarget="p1" aria-label="Decided: took theirs">Clone the template and point the serve config at your tailnet domain. The script below pulls <u>the Dockerfile, compose file and serve config</u> and rewrites <u>localhost to your MagicDNS name</u>.</button></p>
+<pre><span class="l">```sh</span><span class="l"># Get template files</span><span class="l">TAILNET=$(tailscale status --json | jq -r '.MagicDNSSuffix')</span><span class="l">TEMPLATE="https://raw.githubusercontent.com/mrgnw/svelte-docker-tailscale/main"</span><span class="l">curl -O "$TEMPLATE/Dockerfile" &amp; \</span><span class="l">curl -O "$TEMPLATE/compose.yml" &amp; \</span><button class="mark modified n2" type="button" popovertarget="p2" aria-label="Modified in live: 2 lines in this code block. Open change"><span class="l"><u>curl -O "$TEMPLATE/serve.json" &amp; wait</u></span><span class="l"></span><span class="l"># Set up Tailscale config</span><span class="l"><u>echo "\n/tailscale" &gt;&gt; .gitignore</u></span></button><span class="l">```</span></pre>
+					<h4><button class="mark modified focus n3" type="button" popovertarget="p3" aria-label="Modified in live: this heading became a paragraph. Open change"><u>### 2. Create `serve.json`</u></button></h4>
+					<p>Get an auth key from the [Tailscale admin console](https://login.tailscale.com/admin/settings/keys)</p>
+					<p><button class="mark conflict n4" type="button" popovertarget="p4" aria-label="Both changed: you and live edited this paragraph. Open change"><u>Only two variables are required:</u></button></p>
+<pre><span class="l">```sh</span><span class="l">TS_AUTHKEY=</span><span class="l">TS_PORT=4177 # this needs to be unique for each container</span><span class="l">```</span></pre>
+					<p class="caret-row"><button class="mark added caret n5" type="button" popovertarget="p5" aria-label="Added in live: a paragraph after this code block. Open change"></button></p>
+					<p><button class="mark removed n6" type="button" popovertarget="p6" aria-label="Removed in live: this paragraph. Open change"><u>If you did the above in your terminal, you can add them to your .env with this:</u></button></p>
+				</article>
+			</div>
+			<div class="card modified done p1" id="p1" popover>
+				<div class="head"><span class="kind">modified</span><button class="close" popovertarget="p1" popovertargetaction="hide" aria-label="Close">✕</button></div>
+				<div class="done-line">took theirs</div>
+			</div>
+			<div class="card modified p2" id="p2" popover>
+				<div class="head"><span class="kind">modified <small>· code, 2 lines</small></span><button class="close" popovertarget="p2" popovertargetaction="hide" aria-label="Close">✕</button></div>
+<pre><span class="l del">curl -O "$TEMPLATE/serve.json" &amp; wait</span><span class="l add">curl -O "$TEMPLATE/tailscale_serve.json" &amp; wait</span><span class="l add">echo "\ntailscale_serve.json" &gt;&gt; .gitignore</span></pre>
+				<div class="acts"><button class="primary">take theirs</button><button>keep mine</button></div>
+			</div>
+			<div class="card modified p3" id="p3" popover>
+				<div class="head"><span class="kind">modified <small>· heading → paragraph</small></span><button class="close" popovertarget="p3" popovertargetaction="hide" aria-label="Close">✕</button></div>
+				<p class="text theirs">Tailscale needs `network_mode: service:tailscale` on the app container so the sidecar owns the network namespace.</p>
+				<div class="acts"><button class="primary">take theirs</button><button>keep mine</button></div>
+			</div>
+			<div class="card conflict p4" id="p4" popover>
+				<div class="head"><span class="kind">both changed</span><button class="close" popovertarget="p4" popovertargetaction="hide" aria-label="Close">✕</button></div>
+				<p class="text theirs">You need exactly two environment variables:</p>
+				<div class="yours"><b>base</b> · Two variables:</div>
+				<div class="acts"><button class="primary">insert theirs</button><button>keep mine</button></div>
+			</div>
+			<div class="card added p5" id="p5" popover>
+				<div class="head"><span class="kind">added</span><button class="close" popovertarget="p5" popovertargetaction="hide" aria-label="Close">✕</button></div>
+				<p class="text theirs">`TS_PORT` has to be unique per container — two sidecars on the same port fight over the tailnet node name.</p>
+				<div class="acts"><button class="primary">accept</button><button>skip</button></div>
+			</div>
+			<div class="card removed p6" id="p6" popover>
+				<div class="head"><span class="kind">removed</span><button class="close" popovertarget="p6" popovertargetaction="hide" aria-label="Close">✕</button></div>
+				<div class="yours">live dropped this paragraph</div>
+				<div class="acts"><button class="primary">remove it</button><button>keep it</button></div>
+			</div>
+		</div>
+	</section>
+
+	<section>
+		<h2><span class="n">4</span>390px — same marks, same popover</h2>
+		<p class="note">Nothing new on mobile: the marks are the only chrome in the body, the popover is the card, actions go full width. Shown here as a static render under the <b>added</b> caret so it stays inside the frame; the real popover is in the top layer and is anchored the same way. Where anchor positioning is missing the popover falls back to a bottom sheet (<code>@supports not (anchor-name: --x)</code>).</p>
+		<div class="phone">
+			<div class="phone-in">
+				<div class="ref-head">
+					<span class="ref-path">live</span>
+					<span class="count"><b>6</b> · <b>1</b> decided</span>
+					<span class="seg" style="margin-left:auto"><button>Cards</button><button class="on">Inline</button></span>
+				</div>
+				<div class="inline">
+					<article class="body">
+						<p><span class="mark done" aria-hidden="true">Clone the template and point the serve config at your tailnet domain. The script below pulls the Dockerfile, compose file and serve config and rewrites localhost to your MagicDNS name.</span></p>
+						<h4><button class="mark modified" type="button" aria-label="Modified in live: this heading became a paragraph. Open change"><u>### 2. Create `serve.json`</u></button></h4>
+						<p>Get an auth key from the [Tailscale admin console](https://login.tailscale.com/admin/settings/keys)</p>
+						<p><button class="mark conflict" type="button" aria-label="Both changed: you and live edited this paragraph. Open change"><u>Only two variables are required:</u></button></p>
+<pre><span class="l">```sh</span><span class="l">TS_AUTHKEY=</span><span class="l">TS_PORT=4177 # this needs to be unique for each container</span><span class="l">```</span></pre>
+						<p class="caret-row"><button class="mark added caret active focus" type="button" aria-expanded="true" aria-label="Added in live: a paragraph after this code block. Open change"></button></p>
+						<div class="static-pop">
+							<div class="card added">
+								<div class="head"><span class="kind">added</span><button class="close" type="button" aria-label="Close" style="background:none;border:none;color:var(--ink-3);margin-left:auto;padding:2px 4px;font:600 12px/1 var(--font-ui)">✕</button></div>
+								<p class="text theirs">`TS_PORT` has to be unique per container — two sidecars on the same port fight over the tailnet node name.</p>
+								<div class="acts"><button class="primary">accept</button><button>skip</button></div>
+							</div>
+						</div>
+						<p><button class="mark removed" type="button" aria-label="Removed in live: this paragraph. Open change"><u>If you did the above in your terminal, you can add them to your .env with this:</u></button></p>
+<pre><span class="l">```sh</span><span class="l">echo "TS_AUTHKEY=$TS_AUTHKEY" &gt;&gt; .env</span><span class="l">echo "TS_PORT=$TS_PORT" &gt;&gt; .env</span><span class="l">```</span></pre>
+					</article>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<section>
+		<h2><span class="n">5</span>All resolved</h2>
+		<p class="note">The body is plain text again, each decided range keeps its faint tick until the version is dismissed, and the margin holds only the summary. Same end state as the card list and the first mockup.</p>
+		<div class="frame">
+			<div class="ref-head">
+				<span class="ref-path">live</span>
+				<span class="count"><b>6</b> changes · <b>6</b> decided</span>
+				<span class="seg"><button>Cards</button><button class="on">Inline</button></span>
+			</div>
+			<div class="inline">
+				<article class="body">
+					<h3>## Setup</h3>
+					<p><span class="mark done" aria-hidden="true">Clone the template and point the serve config at your tailnet domain. The script below pulls the Dockerfile, compose file and serve config and rewrites localhost to your MagicDNS name.</span></p>
+<pre><span class="l">```sh</span><span class="l"># Get template files</span><span class="l">TAILNET=$(tailscale status --json | jq -r '.MagicDNSSuffix')</span><span class="l">TEMPLATE="https://raw.githubusercontent.com/mrgnw/svelte-docker-tailscale/main"</span><span class="l">curl -O "$TEMPLATE/Dockerfile" &amp; \</span><span class="l">curl -O "$TEMPLATE/compose.yml" &amp; \</span><span class="l">curl -O "$TEMPLATE/tailscale_serve.json" &amp; wait</span><span class="l"></span><span class="l"># Set up Tailscale config</span><span class="l">echo "\n/tailscale" &gt;&gt; .gitignore</span><span class="l"><span class="mark done" aria-hidden="true">echo "\ntailscale_serve.json" &gt;&gt; .gitignore</span></span><span class="l">```</span></pre>
+					<p><span class="mark done" aria-hidden="true">Tailscale needs `network_mode: service:tailscale` on the app container so the sidecar owns the network namespace.</span></p>
+					<p>Get an auth key from the [Tailscale admin console](https://login.tailscale.com/admin/settings/keys)</p>
+					<p><span class="mark done" aria-hidden="true">Only two variables are required:</span></p>
+<pre><span class="l">```sh</span><span class="l">TS_AUTHKEY=</span><span class="l">TS_PORT=4177 # this needs to be unique for each container</span><span class="l">```</span></pre>
+					<p><span class="mark done" aria-hidden="true">`TS_PORT` has to be unique per container — two sidecars on the same port fight over the tailnet node name.</span></p>
+					<p><span class="mark done" aria-hidden="true">If you did the above in your terminal, you can add them to your .env with this:</span></p>
+				</article>
+				<aside class="margin" aria-label="Changes from live">
+					<div class="summary"><span class="tick">✓</span><span>All 6 decided · 4 taken · 2 kept</span></div>
+					<div class="acts"><button class="primary">dismiss version</button><button>back to editing</button></div>
+				</aside>
+			</div>
+		</div>
+	</section>
+</div>
+<script>
+	if (location.hash === '#dark' || location.hash === '#light') document.documentElement.dataset.theme = location.hash.slice(1);
+
+	const wide = document.getElementById('wide');
+	const setActive = (id) => {
+		for (const el of wide.querySelectorAll('[data-id]')) el.classList.toggle('active', el.dataset.id === id);
+	};
+	for (const mark of wide.querySelectorAll('.mark[data-id]')) {
+		mark.addEventListener('focus', () => setActive(mark.dataset.id));
+		mark.addEventListener('mouseenter', () => setActive(mark.dataset.id));
+		mark.addEventListener('click', () => wide.querySelector(`#k${mark.dataset.id} .acts button`)?.focus());
+	}
+	for (const card of wide.querySelectorAll('.card[data-id]')) {
+		card.addEventListener('focusin', () => setActive(card.dataset.id));
+		card.addEventListener('mouseenter', () => setActive(card.dataset.id));
+	}
+
+	const pushDown = () => {
+		let floor = 0;
+		for (const card of wide.querySelectorAll('.margin .card:not(.flow)')) {
+			card.style.setProperty('--push', '0px');
+			const r = card.getBoundingClientRect();
+			const push = Math.max(0, floor - r.top);
+			card.style.setProperty('--push', `${push}px`);
+			floor = r.top + push + r.height + 8;
+		}
+		const margin = wide.querySelector('.margin');
+		margin.style.minHeight = `${floor - wide.getBoundingClientRect().top}px`;
+	};
+	if (CSS.supports('anchor-name: --x')) {
+		pushDown();
+		addEventListener('resize', pushDown);
+	}
+
+	for (const mark of document.querySelectorAll('.mark.focus')) {
+		mark.addEventListener('blur', () => mark.classList.remove('focus'), { once: true });
+	}
+	requestAnimationFrame(() => document.getElementById('p3').showPopover());
+</script>
+</body>
+</html>
