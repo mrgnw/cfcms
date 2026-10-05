@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { isProse, normalizeBlock, splitBlocks, splitSentences } from '$lib/blocks';
+	import SegmentCard from './SegmentCard.svelte';
 	import type { FieldSegment, Segment } from '$lib/types';
 
 	type Props = {
@@ -149,51 +150,41 @@
 		{#if fields?.length}
 			{#each fields as field (field.name)}
 				{#if !fieldResolved.has(field.name)}
-					<div class="segment field">
-						<div class="seg-kind">{field.name}</div>
-						<div class="seg-theirs">{field.theirs}</div>
-						<div class="seg-yours">yours: {field.yours || '—'}</div>
-						<div class="seg-acts">
-							<button
-								class="primary"
-								onclick={() => {
-									onApplyField?.(field);
-									fieldResolved = new Set([...fieldResolved, field.name]);
-								}}>take theirs</button
-							>
-							<button onclick={() => (fieldResolved = new Set([...fieldResolved, field.name]))}>keep mine</button>
-						</div>
-					</div>
+					<SegmentCard kind="field" label={field.name} theirs={field.theirs} yours="yours: {field.yours || '—'}">
+						<button
+							class="primary"
+							onclick={() => {
+								onApplyField?.(field);
+								fieldResolved = new Set([...fieldResolved, field.name]);
+							}}>take theirs</button
+						>
+						<button onclick={() => (fieldResolved = new Set([...fieldResolved, field.name]))}>keep mine</button>
+					</SegmentCard>
 				{/if}
 			{/each}
 		{/if}
 		{#each segments as segment, index (index)}
 			{#if !resolved.has(index)}
-				<div class="segment {segment.kind}">
-					<div class="seg-kind">{segment.kind === 'conflict' ? 'both changed' : segment.kind}</div>
-					{#if segment.kind === 'removed'}
-						<div class="seg-yours strike">{segment.yours}</div>
-					{:else}
-						<div class="seg-theirs">{segment.theirs}</div>
-					{/if}
-					{#if segment.kind === 'modified'}
-						<div class="seg-yours">replaces: {segment.yours}</div>
-					{/if}
-					<div class="seg-acts">
-						<button
-							class="primary"
-							onclick={() => {
-								onApplySegment?.(segment);
-								resolve(index);
-							}}
-						>
-							{segment.kind === 'added' ? 'accept' : segment.kind === 'modified' ? 'take theirs' : segment.kind === 'removed' ? 'remove it' : 'insert theirs'}
-						</button>
-						<button onclick={() => resolve(index)}>
-							{segment.kind === 'removed' ? 'keep it' : segment.kind === 'modified' || segment.kind === 'conflict' ? 'keep mine' : 'skip'}
-						</button>
-					</div>
-				</div>
+				<SegmentCard
+					kind={segment.kind}
+					label={segment.kind === 'conflict' ? 'both changed' : segment.kind}
+					theirs={segment.kind === 'removed' ? null : segment.theirs}
+					yours={segment.kind === 'removed' ? segment.yours : segment.kind === 'modified' ? `replaces: ${segment.yours}` : null}
+					strike={segment.kind === 'removed'}
+				>
+					<button
+						class="primary"
+						onclick={() => {
+							onApplySegment?.(segment);
+							resolve(index);
+						}}
+					>
+						{segment.kind === 'added' ? 'accept' : segment.kind === 'modified' ? 'take theirs' : segment.kind === 'removed' ? 'remove it' : 'insert theirs'}
+					</button>
+					<button onclick={() => resolve(index)}>
+						{segment.kind === 'removed' ? 'keep it' : segment.kind === 'modified' || segment.kind === 'conflict' ? 'keep mine' : 'skip'}
+					</button>
+				</SegmentCard>
 			{/if}
 		{/each}
 		{#if !segments.length && !fields?.length}
@@ -435,47 +426,6 @@
 			max-height: 40vh;
 		}
 	}
-
-	.segment {
-		background: var(--paper);
-		border: 1px solid var(--line);
-		border-radius: 8px;
-		margin-bottom: 10px;
-		padding: 9px 10px;
-	}
-
-	.segment.added { box-shadow: inset 2.5px 0 0 var(--ok); }
-	.segment.modified { box-shadow: inset 2.5px 0 0 var(--accent); }
-	.segment.removed { box-shadow: inset 2.5px 0 0 var(--danger); }
-	.segment.conflict { box-shadow: inset 2.5px 0 0 var(--warn); }
-	.segment.field { box-shadow: inset 2.5px 0 0 var(--ink-3); }
-
-	.seg-kind {
-		color: var(--ink-3);
-		font-size: 10px;
-		font-weight: 700;
-		letter-spacing: 0.06em;
-		margin-bottom: 5px;
-		text-transform: uppercase;
-	}
-
-	.seg-theirs { font: 13px/1.5 var(--font-body, Georgia, serif); margin-bottom: 6px; white-space: pre-wrap; }
-	.seg-yours { color: var(--ink-3); font-size: 11.5px; margin-bottom: 6px; white-space: pre-wrap; }
-	.seg-yours.strike { text-decoration: line-through; }
-	.seg-acts { display: flex; gap: 6px; }
-
-	.seg-acts button {
-		background: var(--paper);
-		border: 1px solid var(--line);
-		border-radius: 6px;
-		color: var(--ink-2);
-		cursor: pointer;
-		font: 600 11px/1 inherit;
-		font-family: inherit;
-		padding: 4px 8px;
-	}
-
-	.seg-acts button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 	.seg-empty {
 		color: var(--ink-3);

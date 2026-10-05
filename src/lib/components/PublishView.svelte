@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { foldContext } from '$lib/segment-diff';
+	import { slide } from 'svelte/transition';
+	import SegmentCard from './SegmentCard.svelte';
 	import type { PendingChange, PublishData } from '$lib/types';
 
 	let { changes, lastPublishedAt }: { changes: PendingChange[]; lastPublishedAt: string | null } = $props();
@@ -9,7 +10,25 @@
 	let publishing = $state(false);
 	let result = $state<PublishData | null>(null);
 	let error = $state<string | null>(null);
-	let context = $state(0);
+	let pinned = $state(new Set<string>());
+	let hovered = $state<string | null>(null);
+	let hoverTimer: ReturnType<typeof setTimeout> | undefined;
+
+	function togglePinned(path: string) {
+		const next = new Set(pinned);
+		if (!next.delete(path)) next.add(path);
+		pinned = next;
+	}
+
+	function hoverStart(path: string) {
+		clearTimeout(hoverTimer);
+		hoverTimer = setTimeout(() => (hovered = path), 400);
+	}
+
+	function hoverEnd() {
+		clearTimeout(hoverTimer);
+		hovered = null;
+	}
 
 	let staged = $derived(changes.filter((change) => change.staged));
 	let stageable = $derived(changes.filter((change) => !change.blocked));
@@ -115,9 +134,6 @@
 					{staged.length} of {changes.length} staged for next publish
 					{#if stageable.length < changes.length}· {changes.length - stageable.length} edited on the site too{/if}
 				</span>
-				<button type="button" class="context" onclick={() => (context = context ? 0 : 3)}>
-					{context ? 'less context' : 'more context'}
-				</button>
 				<button
 					type="button"
 					disabled={!stageable.length}
@@ -129,7 +145,14 @@
 		{/if}
 		{#each changes as change (change.path)}
 			{@const bar = barSegments(change)}
-			<div class="change-row" class:staged={change.staged} class:blocked={change.blocked}>
+			<div
+				class="change-row"
+				role="presentation"
+				class:staged={change.staged}
+				class:blocked={change.blocked}
+				onpointerenter={() => hoverStart(change.path)}
+				onpointerleave={hoverEnd}
+			>
 				<input
 					type="checkbox"
 					aria-label="Stage {change.title} for next publish"
@@ -155,6 +178,8 @@
 					<span class="delta">
 						{#if change.status === 'ready'}
 							<em class="add">+{change.words} words</em>
+						{:else if change.segments?.length === 0 && (change.added || change.deleted)}
+							whitespace only
 						{:else if change.added != null && change.deleted != null}
 							<em class="add">+{change.added}</em>
 							<em class="del">−{change.deleted}</em>
@@ -165,13 +190,23 @@
 						· {change.blocked ? 'edited on the site too' : change.staged ? 'next' : 'ready'}
 					</span>
 				</a>
-				{#if change.lines?.some((line) => line.kind !== 'same')}
-					<details class="hunks">
-						<summary>changes</summary>
-						<pre>{#each foldContext(change.lines, context) as line}{#if line.kind === 'skip'}<i>⋯ {line.count} unchanged</i>
-{:else}<span class={line.kind}>{line.kind === 'add' ? '+' : line.kind === 'del' ? '−' : ' '} {line.text}</span>
-{/if}{/each}</pre>
-					</details>
+				{#if change.segments?.length}
+					<button type="button" class="toggle" aria-expanded={pinned.has(change.path)} onclick={() => togglePinned(change.path)}>
+						{change.segments.length} {change.segments.length === 1 ? 'change' : 'changes'}
+					</button>
+					{#if pinned.has(change.path) || hovered === change.path}
+						<div class="segments" transition:slide={{ duration: 180 }}>
+							{#each change.segments as segment, index (index)}
+								<SegmentCard
+									kind={segment.kind}
+									label={segment.kind}
+									theirs={segment.kind === 'removed' ? null : segment.theirs}
+									yours={segment.kind === 'removed' ? segment.yours : segment.kind === 'modified' ? `was: ${segment.yours}` : null}
+									strike={segment.kind === 'removed'}
+								/>
+							{/each}
+						</div>
+					{/if}
 				{/if}
 				{#if change.blocked}
 					<span class="resolve">
@@ -288,51 +323,25 @@
 		padding: 0 2px;
 	}
 
-	.stage-all .context {
-		margin-left: auto;
-		margin-right: 12px;
-		color: var(--ink-3);
-	}
-
-	.hunks {
+	.toggle {
 		grid-column: 2;
-		font-size: 11.5px;
-	}
-
-	.hunks summary {
+		justify-self: start;
+		background: none;
+		border: none;
 		color: var(--ink-3);
 		cursor: pointer;
-		width: max-content;
+		font: inherit;
+		font-size: 11.5px;
+		padding: 0;
 	}
 
-	.hunks pre {
-		margin: 6px 0 0;
-		padding: 6px 8px;
-		border: 1px solid var(--line);
-		border-radius: 6px;
-		font-size: 11px;
-		line-height: 1.5;
-		white-space: pre-wrap;
-		overflow-wrap: anywhere;
-		max-height: 60vh;
-		overflow: auto;
+	.toggle[aria-expanded='true'] {
+		color: var(--accent-ink);
 	}
 
-	.hunks .add {
-		background: color-mix(in srgb, var(--ok) 14%, transparent);
-	}
-
-	.hunks .del {
-		background: color-mix(in srgb, var(--warn) 14%, transparent);
-		text-decoration: line-through;
-	}
-
-	.hunks .same {
-		color: var(--ink-3);
-	}
-
-	.hunks i {
-		color: var(--ink-3);
+	.segments {
+		grid-column: 2;
+		padding-top: 6px;
 	}
 
 	.stage-all button {

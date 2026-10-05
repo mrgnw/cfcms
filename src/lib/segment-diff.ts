@@ -115,34 +115,3 @@ export const lineDiffCounts = (before: string, after: string): { added: number; 
 	const common = lcsPairs(a, b).length;
 	return { added: b.length - common, deleted: a.length - common };
 };
-
-export type DiffLine = { kind: 'same' | 'add' | 'del'; text: string };
-export type FoldedLine = DiffLine | { kind: 'skip'; count: number };
-
-export const lineDiff = (before: string, after: string): DiffLine[] | null => {
-	const a = before === '' ? [] : before.split('\n');
-	const b = after === '' ? [] : after.split('\n');
-	if (Math.max(a.length, b.length) > maxDiffLines) return null;
-	const lines: DiffLine[] = [];
-	let i = 0;
-	let j = 0;
-	for (const [ai, bj] of [...lcsPairs(a, b), [a.length, b.length] as [number, number]]) {
-		for (; i < ai; i += 1) lines.push({ kind: 'del', text: a[i] });
-		for (; j < bj; j += 1) lines.push({ kind: 'add', text: b[j] });
-		if (ai < a.length) lines.push({ kind: 'same', text: a[ai] });
-		i = ai + 1;
-		j = bj + 1;
-	}
-	return lines;
-};
-
-export const foldContext = (lines: DiffLine[], context: number): FoldedLine[] => {
-	const keep = lines.map((line, index) => line.kind !== 'same' || lines.slice(Math.max(0, index - context), index + context + 1).some((near) => near.kind !== 'same'));
-	const out: FoldedLine[] = [];
-	for (const [index, line] of lines.entries()) {
-		if (keep[index]) out.push(line);
-		else if (out.at(-1)?.kind === 'skip') (out.at(-1) as { count: number }).count += 1;
-		else out.push({ kind: 'skip', count: 1 });
-	}
-	return out;
-};

@@ -25,7 +25,7 @@ import {
 import { commitPost } from '$lib/server/git';
 import { syncSiteText } from '$lib/server/site-text';
 import { parseFrontmatter, setDeleteFlag } from '$lib/frontmatter';
-import { diffSegments, lineDiff, lineDiffCounts } from '$lib/segment-diff';
+import { diffSegments, lineDiffCounts } from '$lib/segment-diff';
 import { isValidWriter, normalizeNewlines } from '$lib/save-rules';
 import { isPending, statusOf } from '$lib/types';
 
@@ -57,7 +57,7 @@ const getPendingChanges = async (posts: Awaited<ReturnType<typeof listPosts>>) =
 			words: post.body.split(/\s+/).filter(Boolean).length,
 			added: diff?.added ?? null,
 			deleted: diff?.deleted ?? null,
-			lines: lineDiff(publishedRevision?.body ?? '', after)
+			segments: diffSegments(publishedRevision?.body ?? '', publishedRevision?.body ?? '', after)
 		};
 	});
 };
