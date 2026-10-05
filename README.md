@@ -45,7 +45,7 @@ Two Crepe details in `MilkdownEditor.svelte`:
 
 ### Languages
 
-The picker lists every language the blog's posts use. Those with a twinkleplop grammar are highlighted the same way the blog highlights them (the list mirrors the blog's `mdsvex.config.js`). `text`, `lua`, `nginx` and `caddy` have no grammar, so they are listed but stay plain, as on the site. Typing a fence such as ```` ```sh ```` followed by a space starts a code block in that language. A fence language not in the list is kept as written and shown as plain text.
+The picker lists every language twinkleplop has a grammar for except C and C++, the same set the blog highlights (the list mirrors the blog's `mdsvex.config.js`). All grammars are bundled into the CMS build, so nothing loads at runtime. `text`, `lua`, `nginx` and `caddy` are listed too because posts use them, but have no grammar and stay plain, as on the site. Typing a fence such as ```` ```sh ```` followed by a space starts a code block in that language. A fence language not in the list is kept as written and shown as plain text.
 
 ### Files copied from the blog
 

@@ -1,7 +1,32 @@
 import { LanguageDescription, LanguageSupport, StreamLanguage } from '@codemirror/language';
 import type { Extension } from '@codemirror/state';
 import { Decoration, EditorView, ViewPlugin, type DecorationSet } from '@codemirror/view';
-import type { LanguageFn } from '@twinkleplop/core';
+import { grammar as bashGrammar, reclassifiers as bashReclassifiers } from '@twinkleplop/bash';
+import { create_language, type LanguageFn } from '@twinkleplop/core';
+import { tokenize as css } from '@twinkleplop/css';
+import { tokenize as diff } from '@twinkleplop/diff';
+import { tokenize as dockerfile } from '@twinkleplop/dockerfile';
+import { tokenize as dotenv } from '@twinkleplop/dotenv';
+import { tokenize as go } from '@twinkleplop/go';
+import { tokenize as graphql } from '@twinkleplop/graphql';
+import { tokenize as html } from '@twinkleplop/html';
+import { tokenize as http } from '@twinkleplop/http';
+import { tokenize as ini } from '@twinkleplop/ini';
+import { tokenize as javascript } from '@twinkleplop/javascript';
+import { tokenize as json } from '@twinkleplop/json';
+import { tokenize as jsonc } from '@twinkleplop/jsonc';
+import { tokenize as markdown } from '@twinkleplop/markdown';
+import { tokenize as powershell } from '@twinkleplop/powershell';
+import { tokenize as python } from '@twinkleplop/python';
+import { tokenize as rust } from '@twinkleplop/rust';
+import { tokenize as shellsession } from '@twinkleplop/shellsession';
+import { tokenize as sql } from '@twinkleplop/sql';
+import { tokenize as svelte } from '@twinkleplop/svelte';
+import { tokenize as toml } from '@twinkleplop/toml';
+import { tokenize as tsx } from '@twinkleplop/tsx';
+import { tokenize as typescript } from '@twinkleplop/typescript';
+import { tokenize as yaml } from '@twinkleplop/yaml';
+import { shellWords } from './shell-words.js';
 
 function decorations(tokenize: LanguageFn, text: string): DecorationSet {
 	const { tokens, token_types } = tokenize(text);
@@ -46,43 +71,40 @@ const plainText = StreamLanguage.define({
 	}
 });
 
-function language(name: string, alias: string[], load: () => Promise<LanguageFn>) {
-	return LanguageDescription.of({
-		name,
-		alias,
-		load: async () => new LanguageSupport(plainText, highlighter(await load()))
-	});
+function language(name: string, alias: string[], tokenize?: LanguageFn) {
+	const support = tokenize ? new LanguageSupport(plainText, highlighter(tokenize)) : new LanguageSupport(plainText);
+	return LanguageDescription.of({ name, alias, support });
 }
 
-function plain(name: string, alias: string[]) {
-	return LanguageDescription.of({ name, alias, support: new LanguageSupport(plainText) });
-}
-
-async function shell(): Promise<LanguageFn> {
-	const [{ create_language }, { grammar, reclassifiers }, { shellWords }] = await Promise.all([
-		import('@twinkleplop/core'),
-		import('@twinkleplop/bash'),
-		import('./shell-words.js')
-	]);
-	return create_language(grammar, [...reclassifiers, shellWords])();
-}
+const shell = create_language(bashGrammar, [...bashReclassifiers, shellWords])();
 
 export const languages = [
 	language('Bash', ['bash', 'sh', 'shell', 'zsh'], shell),
-	language('Python', ['python', 'py'], async () => (await import('@twinkleplop/python')).tokenize()),
-	language('Markdown', ['markdown', 'md'], async () => (await import('@twinkleplop/markdown')).tokenize()),
-	language('YAML', ['yaml', 'yml'], async () => (await import('@twinkleplop/yaml')).tokenize()),
-	language('Diff', ['diff'], async () => (await import('@twinkleplop/diff')).tokenize()),
-	language('HTML', ['html'], async () => (await import('@twinkleplop/html')).tokenize()),
-	language('INI', ['ini'], async () => (await import('@twinkleplop/ini')).tokenize()),
-	language('JSON', ['json'], async () => (await import('@twinkleplop/json')).tokenize()),
-	language('JSONC', ['jsonc'], async () => (await import('@twinkleplop/jsonc')).tokenize()),
-	language('Svelte', ['svelte'], async () => (await import('@twinkleplop/svelte')).tokenize()),
-	language('TOML', ['toml'], async () => (await import('@twinkleplop/toml')).tokenize()),
-	language('JavaScript', ['js', 'javascript'], async () => (await import('@twinkleplop/javascript')).tokenize()),
-	language('Rust', ['rust', 'rs'], async () => (await import('@twinkleplop/rust')).tokenize()),
-	plain('Text', ['text']),
-	plain('Lua', ['lua']),
-	plain('Nginx', ['nginx']),
-	plain('Caddy', ['caddy'])
+	language('Caddy', ['caddy']),
+	language('CSS', ['css'], css()),
+	language('Diff', ['diff'], diff()),
+	language('Dockerfile', ['dockerfile', 'docker'], dockerfile()),
+	language('dotenv', ['dotenv', 'env'], dotenv()),
+	language('Go', ['go', 'golang'], go()),
+	language('GraphQL', ['graphql', 'gql'], graphql()),
+	language('HTML', ['html'], html()),
+	language('HTTP', ['http'], http()),
+	language('INI', ['ini'], ini()),
+	language('JavaScript', ['js', 'javascript', 'mjs', 'cjs'], javascript()),
+	language('JSON', ['json'], json()),
+	language('JSONC', ['jsonc'], jsonc()),
+	language('Lua', ['lua']),
+	language('Markdown', ['markdown', 'md'], markdown()),
+	language('Nginx', ['nginx']),
+	language('PowerShell', ['powershell', 'ps1', 'pwsh'], powershell()),
+	language('Python', ['python', 'py'], python()),
+	language('Rust', ['rust', 'rs'], rust()),
+	language('Shell session', ['console', 'shellsession', 'sh-session'], shellsession()),
+	language('SQL', ['sql'], sql()),
+	language('Svelte', ['svelte'], svelte()),
+	language('Text', ['text']),
+	language('TOML', ['toml'], toml()),
+	language('TSX', ['tsx'], tsx()),
+	language('TypeScript', ['ts', 'typescript'], typescript()),
+	language('YAML', ['yaml', 'yml'], yaml())
 ];
