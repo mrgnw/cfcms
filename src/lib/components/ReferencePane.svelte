@@ -11,7 +11,7 @@
 		segments?: Segment[] | null;
 		fields?: FieldSegment[] | null;
 		onInsert: (markdown: string, inline: boolean) => void;
-		onApplySegment?: (segment: Segment) => void;
+		onApplySegment?: (segment: Segment) => boolean;
 		onApplyField?: (field: FieldSegment) => void;
 	};
 
@@ -23,6 +23,11 @@
 	let resolved = $state<Set<number>>(new Set());
 	const resolve = (index: number) => {
 		resolved = new Set([...resolved, index]);
+	};
+	let unplaced = $state<Set<number>>(new Set());
+	const applySegment = (segment: Segment, index: number) => {
+		if (onApplySegment?.(segment) === false) unplaced = new Set([...unplaced, index]);
+		else resolve(index);
 	};
 	let fieldResolved = $state<Set<string>>(new Set());
 
@@ -61,6 +66,13 @@
 		} else {
 			onInsert(markdown, inline);
 		}
+	}
+
+	function copySegment(text: string, index: number) {
+		navigator.clipboard?.writeText(text).catch(() => {});
+		copiedKey = `seg:${index}`;
+		if (copyTimer) clearTimeout(copyTimer);
+		copyTimer = setTimeout(() => (copiedKey = null), 1000);
 	}
 
 	function setDrag(e: DragEvent, markdown: string, inline: boolean) {
@@ -171,16 +183,17 @@
 					theirs={segment.kind === 'removed' ? null : segment.theirs}
 					yours={segment.kind === 'removed' ? segment.yours : segment.kind === 'modified' ? `replaces: ${segment.yours}` : null}
 					strike={segment.kind === 'removed'}
+					note={unplaced.has(index) ? "can't place, the text around it changed" : null}
 				>
-					<button
-						class="primary"
-						onclick={() => {
-							onApplySegment?.(segment);
-							resolve(index);
-						}}
-					>
-						{segment.kind === 'added' ? 'accept' : segment.kind === 'modified' ? 'take theirs' : segment.kind === 'removed' ? 'remove it' : 'insert theirs'}
-					</button>
+					{#if !unplaced.has(index)}
+						<button class="primary" onclick={() => applySegment(segment, index)}>
+							{segment.kind === 'added' ? 'accept' : segment.kind === 'modified' ? 'take theirs' : segment.kind === 'removed' ? 'remove it' : 'insert theirs'}
+						</button>
+					{:else if segment.kind !== 'removed'}
+						<button class="primary" onclick={() => copySegment(segment.theirs, index)}>
+							{copiedKey === `seg:${index}` ? 'copied' : 'copy theirs'}
+						</button>
+					{/if}
 					<button onclick={() => resolve(index)}>
 						{segment.kind === 'removed' ? 'keep it' : segment.kind === 'modified' || segment.kind === 'conflict' ? 'keep mine' : 'skip'}
 					</button>

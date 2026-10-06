@@ -1,10 +1,10 @@
 import { normalizeBlock, splitBlocks } from './blocks.ts';
 
 export type Segment =
-	| { kind: 'added'; theirs: string; afterMain: string | null }
+	| { kind: 'added'; theirs: string; afterMain: string | null; afterTheirs: string[] }
 	| { kind: 'removed'; yours: string }
 	| { kind: 'modified'; yours: string; theirs: string }
-	| { kind: 'conflict'; theirs: string; afterMain: string | null };
+	| { kind: 'conflict'; theirs: string; afterMain: string | null; afterTheirs: string[] };
 
 const maxDiffBlocks = 500;
 
@@ -78,6 +78,7 @@ export const diffSegments = (baseBody: string, mainBody: string, versionBody: st
 		const inserted = range(vStart + 1, vEnd).filter((vIdx) => !mainSet.has(vN[vIdx]) && !baseSet.has(vN[vIdx]));
 
 		const pairCount = Math.min(deleted.length, inserted.length);
+		const afterTheirsFor = (p: number) => inserted.slice(0, p).reverse().map((vIdx) => versionBlocks[vIdx]);
 
 		for (let p = 0; p < pairCount; p += 1) {
 			const bIdx = deleted[p];
@@ -85,7 +86,12 @@ export const diffSegments = (baseBody: string, mainBody: string, versionBody: st
 			const mainIdx = baseInMain.get(bIdx);
 
 			if (mainIdx == null) {
-				segments.push({ kind: 'conflict', theirs: versionBlocks[vIdx], afterMain: anchorFor(vIdx) });
+				segments.push({
+					kind: 'conflict',
+					theirs: versionBlocks[vIdx],
+					afterMain: anchorFor(vIdx),
+					afterTheirs: afterTheirsFor(p)
+				});
 			} else {
 				segments.push({ kind: 'modified', yours: mainBlocks[mainIdx], theirs: versionBlocks[vIdx] });
 			}
@@ -99,11 +105,43 @@ export const diffSegments = (baseBody: string, mainBody: string, versionBody: st
 
 		for (let p = pairCount; p < inserted.length; p += 1) {
 			const vIdx = inserted[p];
-			segments.push({ kind: 'added', theirs: versionBlocks[vIdx], afterMain: anchorFor(vIdx) });
+			segments.push({
+				kind: 'added',
+				theirs: versionBlocks[vIdx],
+				afterMain: anchorFor(vIdx),
+				afterTheirs: afterTheirsFor(p)
+			});
 		}
 	}
 
 	return segments;
+};
+
+export const applySegment = (body: string, segment: Segment): string | null => {
+	const blocks = splitBlocks(body);
+	const norms = blocks.map(normalizeBlock);
+
+	if (segment.kind === 'modified' || segment.kind === 'removed') {
+		const target = norms.indexOf(normalizeBlock(segment.yours));
+		if (target < 0) return null;
+		if (segment.kind === 'modified') blocks.splice(target, 1, segment.theirs);
+		else blocks.splice(target, 1);
+		return blocks.join('\n\n');
+	}
+
+	const placed = segment.afterTheirs.map((text) => norms.indexOf(normalizeBlock(text))).find((idx) => idx >= 0);
+	let at: number;
+	if (placed != null) {
+		at = placed + 1;
+	} else if (segment.afterMain == null) {
+		at = 0;
+	} else {
+		const afterMain = norms.indexOf(normalizeBlock(segment.afterMain));
+		if (afterMain < 0) return null;
+		at = afterMain + 1;
+	}
+	blocks.splice(at, 0, segment.theirs);
+	return blocks.join('\n\n');
 };
 
 const maxDiffLines = 4000;

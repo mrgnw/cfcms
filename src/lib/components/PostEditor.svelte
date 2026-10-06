@@ -9,7 +9,7 @@
 	import MilkdownEditor from './MilkdownEditor.svelte';
 	import ReferencePane from './ReferencePane.svelte';
 	import { parseFrontmatter, serializeFrontmatter } from '$lib/frontmatter';
-	import { splitBlocks, normalizeBlock } from '$lib/blocks';
+	import { applySegment as applySegmentTo } from '$lib/segment-diff';
 	import type { FieldSegment, Post, Segment, WriterVersion } from '$lib/types';
 
 	type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error';
@@ -111,29 +111,17 @@
 		markDirty();
 	}
 
-	function replaceBody(nextBlocks: string[]) {
-		const next = nextBlocks.join('\n\n');
+	function replaceBody(next: string) {
 		bodyField = next;
 		milkdown?.setContent(next);
 		markDirty();
 	}
 
-	function applySegment(segment: Segment) {
-		const blocks = splitBlocks(bodyField);
-		const norms = blocks.map(normalizeBlock);
-
-		if (segment.kind === 'modified' || segment.kind === 'removed') {
-			const target = norms.indexOf(normalizeBlock(segment.yours));
-			if (target < 0) return;
-			if (segment.kind === 'modified') blocks.splice(target, 1, segment.theirs);
-			else blocks.splice(target, 1);
-			replaceBody(blocks);
-			return;
-		}
-
-		const anchor = segment.afterMain ? norms.indexOf(normalizeBlock(segment.afterMain)) : -1;
-		blocks.splice(anchor + 1, 0, segment.theirs);
-		replaceBody(blocks);
+	function applySegment(segment: Segment): boolean {
+		const next = applySegmentTo(bodyField, segment);
+		if (next == null) return false;
+		replaceBody(next);
+		return true;
 	}
 
 	function applyField(field: FieldSegment) {

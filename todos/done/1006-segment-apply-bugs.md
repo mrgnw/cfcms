@@ -1,5 +1,7 @@
 ---
 title: Applying a segment can misplace or silently drop the change
+branch: todos-segment-apply-bugs
+outcome: applySegment is pure in segment-diff.ts and returns null when it can't place; cards resolve only on success, else show "can't place" with copy; afterTheirs is the run's earlier blocks nearest first, so any accept order and any skipped block keep version order
 ---
 
 Found while planning the inline diff (`todos/diff-view-editor.md`, margin variant). All three reproduce today in the Cards view. `applySegment` in `PostEditor.svelte` places a segment by content, and each card resolves on click whether or not the apply did anything.

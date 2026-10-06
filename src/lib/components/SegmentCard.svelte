@@ -7,6 +7,7 @@
 		theirs = null,
 		yours = null,
 		strike = false,
+		note = null,
 		children
 	}: {
 		kind: string;
@@ -14,6 +15,7 @@
 		theirs?: string | null;
 		yours?: string | null;
 		strike?: boolean;
+		note?: string | null;
 		children?: Snippet;
 	} = $props();
 </script>
@@ -22,6 +24,7 @@
 	<div class="seg-kind">{label}</div>
 	{#if theirs != null}<div class="seg-theirs">{theirs}</div>{/if}
 	{#if yours != null}<div class="seg-yours" class:strike>{yours}</div>{/if}
+	{#if note != null}<div class="seg-note">{note}</div>{/if}
 	{#if children}<div class="seg-acts">{@render children()}</div>{/if}
 </div>
 
@@ -52,6 +55,7 @@
 	.seg-theirs { font: 13px/1.5 var(--font-body, Georgia, serif); margin-bottom: 6px; white-space: pre-wrap; }
 	.seg-yours { color: var(--ink-3); font-size: 11.5px; margin-bottom: 6px; white-space: pre-wrap; }
 	.seg-yours.strike { text-decoration: line-through; }
+	.seg-note { color: var(--ink-3); font-size: 11.5px; font-style: italic; margin-bottom: 6px; }
 	.seg-acts { display: flex; gap: 6px; }
 
 	.seg-acts :global(button) {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { diffSegments, lineDiffCounts } from './segment-diff.ts';
+import { applySegment, diffSegments, lineDiffCounts, type Segment } from './segment-diff.ts';
 
 const base = 'Alpha paragraph.\n\nBeta paragraph.\n\nGamma paragraph.';
 
@@ -7,7 +7,7 @@ assert.deepEqual(diffSegments(base, base, base), [], 'identical everywhere → n
 
 assert.deepEqual(
 	diffSegments(base, base, 'Alpha paragraph.\n\nNew thought.\n\nBeta paragraph.\n\nGamma paragraph.'),
-	[{ kind: 'added', theirs: 'New thought.', afterMain: 'Alpha paragraph.' }],
+	[{ kind: 'added', theirs: 'New thought.', afterMain: 'Alpha paragraph.', afterTheirs: [] }],
 	'they added a block'
 );
 
@@ -41,7 +41,7 @@ assert.deepEqual(
 		'Alpha, your rewrite.\n\nBeta paragraph.\n\nGamma paragraph.',
 		'Alpha, their rewrite.\n\nBeta paragraph.\n\nGamma paragraph.'
 	),
-	[{ kind: 'conflict', theirs: 'Alpha, their rewrite.', afterMain: null }],
+	[{ kind: 'conflict', theirs: 'Alpha, their rewrite.', afterMain: null, afterTheirs: [] }],
 	'both rewrote the same base block → conflict, anchored where it sat'
 );
 
@@ -58,5 +58,63 @@ assert.equal(diffSegments(big, big, big), null, 'over the block cap → null fal
 assert.deepEqual(lineDiffCounts('a\nb\nc', 'a\nx\nc\nd'), { added: 2, deleted: 1 }, 'line counts via LCS');
 assert.deepEqual(lineDiffCounts('same', 'same'), { added: 0, deleted: 0 });
 assert.equal(lineDiffCounts(Array.from({ length: 4001 }, () => 'l').join('\n'), 'x'), null, 'over the line cap → null');
+
+// applySegment: the repros from todos/segment-apply-bugs.md, with base = main = Alpha., Omega.
+const am = 'Alpha.\n\nOmega.';
+const applyAll = (body: string, segs: Segment[]) =>
+	segs.reduce<string | null>((acc, seg) => (acc == null ? null : applySegment(acc, seg)), body);
+
+const run = diffSegments(am, am, 'Alpha.\n\nOne.\n\nTwo.\n\nThree.\n\nOmega.');
+assert.deepEqual(
+	run,
+	[
+		{ kind: 'added', theirs: 'One.', afterMain: 'Alpha.', afterTheirs: [] },
+		{ kind: 'added', theirs: 'Two.', afterMain: 'Alpha.', afterTheirs: ['One.'] },
+		{ kind: 'added', theirs: 'Three.', afterMain: 'Alpha.', afterTheirs: ['Two.', 'One.'] }
+	],
+	'an inserted run lists the earlier blocks of the run, nearest first'
+);
+assert.ok(run);
+const [one, two, three] = run;
+const inOrder = 'Alpha.\n\nOne.\n\nTwo.\n\nThree.\n\nOmega.';
+assert.equal(applyAll(am, [one, two, three]), inOrder, 'accepting a run top to bottom keeps version order');
+assert.equal(applyAll(am, [three, two, one]), inOrder, 'accepting a run bottom to top keeps version order');
+assert.equal(
+	applyAll(am, [three, one]),
+	'Alpha.\n\nOne.\n\nThree.\n\nOmega.',
+	'skipping the middle block (Three, then One) keeps version order'
+);
+assert.equal(
+	applyAll(am, [one, three]),
+	'Alpha.\n\nOne.\n\nThree.\n\nOmega.',
+	'skipping the middle block (One, then Three) keeps version order'
+);
+
+const anchorEdited = 'Alpha, edited.\n\nOmega.';
+assert.equal(applySegment(anchorEdited, one), null, 'a rewritten anchor → null, not the top of the post');
+assert.equal(
+	applySegment(anchorEdited, { kind: 'conflict', theirs: 'Theirs.', afterMain: 'Alpha.', afterTheirs: [] }),
+	null,
+	'conflict with a rewritten anchor → null'
+);
+assert.equal(
+	applySegment(am, { kind: 'added', theirs: 'Top.', afterMain: null, afterTheirs: [] }),
+	'Top.\n\nAlpha.\n\nOmega.',
+	'no anchor → inserted at the top'
+);
+
+const targetEdited = 'Alpha, rewritten by you.\n\nOmega.';
+assert.equal(applySegment(targetEdited, { kind: 'removed', yours: 'Alpha.' }), null, 'removed with a rewritten target → null');
+assert.equal(
+	applySegment(targetEdited, { kind: 'modified', yours: 'Alpha.', theirs: 'Alpha, theirs.' }),
+	null,
+	'modified with a rewritten target → null'
+);
+assert.equal(applySegment(am, { kind: 'removed', yours: 'Alpha.' }), 'Omega.', 'removed on an unchanged body');
+assert.equal(
+	applySegment(am, { kind: 'modified', yours: 'Alpha.', theirs: 'Alpha, theirs.' }),
+	'Alpha, theirs.\n\nOmega.',
+	'modified on an unchanged body'
+);
 
 console.log('segment-diff.check: ok');
