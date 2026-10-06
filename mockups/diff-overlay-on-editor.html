@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Diff overlay on the live editor · gutter trigger · post editor · cms</title>
+<style>
+	:root {
+		color-scheme: light;
+		--paper: #ffffff;
+		--bg: #f5f4f1;
+		--ink: #1a1c20;
+		--ink-2: #585c64;
+		--ink-3: #9a9ea6;
+		--line: #e4e3de;
+		--hover: #edece7;
+		--accent: #3b6fd4;
+		--accent-ink: #2d57ac;
+		--on-accent: #ffffff;
+		--ok: #2f7d4f;
+		--warn: #8a6512;
+		--danger: #c33c33;
+		--shadow: rgba(0, 0, 0, 0.18);
+		--radius: 10px;
+		--font-display: 'Iowan Old Style', Palatino, Georgia, serif;
+		--font-ui: ui-sans-serif, system-ui, -apple-system, sans-serif;
+		--font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+	}
+	@media (prefers-color-scheme: dark) {
+		:root:not([data-theme='light']) {
+			color-scheme: dark;
+			--paper: #16191f;
+			--bg: #0f1115;
+			--ink: #e4e7ec;
+			--ink-2: #9aa4b2;
+			--ink-3: #6a7484;
+			--line: #262b34;
+			--hover: #1f242c;
+			--accent: #6b9bf0;
+			--accent-ink: #93b6f7;
+			--on-accent: #0f1115;
+			--ok: #5fbd80;
+			--warn: #d9b455;
+			--danger: #ef7f74;
+			--shadow: rgba(0, 0, 0, 0.5);
+		}
+	}
+	:root[data-theme='dark'] {
+		color-scheme: dark;
+		--paper: #16191f;
+		--bg: #0f1115;
+		--ink: #e4e7ec;
+		--ink-2: #9aa4b2;
+		--ink-3: #6a7484;
+		--line: #262b34;
+		--hover: #1f242c;
+		--accent: #6b9bf0;
+		--accent-ink: #93b6f7;
+		--on-accent: #0f1115;
+		--ok: #5fbd80;
+		--warn: #d9b455;
+		--danger: #ef7f74;
+		--shadow: rgba(0, 0, 0, 0.5);
+	}
+	* { box-sizing: border-box; }
+	body {
+		background: var(--bg);
+		color: var(--ink);
+		font: 14px/1.5 var(--font-ui);
+		margin: 0;
+		padding: 28px 20px 80px;
+	}
+	.page { margin: 0 auto; max-width: 1160px; }
+	.top { align-items: baseline; display: flex; gap: 14px; margin-bottom: 6px; }
+	h1 { font-size: 19px; font-weight: 700; margin: 0; }
+	.sub { color: var(--ink-2); font-size: 13px; margin: 0 0 30px; }
+	.theme {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 7px;
+		color: var(--ink-2);
+		cursor: pointer;
+		font: inherit;
+		font-size: 11px;
+		margin-left: auto;
+		padding: 3px 9px;
+	}
+
+	section { margin: 0 0 48px; }
+	h2 {
+		border-bottom: 1px solid var(--line);
+		font-size: 12px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		margin: 0 0 14px;
+		padding-bottom: 6px;
+		text-transform: uppercase;
+	}
+	h2 .n { color: var(--accent-ink); margin-right: 6px; }
+	.note { color: var(--ink-2); font-size: 12.5px; margin: 0 0 12px; }
+	.note code, .legend code { font: 12px var(--font-mono); }
+
+	.frame {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 14px;
+		padding: 16px 18px;
+	}
+
+	.ref-head {
+		align-items: center;
+		color: var(--ink-3);
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px 10px;
+		padding: 0 0 10px;
+	}
+	.ref-path { font: 11px var(--font-mono); }
+	.seg {
+		background: var(--bg);
+		border: 1px solid var(--line);
+		border-radius: 7px;
+		display: inline-flex;
+		padding: 2px;
+	}
+	.seg button {
+		background: transparent;
+		border: none;
+		border-radius: 5px;
+		color: var(--ink-3);
+		cursor: pointer;
+		font: inherit;
+		font-size: 11px;
+		padding: 3px 9px;
+	}
+	.seg button.on { background: var(--hover); color: var(--ink); }
+	.count { color: var(--ink-3); font-size: 11px; font-variant-numeric: tabular-nums; }
+	.count b { color: var(--ink-2); font-weight: 600; }
+	.keys { color: var(--ink-3); display: flex; font-size: 11px; gap: 6px; margin-left: auto; }
+	kbd {
+		background: var(--bg);
+		border: 1px solid var(--line);
+		border-bottom-width: 2px;
+		border-radius: 4px;
+		color: var(--ink-2);
+		font: 10.5px var(--font-ui);
+		padding: 0 5px;
+	}
+
+	.legend {
+		align-items: center;
+		color: var(--ink-2);
+		display: flex;
+		flex-wrap: wrap;
+		font-size: 12.5px;
+		gap: 10px 22px;
+		margin: 0 0 14px;
+	}
+	.legend > span { align-items: center; display: inline-flex; gap: 7px; }
+	.legend .sw {
+		border-bottom: 2px solid var(--k);
+		color: var(--ink);
+		font-family: var(--font-display);
+		font-size: 15px;
+		line-height: 1.1;
+	}
+	.legend .bar { background: var(--k); border-radius: 2px; display: inline-block; height: 16px; width: 3px; }
+	.legend .tick { color: var(--ok); opacity: 0.55; }
+
+	/* the card: what changed and the two actions — margin or popover, same markup */
+	.card {
+		--k: var(--accent);
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 8px;
+		box-shadow: inset 2.5px 0 0 var(--k);
+		color: var(--ink);
+		font: 13px/1.45 var(--font-ui);
+		padding: 8px 10px 9px 12px;
+	}
+	.card.added { --k: var(--ok); }
+	.card.modified { --k: var(--accent); }
+	.card.removed { --k: var(--danger); }
+	.card.conflict { --k: var(--warn); }
+	.card.active { border-color: color-mix(in srgb, var(--k) 55%, var(--line)); box-shadow: inset 2.5px 0 0 var(--k), 0 0 0 3px color-mix(in srgb, var(--k) 12%, transparent); }
+	.card.done { opacity: 0.45; }
+	.card .head { align-items: baseline; display: flex; gap: 6px; margin-bottom: 4px; }
+	.kind {
+		color: var(--k);
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+	.kind small { color: var(--ink-3); font-weight: 600; letter-spacing: 0; text-transform: none; }
+	.card .size { color: var(--k); font-size: 11px; font-variant-numeric: tabular-nums; font-weight: 600; margin-left: auto; }
+	.card .text { color: var(--ink); margin: 0 0 7px; }
+	.card .text.theirs { font-family: var(--font-display); font-size: 14px; line-height: 1.45; }
+	.card .text.theirs b { display: block; font-weight: 600; }
+	.card .yours { color: var(--ink-3); font-size: 12px; margin: 0 0 7px; }
+	.card .yours b { color: var(--ink-2); font-weight: 600; }
+	.card .gone { border-left: 2px solid color-mix(in srgb, var(--danger) 50%, transparent); color: var(--ink-2); font-size: 12px; margin: 0 0 7px; padding-left: 8px; }
+	.card .gone div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.card .gone code { font: 11px var(--font-mono); }
+	.card pre {
+		background: #14171d;
+		border-radius: 6px;
+		color: #e4e7ec;
+		font: 11.5px/1.5 var(--font-mono);
+		margin: 0 0 7px;
+		overflow-x: auto;
+		padding: 6px 8px;
+	}
+	.card pre .l { display: block; padding-left: 12px; position: relative; }
+	.card pre .l::before { left: 0; position: absolute; }
+	.card pre .l.add { color: #5fbd80; }
+	.card pre .l.add::before { content: '+'; }
+	.card pre .l.del { color: #ef7f74; text-decoration: line-through; }
+	.card pre .l.del::before { content: '−'; text-decoration: none; }
+	.card .done-line { color: var(--ink-2); font-size: 12px; }
+	.card .done-line::before { color: var(--ok); content: '✓ '; font-weight: 700; }
+
+	.acts { display: flex; gap: 5px; }
+	.acts button {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		color: var(--ink-2);
+		cursor: pointer;
+		font: 600 11px/1 var(--font-ui);
+		padding: 5px 9px;
+	}
+	.acts button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+	.acts button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+	/* legend glyph samples (not buttons) */
+	.legend .gl { display: inline-block; flex: none; height: 16px; position: relative; width: 14px; }
+	.legend .gl.dot::before { background: var(--k); border-radius: 50%; content: ''; height: 8px; left: 3px; position: absolute; top: 4px; width: 8px; }
+	.legend .gl.bar::before { background: var(--k); border-radius: 2px; bottom: 0; content: ''; left: 5px; position: absolute; top: 0; width: 3px; }
+	.legend .gl.wedge::before { border-block: 5px solid transparent; border-left: 7px solid var(--k); content: ''; left: 3px; position: absolute; top: 3px; }
+	.legend .tick { color: var(--ok); font-weight: 700; opacity: 0.7; }
+
+	.seg-btn {
+		background: var(--bg);
+		border: 1px solid var(--line);
+		border-radius: 7px;
+		color: var(--ink-2);
+		cursor: pointer;
+		font: inherit;
+		font-size: 11px;
+		padding: 3px 9px;
+	}
+	.seg-btn:focus-visible, .seg button:focus-visible, .theme:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+	/* the workspace: the live editor, margin column on its left, where the reference pane is */
+	.inline { position: relative; }
+	#wide {
+		display: grid;
+		gap: 28px;
+		grid-template-columns: 290px minmax(0, 660px);
+		margin: 0 auto;
+		width: min(100%, 978px);
+	}
+	#wide .body { grid-column: 2; grid-row: 1; }
+	#wide .margin { grid-column: 1; grid-row: 1; min-width: 0; }
+
+	/* the editor surface: a contenteditable styled like Crepe's, not a rendering */
+	.body {
+		--code-ok: #5fbd80;
+		--code-mod: #6b9bf0;
+		--code-rm: #ef7f74;
+		caret-color: var(--accent);
+		cursor: text;
+		font-family: var(--font-display);
+		font-size: 17px;
+		line-height: 1.7;
+		min-width: 0;
+		outline: none;
+		overflow-wrap: anywhere;
+		padding-left: 22px;
+	}
+	.body > *, .body .rm > * { margin: 0 0 1.1em; }
+	.body .rm > :last-child { margin-bottom: 0; }
+	.body h3 { font-size: 1.25em; font-weight: 600; line-height: 1.3; margin-top: 0.2em; }
+	.body h4 { --gh: 1.3em; font-size: 1.05em; font-weight: 600; line-height: 1.3; }
+	.body a { color: var(--accent-ink); }
+	.body code { font: 0.85em var(--font-mono); }
+	.body p code, .body h4 code { background: var(--hover); border-radius: 4px; padding: 0.05em 0.3em; }
+	.blk { position: relative; }
+	/* focused block: the one holding the caret */
+	.body > .cur { background: color-mix(in srgb, var(--ink) 3.5%, transparent); border-radius: 4px; box-shadow: 0 0 0 5px color-mix(in srgb, var(--ink) 3.5%, transparent); }
+	.caret {
+		animation: blink 1.1s steps(1) infinite;
+		background: var(--ink);
+		display: inline-block;
+		height: 1.15em;
+		margin: 0 -1px;
+		vertical-align: -0.2em;
+		width: 2px;
+	}
+	@keyframes blink { 50% { opacity: 0; } }
+	@media (prefers-reduced-motion: reduce) { .caret { animation: none; } }
+
+	.body pre {
+		background: #14171d;
+		border: 1px solid var(--line);
+		border-radius: 8px;
+		color: #e4e7ec;
+		font: 13px/1.6 var(--font-mono);
+		overflow-x: auto;
+		padding: 12px 14px;
+		position: relative;
+	}
+	.body pre .l { display: block; }
+	.body pre .lang { color: #6a7484; font: 10.5px var(--font-ui); letter-spacing: 0.04em; position: absolute; right: 10px; top: 5px; user-select: none; }
+	.body pre.blk { overflow: visible; overflow-wrap: anywhere; white-space: pre-wrap; }
+	.body pre .ghost { border-top: 1px dashed color-mix(in srgb, var(--code-ok) 45%, transparent); color: var(--code-ok); display: block; font: 600 10.5px/1.4 var(--font-ui); margin: 2px -14px 0; padding: 2px 14px 0; user-select: none; }
+
+	/* passive marks: tint and underline in the kind colour, never a button */
+	.mk { --k: var(--accent); border-radius: 3px; }
+	.mk.modified { --k: var(--accent); }
+	.mk.conflict { --k: var(--warn); }
+	.mk.removed { --k: var(--danger); }
+	.mk.under {
+		background: color-mix(in srgb, var(--k) 7%, transparent);
+		-webkit-box-decoration-break: clone;
+		box-decoration-break: clone;
+		text-decoration: underline;
+		text-decoration-color: var(--k);
+		text-decoration-thickness: 2px;
+		text-underline-offset: 3px;
+	}
+	.mk.under.active, .mk.under.open { background: color-mix(in srgb, var(--k) 16%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--k) 16%, transparent); }
+	/* decided: no underline, a faint tick after the words */
+	.mk.done::after { color: var(--ok); content: '✓'; font: 600 0.65em var(--font-ui); margin-left: 4px; opacity: 0.5; vertical-align: 0.25em; }
+	.mk.fence { display: block; margin: 0 -14px; padding: 0 14px; }
+	.mk.fence.active, .mk.fence.open { background: rgba(107, 155, 240, 0.08); }
+	.body pre .l.mod { background: rgba(107, 155, 240, 0.14); box-shadow: -14px 0 0 rgba(107, 155, 240, 0.14), inset 3px 0 0 var(--code-mod); margin: 0 -14px; padding: 0 14px; }
+	.body pre .l.rm { background: rgba(239, 127, 116, 0.14); box-shadow: inset 3px 0 0 var(--code-rm); margin: 0 -14px; padding: 0 14px; }
+	.mk.rm { background: color-mix(in srgb, var(--danger) 5%, transparent); border-radius: 4px; box-shadow: 0 0 0 5px color-mix(in srgb, var(--danger) 5%, transparent); display: block; margin: 0 0 1.1em; position: relative; }
+	.mk.rm > p { text-decoration: underline; text-decoration-color: var(--danger); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+	.mk.rm.active, .mk.rm.open { background: color-mix(in srgb, var(--danger) 11%, transparent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--danger) 11%, transparent); }
+	.ins-line {
+		--k: var(--ok);
+		align-items: center;
+		color: var(--k);
+		display: flex;
+		font: 600 11px/1 var(--font-ui);
+		font-variant-numeric: tabular-nums;
+		gap: 7px;
+		margin: -0.5em 0 0.7em;
+		min-height: 24px;
+		user-select: none;
+	}
+	.ins-line::after { border-top: 1px dashed color-mix(in srgb, var(--k) 45%, transparent); content: ''; flex: 1; }
+	.ins-line .cnt { margin-left: 6px; }
+	.ins-line.end { margin-bottom: 0.2em; margin-top: 0.4em; }
+	.ins-line.active, .ins-line.open { background: color-mix(in srgb, var(--k) 8%, transparent); }
+
+	/* the trigger: a glyph in the block's left padding — the only button on the page body */
+	.g {
+		--k: var(--accent);
+		appearance: none;
+		background: none;
+		border: none;
+		border-radius: 6px;
+		color: var(--k);
+		cursor: pointer;
+		font: inherit;
+		height: var(--gh, 1.7em);
+		left: -22px;
+		padding: 0;
+		position: absolute;
+		top: 0;
+		user-select: none;
+		width: 22px;
+	}
+	.g.modified { --k: var(--accent); }
+	.g.conflict { --k: var(--warn); }
+	.g.removed { --k: var(--danger); }
+	.g.added { --k: var(--ok); }
+	.g::before { content: ''; left: 50%; position: absolute; top: 50%; transform: translate(-50%, -50%); }
+	.g.dot::before { background: var(--k); border-radius: 50%; height: 8px; width: 8px; }
+	.g.bar { height: 100%; }
+	.g.bar::before { background: var(--k); border-radius: 2px; bottom: 5px; height: auto; top: 5px; transform: translateX(-50%); width: 3px; }
+	.g.bar.rm::before { top: 20px; }
+	.g.bar .n { font: 700 10.5px/1 var(--font-ui); font-variant-numeric: tabular-nums; left: 2px; position: absolute; top: 5px; white-space: nowrap; }
+	.g.wedge { height: 100%; }
+	.g.wedge::before { border-block: 5px solid transparent; border-left: 7px solid var(--k); height: 0; left: 8px; transform: translateY(-50%); width: 0; }
+	.g:hover, .g.active, .g.open { background: color-mix(in srgb, var(--k) 13%, transparent); }
+	.g.open { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--k) 65%, transparent); }
+	.g.open.dot::before { height: 10px; width: 10px; }
+	.g:focus-visible { outline: 2px solid var(--k); outline-offset: -1px; }
+	.g.done::before { background: none; border-radius: 0; color: var(--ok); content: '✓'; font: 700 12px/1 var(--font-ui); height: auto; opacity: 0.6; width: auto; }
+
+	/* margin: one open card per mark, top aligned to the mark via anchor positioning */
+	.margin .card.anch { position: absolute; left: 0; top: calc(anchor(top) - 6px + var(--push, 0px)); width: 290px; }
+	.margin .card.anch:not(.open) { display: none; }
+	.margin .unplaced { position: absolute; left: 0; top: var(--u-top, 100%); width: 290px; }
+	@supports not (anchor-name: --x) {
+		.margin .card.anch { margin-bottom: 8px; position: static; width: auto; }
+		.margin .unplaced { position: static; width: auto; }
+		.margin .fallback-note { display: block; }
+	}
+	.fallback-note { color: var(--warn); display: none; font-size: 11px; margin-bottom: 8px; }
+
+	/* unplaced: segments whose anchor text was rewritten */
+	.unplaced { border-top: 1px dashed var(--line); padding-top: 10px; }
+	.u-head { color: var(--ink-2); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; margin-bottom: 7px; text-transform: uppercase; }
+	.u-head .n { color: var(--warn); margin-left: 4px; }
+	.u-why { color: var(--warn); font-size: 12px; margin: 0 0 6px; }
+	.u-why::before { content: '⚠ '; }
+	.unplaced .card { --k: var(--ink-3); }
+	#narrow > .unplaced { margin: 22px auto 0; max-width: 420px; padding-left: 22px; }
+
+	/* popover: the same card, anchored to the mark, manual so typing never dismisses it */
+	.card[popover] {
+		--pw: min(360px, calc(100vw - 24px));
+		border: 1px solid var(--line);
+		box-shadow: inset 2.5px 0 0 var(--k), 0 10px 30px var(--shadow);
+		inset: auto;
+		left: clamp(12px, anchor(left), calc(100vw - var(--pw) - 12px));
+		margin: 6px 0 0;
+		padding: 8px 10px 9px 12px;
+		position: fixed;
+		position-try-fallbacks: flip-block;
+		top: anchor(bottom);
+		width: var(--pw);
+	}
+	.card[popover]::backdrop { background: transparent; }
+	.close {
+		background: none;
+		border: none;
+		color: var(--ink-3);
+		cursor: pointer;
+		font: 600 12px/1 var(--font-ui);
+		margin-left: auto;
+		padding: 2px 4px;
+	}
+	.card .size + .close { margin-left: 6px; }
+	.close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+	@supports not (anchor-name: --x) {
+		.card[popover] {
+			border-radius: 14px 14px 0 0;
+			bottom: 0;
+			left: 0;
+			margin: 0;
+			right: 0;
+			top: auto;
+			width: auto;
+		}
+	}
+
+	/* narrow desktop */
+	.narrow { margin: 0 auto; max-width: 860px; }
+	.narrow .body { max-width: 700px; margin: 0 auto; }
+
+	/* phone */
+	.phone {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 22px;
+		box-shadow: 0 8px 28px var(--shadow);
+		margin: 0 auto;
+		max-width: 100%;
+		overflow: hidden;
+		position: relative;
+		width: 390px;
+	}
+	.phone-in { padding: 14px 14px 24px 8px; }
+	.phone .body { font-size: 16px; line-height: 1.65; }
+	.phone .static-pop { margin: 8px 0 18px -22px; position: relative; }
+	.phone .static-pop .card { box-shadow: inset 2.5px 0 0 var(--k), 0 10px 30px var(--shadow); }
+	.phone .static-pop::before {
+		background: var(--paper);
+		border-left: 1px solid var(--line);
+		border-top: 1px solid var(--line);
+		content: '';
+		height: 10px;
+		left: 30px;
+		position: absolute;
+		top: -6px;
+		transform: rotate(45deg);
+		width: 10px;
+	}
+	.phone .acts button { flex: 1; padding: 8px 10px; }
+	.phone .ref-head .keys { display: none; }
+
+	.narrow-only { display: none; }
+	@media (max-width: 959px) {
+		#sec-wide { display: none; }
+		.narrow-only { display: block; }
+	}
+	@media (max-width: 520px) {
+		body { padding: 20px 16px 60px; }
+		.frame { padding: 12px 12px; }
+		.ref-head .keys { margin-left: 0; width: 100%; }
+		#narrow > .unplaced { padding-left: 0; }
+	}
+
+</style>
+</head>
+<body>
+<div class="page">
+	<div class="top">
+		<h1>Diff overlay on the live editor</h1>
+		<button class="theme" type="button" onclick="const r=document.documentElement;const d=r.dataset.theme==='dark'||(!r.dataset.theme&&matchMedia('(prefers-color-scheme: dark)').matches);r.dataset.theme=d?'light':'dark'">light / dark</button>
+	</div>
+	<p class="sub">the editor stays live · site's changes are marks on top of my text · the gutter glyph opens the change, the words only place the caret</p>
+
+	<section>
+		<h2><span class="n">1</span>Two parts: a passive mark, an active glyph</h2>
+		<p class="note">The body below is a real <code>contenteditable</code>: click anywhere, including inside marked words, and the caret goes there. The marked words carry only a passive <b>underline and faint tint</b> in the kind colour; they are not buttons. The trigger is a <b>glyph in the left padding</b> of the block, a real <code>&lt;button&gt;</code>: a <b>dot</b> when words differ, a <b>bar</b> for lines or blocks (the removal bar carries its count), a <b>wedge</b> where content exists only in site. Marks are ProseMirror decorations, so they move with the text while I type. Taking theirs is one transaction on the range, so <kbd>⌘Z</kbd> undoes it and the caret stays.</p>
+		<div class="legend" aria-label="Legend">
+			<span><span class="gl dot" style="--k: var(--accent)"></span><span class="sw" style="--k: var(--accent)">modified</span>words differ</span>
+			<span><span class="gl dot" style="--k: var(--warn)"></span><span class="sw" style="--k: var(--warn)">both changed</span>we both edited the base</span>
+			<span><span class="gl bar" style="--k: var(--accent)"></span>lines or blocks differ</span>
+			<span><span class="gl bar" style="--k: var(--danger)"></span>site removes the blocks</span>
+			<span><span class="gl wedge" style="--k: var(--ok)"></span>only in site</span>
+			<span><span class="tick">✓</span>decided</span>
+		</div>
+		<div class="frame" style="padding: 10px 14px"><div class="ref-head">
+	<span class="ref-path">site</span>
+	<span class="count"><b>8</b> changes · <b>1</b> decided · <b>1</b> unplaced</span>
+	<span class="seg"><button type="button">Editor</button><button type="button" class="on">Editor + overlay</button></span>
+	<span class="keys"><kbd>F8</kbd> next mark <kbd>⇧</kbd><kbd>F8</kbd> previous <kbd>Esc</kbd> close</span>
+</div></div>
+	</section>
+
+	<section id="sec-wide">
+		<h2><span class="n">2</span>1200px — glyph in the gutter, cards in the left margin</h2>
+		<p class="note">From 960px up the cards live in the margin column beside the editor. Only change 4 is open; every other change is collapsed to its glyph. A card's top is pinned to its mark with CSS anchor positioning (<code>anchor-name</code> comes from the decoration's attrs), and the measured pass pushes open cards apart, so use <b>expand all</b> to see all seven cards stack without overlapping. The caret sits inside the underlined words of change 4 and the card stays open while I type. The paragraph above it was rewritten, so site's version of it has no place to sit: it goes to the unplaced list at the bottom of the margin.</p>
+		<div class="frame">
+			<div class="ref-head">
+	<span class="ref-path">site</span>
+	<span class="count"><b>8</b> changes · <b>1</b> decided · <b>1</b> unplaced</span>
+	<span class="seg"><button type="button">Editor</button><button type="button" class="on">Editor + overlay</button></span>
+	<button class="seg-btn" id="expand" type="button">expand all</button><span class="keys"><kbd>F8</kbd> next mark <kbd>⇧</kbd><kbd>F8</kbd> previous <kbd>Esc</kbd> close</span>
+</div>
+			<div class="inline" id="wide">
+				<article class="body" contenteditable="true" spellcheck="false" role="textbox" aria-multiline="true" aria-label="Post body, with 7 changes from site marked">
+<h3>Setup</h3>
+
+<p class="blk"><button class="g dot modified done" type="button" contenteditable="false" data-id="1" aria-controls="k1" aria-expanded="false" aria-label="Decided: took theirs from site. Show change"></button><span class="mk done modified" data-id="1" style="anchor-name: --m1">Clone the template and point the serve config at your tailnet domain. The script below pulls the Dockerfile, compose file and serve config and rewrites localhost to your MagicDNS name.</span></p>
+
+<pre class="blk code"><button class="g bar modified" type="button" contenteditable="false" data-id="2" aria-controls="k2" aria-expanded="false" aria-label="Modified in site: this code block, 1 line removed, 1 changed, 1 added. Open change"></button><span class="lang" contenteditable="false">sh</span><span class="l"># Get template files</span><span class="mk fence modified" data-id="2" style="anchor-name: --m2"><span class="l rm">TAILNET=$(tailscale status --json | jq -r '.MagicDNSSuffix')</span><span class="l">TEMPLATE="https://raw.githubusercontent.com/mrgnw/svelte-docker-tailscale/main"</span><span class="l">curl -O "$TEMPLATE/Dockerfile" &amp; \</span><span class="l">curl -O "$TEMPLATE/compose.yml" &amp; \</span><span class="l mod">curl -O "$TEMPLATE/serve.json" &amp; wait</span><span class="l"></span><span class="l"># Set up Tailscale config</span><span class="l">echo "\n/tailscale" &gt;&gt; .gitignore</span><span class="ghost" contenteditable="false" aria-hidden="true">+1 line</span></span></pre>
+
+<h4 class="blk"><button class="g dot modified h4" type="button" contenteditable="false" data-id="3" aria-controls="k3" aria-expanded="false" aria-label="Modified in site: this heading became a paragraph. Open change"></button><span class="mk under modified" data-id="3" style="anchor-name: --m3">2. Create <code>serve.json</code></span></h4>
+
+<p class="blk">Create a reusable, tagged auth key in the <a href="#" onclick="return false">Tailscale admin console</a>.</p>
+
+<p class="blk cur"><button class="g dot conflict open" type="button" contenteditable="false" data-id="4" aria-controls="k4" aria-expanded="true" aria-label="Both changed: you and site edited this paragraph. Open change"></button><span class="mk under conflict open" data-id="4" style="anchor-name: --m4">Only two<span class="caret" contenteditable="false" aria-hidden="true"></span> variables are required:</span></p>
+
+
+<pre class="blk code"><span class="lang" contenteditable="false">sh</span><span class="l">TS_AUTHKEY=</span><span class="l">TS_PORT=4177 # this needs to be unique for each container</span></pre>
+
+<div class="blk ins-line" contenteditable="false" data-id="5" style="anchor-name: --m5"><button class="g wedge added" type="button" contenteditable="false" data-id="5" aria-controls="k5" aria-expanded="false" aria-label="Added in site: 1 paragraph, 19 words, after this code block. Open change"></button><span class="cnt">+1 ¶ · 19 words</span></div>
+
+<div class="mk rm removed" data-id="6" style="anchor-name: --m6"><button class="g bar rm removed" type="button" contenteditable="false" data-id="6" aria-controls="k6" aria-expanded="false" aria-label="Removed in site: the next 2 blocks, a paragraph of 17 words and a 2-line code block. Open change"><span class="n">−2</span></button><p>If you did the above in your terminal, you can add them to your .env with this:</p>
+<pre class="code"><span class="lang" contenteditable="false">sh</span><span class="l">echo "TS_AUTHKEY=$TS_AUTHKEY" &gt;&gt; .env</span><span class="l">echo "TS_PORT=$TS_PORT" &gt;&gt; .env</span></pre></div>
+
+<div class="blk ins-line end" contenteditable="false" data-id="7" style="anchor-name: --m7"><button class="g wedge added" type="button" contenteditable="false" data-id="7" aria-controls="k7" aria-expanded="false" aria-label="Added in site: a section of 3 blocks, 21 words, at the end. Open change"></button><span class="cnt">+3 blocks · 21 words</span></div>
+</article>
+				<aside class="margin" aria-label="Changes from site">
+					<p class="fallback-note">no anchor positioning in this browser — cards flow in order instead of aligning to their marks</p>
+					<div class="card anch modified done" id="k1" data-id="1" style="position-anchor: --m1"><div class="head"><span class="kind">modified</span><button class="close" type="button" data-close aria-label="Close">✕</button></div><div class="done-line">took theirs · <kbd>⌘Z</kbd> undoes it</div></div>
+					<div class="card anch modified" id="k2" data-id="2" style="position-anchor: --m2"><div class="head"><span class="kind">modified <small>· code</small></span><span class="size">−2 +2 lines</span><button class="close" type="button" data-close aria-label="Close">✕</button></div><pre><span class="l del">TAILNET=$(tailscale status --json | jq -r '.MagicDNSSuffix')</span><span class="l del">curl -O "$TEMPLATE/serve.json" &amp; wait</span><span class="l add">curl -O "$TEMPLATE/tailscale_serve.json" &amp; wait</span><span class="l add">echo "\ntailscale_serve.json" &gt;&gt; .gitignore</span></pre><div class="acts"><button class="primary" type="button">take theirs</button><button type="button">keep mine</button></div></div>
+					<div class="card anch modified" id="k3" data-id="3" style="position-anchor: --m3"><div class="head"><span class="kind">modified <small>· heading → paragraph</small></span><button class="close" type="button" data-close aria-label="Close">✕</button></div><p class="text theirs">Tailscale needs <code>network_mode: service:tailscale</code> on the app container so the sidecar owns the network namespace.</p><div class="acts"><button class="primary" type="button">take theirs</button><button type="button">keep mine</button></div></div>
+					<div class="card anch conflict open" id="k4" data-id="4" style="position-anchor: --m4"><div class="head"><span class="kind">both changed</span><button class="close" type="button" data-close aria-label="Close">✕</button></div><p class="text theirs">You need exactly two environment variables:</p><div class="yours"><b>base</b> · Two variables:</div><div class="acts"><button class="primary" type="button">insert theirs</button><button type="button">keep mine</button></div></div>
+					<div class="card anch added" id="k5" data-id="5" style="position-anchor: --m5"><div class="head"><span class="kind">added</span><span class="size">+1 ¶ · 19 words</span><button class="close" type="button" data-close aria-label="Close">✕</button></div><p class="text theirs"><code>TS_PORT</code> has to be unique per container — two sidecars on the same port fight over the tailnet node name.</p><div class="acts"><button class="primary" type="button">accept</button><button type="button">skip</button></div></div>
+					<div class="card anch removed" id="k6" data-id="6" style="position-anchor: --m6"><div class="head"><span class="kind">removed</span><span class="size">−2 blocks · 17 words</span><button class="close" type="button" data-close aria-label="Close">✕</button></div><div class="gone"><div>¶ If you did the above in your terminal…</div><div><code>sh</code> block, 2 lines</div></div><div class="acts"><button class="primary" type="button">remove both</button><button type="button">keep both</button></div></div>
+					<div class="card anch added" id="k7" data-id="7" style="position-anchor: --m7"><div class="head"><span class="kind">added <small>· section</small></span><span class="size">+3 blocks · 21 words</span><button class="close" type="button" data-close aria-label="Close">✕</button></div><p class="text theirs"><b>3. Start it</b>Run <code>docker compose up -d</code>; the sidecar joins the tailnet as <code>$TS_HOSTNAME</code> and serves the app over HTTPS.</p><pre><span class="l">docker compose up -d</span></pre><div class="acts"><button class="primary" type="button">accept all</button><button type="button">skip</button></div></div>
+					<div class="unplaced" role="group" aria-labelledby="u-wide-h">
+	<div class="u-head" id="u-wide-h">Unplaced <span class="n">1</span></div>
+	<div class="card modified">
+		<div class="head"><span class="kind">modified <small>· paragraph</small></span></div>
+		<p class="u-why">can't place, the text around it changed</p>
+		<p class="text theirs">Get an auth key from the Tailscale admin console and tick <b style="display:inline">Reusable</b>.</p>
+		<div class="yours"><b>anchored to</b> · Get an auth key from the Tailscale admin console</div>
+		<div class="acts"><button class="primary" type="button" data-copy>copy theirs</button><button type="button">dismiss</button></div>
+	</div>
+</div>
+				</aside>
+			</div>
+		</div>
+	</section>
+	<p class="note narrow-only">Section 2 shows the margin layout and appears at 960px and wider. Below that the same glyphs open popovers: see sections 3 and 4.</p>
+
+	<section>
+		<h2><span class="n">3</span>~900px — no margin, the glyph opens a popover</h2>
+		<p class="note">Under 960px there is no room for the column. The glyph is <code>&lt;button popovertarget&gt;</code> and the card is the same markup with <code>popover="manual"</code>, so typing, clicking into the text and scrolling do not dismiss it. The close button closes it, and so does <kbd>Esc</kbd>; the popover sits below the mark it belongs to and flips above at the viewport edge. Change 4 is open here with the caret in its words. Unplaced changes move below the body.</p>
+		<div class="frame narrow" id="narrow">
+			<div class="ref-head">
+	<span class="ref-path">site</span>
+	<span class="count"><b>8</b> changes · <b>1</b> decided · <b>1</b> unplaced</span>
+	<span class="seg"><button type="button">Editor</button><button type="button" class="on">Editor + overlay</button></span>
+	<span class="keys"><kbd>F8</kbd> next mark <kbd>⇧</kbd><kbd>F8</kbd> previous <kbd>Esc</kbd> close</span>
+</div>
+			<div class="inline">
+				<article class="body" contenteditable="true" spellcheck="false" role="textbox" aria-multiline="true" aria-label="Post body, with 7 changes from site marked">
+<h3>Setup</h3>
+
+<p class="blk"><button class="g dot modified done" type="button" contenteditable="false" data-id="1" popovertarget="p1" aria-label="Decided: took theirs from site. Show change"></button><span class="mk done modified" data-id="1" style="anchor-name: --n1">Clone the template and point the serve config at your tailnet domain. The script below pulls the Dockerfile, compose file and serve config and rewrites localhost to your MagicDNS name.</span></p>
+
+<pre class="blk code"><button class="g bar modified" type="button" contenteditable="false" data-id="2" popovertarget="p2" aria-label="Modified in site: this code block, 1 line removed, 1 changed, 1 added. Open change"></button><span class="lang" contenteditable="false">sh</span><span class="l"># Get template files</span><span class="mk fence modified" data-id="2" style="anchor-name: --n2"><span class="l rm">TAILNET=$(tailscale status --json | jq -r '.MagicDNSSuffix')</span><span class="l">TEMPLATE="https://raw.githubusercontent.com/mrgnw/svelte-docker-tailscale/main"</span><span class="l">curl -O "$TEMPLATE/Dockerfile" &amp; \</span><span class="l">curl -O "$TEMPLATE/compose.yml" &amp; \</span><span class="l mod">curl -O "$TEMPLATE/serve.json" &amp; wait</span><span class="l"></span><span class="l"># Set up Tailscale config</span><span class="l">echo "\n/tailscale" &gt;&gt; .gitignore</span><span class="ghost" contenteditable="false" aria-hidden="true">+1 line</span></span></pre>
+
+<h4 class="blk"><button class="g dot modified h4" type="button" contenteditable="false" data-id="3" popovertarget="p3" aria-label="Modified in site: this heading became a paragraph. Open change"></button><span class="mk under modified" data-id="3" style="anchor-name: --n3">2. Create <code>serve.json</code></span></h4>
+
+<p class="blk">Create a reusable, tagged auth key in the <a href="#" onclick="return false">Tailscale admin console</a>.</p>
+
+<p class="blk cur"><button class="g dot conflict open" type="button" contenteditable="false" data-id="4" popovertarget="p4" aria-label="Both changed: you and site edited this paragraph. Open change"></button><span class="mk under conflict open" data-id="4" style="anchor-name: --n4">Only two<span class="caret" contenteditable="false" aria-hidden="true"></span> variables are required:</span></p>
+
+
+<pre class="blk code"><span class="lang" contenteditable="false">sh</span><span class="l">TS_AUTHKEY=</span><span class="l">TS_PORT=4177 # this needs to be unique for each container</span></pre>
+
+<div class="blk ins-line" contenteditable="false" data-id="5" style="anchor-name: --n5"><button class="g wedge added" type="button" contenteditable="false" data-id="5" popovertarget="p5" aria-label="Added in site: 1 paragraph, 19 words, after this code block. Open change"></button><span class="cnt">+1 ¶ · 19 words</span></div>
+
+<div class="mk rm removed" data-id="6" style="anchor-name: --n6"><button class="g bar rm removed" type="button" contenteditable="false" data-id="6" popovertarget="p6" aria-label="Removed in site: the next 2 blocks, a paragraph of 17 words and a 2-line code block. Open change"><span class="n">−2</span></button><p>If you did the above in your terminal, you can add them to your .env with this:</p>
+<pre class="code"><span class="lang" contenteditable="false">sh</span><span class="l">echo "TS_AUTHKEY=$TS_AUTHKEY" &gt;&gt; .env</span><span class="l">echo "TS_PORT=$TS_PORT" &gt;&gt; .env</span></pre></div>
+
+<div class="blk ins-line end" contenteditable="false" data-id="7" style="anchor-name: --n7"><button class="g wedge added" type="button" contenteditable="false" data-id="7" popovertarget="p7" aria-label="Added in site: a section of 3 blocks, 21 words, at the end. Open change"></button><span class="cnt">+3 blocks · 21 words</span></div>
+</article>
+			</div>
+			<div class="unplaced" role="group" aria-labelledby="u-narrow-h">
+	<div class="u-head" id="u-narrow-h">Unplaced <span class="n">1</span></div>
+	<div class="card modified">
+		<div class="head"><span class="kind">modified <small>· paragraph</small></span></div>
+		<p class="u-why">can't place, the text around it changed</p>
+		<p class="text theirs">Get an auth key from the Tailscale admin console and tick <b style="display:inline">Reusable</b>.</p>
+		<div class="yours"><b>anchored to</b> · Get an auth key from the Tailscale admin console</div>
+		<div class="acts"><button class="primary" type="button" data-copy>copy theirs</button><button type="button">dismiss</button></div>
+	</div>
+</div>
+			<div class="card modified done" id="p1" popover="manual" style="position-anchor: --n1"><div class="head"><span class="kind">modified</span><button class="close" type="button" popovertarget="p1" popovertargetaction="hide" aria-label="Close">✕</button></div><div class="done-line">took theirs · <kbd>⌘Z</kbd> undoes it</div></div>
+			<div class="card modified" id="p2" popover="manual" style="position-anchor: --n2"><div class="head"><span class="kind">modified <small>· code</small></span><span class="size">−2 +2 lines</span><button class="close" type="button" popovertarget="p2" popovertargetaction="hide" aria-label="Close">✕</button></div><pre><span class="l del">TAILNET=$(tailscale status --json | jq -r '.MagicDNSSuffix')</span><span class="l del">curl -O "$TEMPLATE/serve.json" &amp; wait</span><span class="l add">curl -O "$TEMPLATE/tailscale_serve.json" &amp; wait</span><span class="l add">echo "\ntailscale_serve.json" &gt;&gt; .gitignore</span></pre><div class="acts"><button class="primary" type="button">take theirs</button><button type="button">keep mine</button></div></div>
+			<div class="card modified" id="p3" popover="manual" style="position-anchor: --n3"><div class="head"><span class="kind">modified <small>· heading → paragraph</small></span><button class="close" type="button" popovertarget="p3" popovertargetaction="hide" aria-label="Close">✕</button></div><p class="text theirs">Tailscale needs <code>network_mode: service:tailscale</code> on the app container so the sidecar owns the network namespace.</p><div class="acts"><button class="primary" type="button">take theirs</button><button type="button">keep mine</button></div></div>
+			<div class="card conflict" id="p4" popover="manual" style="position-anchor: --n4"><div class="head"><span class="kind">both changed</span><button class="close" type="button" popovertarget="p4" popovertargetaction="hide" aria-label="Close">✕</button></div><p class="text theirs">You need exactly two environment variables:</p><div class="yours"><b>base</b> · Two variables:</div><div class="acts"><button class="primary" type="button">insert theirs</button><button type="button">keep mine</button></div></div>
+			<div class="card added" id="p5" popover="manual" style="position-anchor: --n5"><div class="head"><span class="kind">added</span><span class="size">+1 ¶ · 19 words</span><button class="close" type="button" popovertarget="p5" popovertargetaction="hide" aria-label="Close">✕</button></div><p class="text theirs"><code>TS_PORT</code> has to be unique per container — two sidecars on the same port fight over the tailnet node name.</p><div class="acts"><button class="primary" type="button">accept</button><button type="button">skip</button></div></div>
+			<div class="card removed" id="p6" popover="manual" style="position-anchor: --n6"><div class="head"><span class="kind">removed</span><span class="size">−2 blocks · 17 words</span><button class="close" type="button" popovertarget="p6" popovertargetaction="hide" aria-label="Close">✕</button></div><div class="gone"><div>¶ If you did the above in your terminal…</div><div><code>sh</code> block, 2 lines</div></div><div class="acts"><button class="primary" type="button">remove both</button><button type="button">keep both</button></div></div>
+			<div class="card added" id="p7" popover="manual" style="position-anchor: --n7"><div class="head"><span class="kind">added <small>· section</small></span><span class="size">+3 blocks · 21 words</span><button class="close" type="button" popovertarget="p7" popovertargetaction="hide" aria-label="Close">✕</button></div><p class="text theirs"><b>3. Start it</b>Run <code>docker compose up -d</code>; the sidecar joins the tailnet as <code>$TS_HOSTNAME</code> and serves the app over HTTPS.</p><pre><span class="l">docker compose up -d</span></pre><div class="acts"><button class="primary" type="button">accept all</button><button type="button">skip</button></div></div>
+		</div>
+	</section>
+
+	<section>
+		<h2><span class="n">4</span>390px — same glyph, same popover</h2>
+		<p class="note">On a phone the glyph is the only chrome besides the underline, and its hit area is the full 22px gutter width by one line. The popover is the card with full-width actions. It is shown here as a static render below the block so it stays inside the frame; the real one is in the top layer, anchored the same way, and falls back to a bottom sheet without anchor positioning.</p>
+		<div class="phone">
+			<div class="phone-in">
+				<div class="ref-head" style="padding-left: 8px">
+					<span class="ref-path">site</span>
+					<span class="count"><b>8</b> · <b>1</b> decided · <b>1</b> unplaced</span>
+					<span class="seg" style="margin-left:auto"><button type="button">Editor</button><button type="button" class="on">+ overlay</button></span>
+				</div>
+				<div class="inline">
+					<article class="body" contenteditable="true" spellcheck="false" role="textbox" aria-multiline="true" aria-label="Post body, excerpt">
+
+<h4 class="blk"><button class="g dot modified h4" type="button" contenteditable="false" data-id="3" aria-expanded="false" aria-label="Modified in site: this heading became a paragraph. Open change"></button><span class="mk under modified" data-id="3" style="anchor-name: --f3">2. Create <code>serve.json</code></span></h4>
+
+<p class="blk">Create a reusable, tagged auth key in the <a href="#" onclick="return false">Tailscale admin console</a>.</p>
+
+<p class="blk cur"><button class="g dot conflict open" type="button" contenteditable="false" data-id="4" aria-expanded="true" aria-label="Both changed: you and site edited this paragraph. Open change"></button><span class="mk under conflict open" data-id="4" style="anchor-name: --f4">Only two<span class="caret" contenteditable="false" aria-hidden="true"></span> variables are required:</span></p>
+<div class="static-pop" contenteditable="false">
+	<div class="card conflict">
+		<div class="head"><span class="kind">both changed</span><button class="close" type="button" aria-label="Close">✕</button></div>
+		<p class="text theirs">You need exactly two environment variables:</p>
+		<div class="yours"><b>base</b> · Two variables:</div>
+		<div class="acts"><button class="primary" type="button">insert theirs</button><button type="button">keep mine</button></div>
+	</div>
+</div>
+
+<pre class="blk code"><span class="lang" contenteditable="false">sh</span><span class="l">TS_AUTHKEY=</span><span class="l">TS_PORT=4177 # this needs to be unique for each container</span></pre>
+
+<div class="blk ins-line" contenteditable="false" data-id="5" style="anchor-name: --f5"><button class="g wedge added" type="button" contenteditable="false" data-id="5" aria-expanded="false" aria-label="Added in site: 1 paragraph, 19 words, after this code block. Open change"></button><span class="cnt">+1 ¶ · 19 words</span></div>
+
+<div class="mk rm removed" data-id="6" style="anchor-name: --f6"><button class="g bar rm removed" type="button" contenteditable="false" data-id="6" aria-expanded="false" aria-label="Removed in site: the next 2 blocks, a paragraph of 17 words and a 2-line code block. Open change"><span class="n">−2</span></button><p>If you did the above in your terminal, you can add them to your .env with this:</p>
+<pre class="code"><span class="lang" contenteditable="false">sh</span><span class="l">echo "TS_AUTHKEY=$TS_AUTHKEY" &gt;&gt; .env</span><span class="l">echo "TS_PORT=$TS_PORT" &gt;&gt; .env</span></pre></div>
+
+<div class="blk ins-line end" contenteditable="false" data-id="7" style="anchor-name: --f7"><button class="g wedge added" type="button" contenteditable="false" data-id="7" aria-expanded="false" aria-label="Added in site: a section of 3 blocks, 21 words, at the end. Open change"></button><span class="cnt">+3 blocks · 21 words</span></div>
+</article>
+				</div>
+			</div>
+		</div>
+	</section>
+</div>
+<script>
+	if (location.hash === '#dark' || location.hash === '#light') document.documentElement.dataset.theme = location.hash.slice(1);
+
+	let ready = false;
+	const wide = document.getElementById('wide');
+	const narrow = document.getElementById('narrow');
+
+	// the glyph must not steal the caret: mousedown on it keeps the editor selection (in the app, same preventDefault)
+	for (const g of document.querySelectorAll('.g')) g.addEventListener('mousedown', (e) => e.preventDefault());
+
+	/* wide: margin cards */
+	const pushDown = () => {
+		if (!wide || !wide.offsetParent) return;
+		const top0 = wide.getBoundingClientRect().top;
+		let floor = 0;
+		for (const card of wide.querySelectorAll('.margin .card.anch.open')) {
+			card.style.setProperty('--push', '0px');
+			const r = card.getBoundingClientRect();
+			const push = Math.max(0, floor - r.top);
+			card.style.setProperty('--push', `${push}px`);
+			floor = r.top + push + r.height + 8;
+		}
+		// unplaced group: bottom of the margin, never above the last open card
+		const margin = wide.querySelector('.margin');
+		const un = wide.querySelector('.unplaced');
+		const bodyH = wide.querySelector('.body').offsetHeight;
+		const u = Math.max(floor - top0 + 12, bodyH - un.offsetHeight);
+		un.style.setProperty('--u-top', `${u}px`);
+		margin.style.minHeight = `${u + un.offsetHeight}px`;
+	};
+	const setActive = (id) => {
+		for (const el of wide.querySelectorAll('[data-id]')) el.classList.toggle('active', el.dataset.id === id);
+	};
+	const setOpen = (id, on) => {
+		for (const el of wide.querySelectorAll(`.g[data-id="${id}"], .mk[data-id="${id}"], .ins-line[data-id="${id}"]`)) el.classList.toggle('open', on);
+		wide.querySelector(`.g[data-id="${id}"]`).setAttribute('aria-expanded', String(on));
+		wide.querySelector(`#k${id}`).classList.toggle('open', on);
+	};
+	if (wide) {
+		for (const g of wide.querySelectorAll('.g')) {
+			g.addEventListener('click', () => {
+				const card = wide.querySelector(`#k${g.dataset.id}`);
+				const on = !card.classList.contains('open');
+				setOpen(g.dataset.id, on);
+				pushDown();
+				if (on) card.querySelector('.acts button')?.focus();
+			});
+			g.addEventListener('focus', () => setActive(g.dataset.id));
+			g.addEventListener('mouseenter', () => setActive(g.dataset.id));
+		}
+		for (const card of wide.querySelectorAll('.card.anch')) {
+			card.addEventListener('focusin', () => setActive(card.dataset.id));
+			card.addEventListener('mouseenter', () => setActive(card.dataset.id));
+			card.querySelector('[data-close]').addEventListener('click', () => {
+				setOpen(card.dataset.id, false);
+				pushDown();
+				wide.querySelector(`.g[data-id="${card.dataset.id}"]`).focus();
+			});
+		}
+		const expand = document.getElementById('expand');
+		expand.addEventListener('click', () => {
+			const all = expand.dataset.all !== 'true';
+			expand.dataset.all = String(all);
+			expand.textContent = all ? 'collapse all' : 'expand all';
+			for (const g of wide.querySelectorAll('.g')) setOpen(g.dataset.id, all || g.dataset.id === '4');
+			pushDown();
+		});
+		if (CSS.supports('anchor-name: --x')) {
+			pushDown();
+			addEventListener('resize', pushDown);
+			document.fonts?.ready.then(pushDown);
+		}
+	}
+
+	/* narrow: manual popovers, mirror open state onto the glyph */
+	document.addEventListener('toggle', (e) => {
+		const pop = e.target;
+		if (!pop.matches?.('.card[popover]')) return;
+		const on = e.newState === 'open';
+		for (const el of narrow.querySelectorAll(`[data-id="${pop.id.slice(1)}"]`)) if (el.matches('.g, .mk, .ins-line')) el.classList.toggle('open', on);
+		if (on && ready) pop.querySelector('.acts button')?.focus();
+	}, true);
+
+	/* next / previous mark: F8 / Shift+F8 opens that mark's card (one open at a time) */
+	const jump = (dir) => {
+		const scope = wide?.offsetParent ? wide : narrow;
+		const glyphs = [...scope.querySelectorAll('.body .g')];
+		const cur = glyphs.findIndex((g) => g.classList.contains('open'));
+		const next = glyphs[(cur + dir + glyphs.length) % glyphs.length];
+		if (scope === wide) {
+			for (const g of glyphs) setOpen(g.dataset.id, g === next);
+			pushDown();
+		} else {
+			for (const p of narrow.querySelectorAll('.card[popover]:popover-open')) p.hidePopover();
+			narrow.querySelector(`#p${next.dataset.id}`).showPopover();
+		}
+		next.scrollIntoView({ block: 'center', behavior: 'smooth' });
+	};
+	document.addEventListener('keydown', (e) => {
+		if (e.key === 'F8') { e.preventDefault(); jump(e.shiftKey ? -1 : 1); }
+		if (e.key === 'Escape') {
+			// manual popovers have no native Esc / light dismiss, so close them here (the close button does the same)
+			for (const p of document.querySelectorAll('.card[popover]:popover-open')) {
+				p.hidePopover();
+				document.querySelector(`.g[popovertarget="${p.id}"]`)?.focus();
+			}
+			const open = wide?.querySelector('.card.anch.open:focus-within');
+			if (open) open.querySelector('[data-close]').click();
+		}
+	});
+
+	/* the editor: faux caret goes away once the real one is used; current block follows the selection */
+	for (const body of document.querySelectorAll('.body')) {
+		body.addEventListener('focusin', (e) => { if (e.target === body) body.querySelectorAll('.caret').forEach((c) => c.remove()); });
+	}
+	document.addEventListener('selectionchange', () => {
+		const n = getSelection()?.anchorNode;
+		const blk = (n?.nodeType === 1 ? n : n?.parentElement)?.closest('.body > *');
+		const body = blk?.parentElement;
+		if (!body || !blk.classList.contains('blk') || blk.classList.contains('ins-line')) return;
+		body.querySelectorAll(':scope > .cur').forEach((c) => c.classList.toggle('cur', c === blk));
+		blk.classList.add('cur');
+		body.querySelectorAll('.caret').forEach((c) => c.remove());
+	});
+
+	/* copy action on the unplaced card */
+	document.addEventListener('click', async (e) => {
+		const b = e.target.closest('[data-copy]');
+		if (!b) return;
+		const text = b.closest('.card').querySelector('.theirs').textContent;
+		try { await navigator.clipboard.writeText(text); b.textContent = 'copied'; } catch { b.textContent = 'copy failed'; }
+		setTimeout(() => { b.textContent = 'copy theirs'; }, 1600);
+	});
+
+	requestAnimationFrame(() => {
+		if (narrow?.offsetParent) narrow.querySelector('#p4').showPopover();
+		setTimeout(() => { ready = true; }, 400); // the initial popover must not pull focus
+	});
+
+</script>
+</body>
+</html>
