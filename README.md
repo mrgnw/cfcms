@@ -74,31 +74,31 @@ Test the endpoint locally:
 curl -X POST http://localhost:5273/publish
 ```
 
-## Kagaya Service
+## Pitchfork Service
 
-Kagaya (`ky`, source at `~/dev/kagaya`) runs local daemons on this machine. This CMS is registered as `blog-cms`.
+[Pitchfork](https://github.com/jdx/pitchfork) runs local daemons on this machine. This CMS is registered as `global/blog-cms`.
 
 Check services:
 
 ```sh
-ky status
+pitchfork list
 ```
 
 Restart it after config changes. The service builds before it serves, so the port
 takes a few seconds to come up:
 
 ```sh
-ky restart blog-cms
+pitchfork restart global/blog-cms
 ```
 
 Start it:
 
 ```sh
-ky start blog-cms
+pitchfork start global/blog-cms
 ```
 
 Stream logs:
 
 ```sh
-ky echo blog-cms
+pitchfork logs global/blog-cms
 ```
