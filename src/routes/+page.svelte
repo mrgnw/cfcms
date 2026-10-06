@@ -97,7 +97,13 @@
 				</div>
 			{/key}
 		{:else}
-			<HomePanel {recentPosts} {counts} bind:newTitle bind:filter />
+			<HomePanel
+				{recentPosts}
+				{counts}
+				llmDrafts={data.posts.filter((p) => p.path.endsWith('.llm.md')).length}
+				bind:newTitle
+				bind:filter
+			/>
 		{/if}
 	</section>
 </main>

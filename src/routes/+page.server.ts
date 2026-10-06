@@ -3,6 +3,7 @@ import {
 	createPost,
 	createUserVersion,
 	getPost,
+	importAllLlmDrafts,
 	listPosts,
 	postsRev,
 	purgePost,
@@ -184,6 +185,7 @@ export const actions = {
 
 		throw redirect(303, `/?post=${encodeURIComponent(userPath)}`);
 	},
+	importLlm: async () => ({ importedLlm: await importAllLlmDrafts() }),
 	stage: async ({ request }) => {
 		const form = await request.formData();
 		const path = String(form.get('path') ?? '');

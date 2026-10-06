@@ -1,19 +1,36 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { deserialize } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 	import DeployBadge from './DeployBadge.svelte';
 	import { type PostCounts, type PostFilter, type PostListItem } from '$lib/types';
 
 	let {
 		recentPosts,
 		counts,
+		llmDrafts,
 		newTitle = $bindable(''),
 		filter = $bindable('all')
 	}: {
 		recentPosts: PostListItem[];
 		counts: PostCounts;
+		llmDrafts: number;
 		newTitle?: string;
 		filter?: PostFilter;
 	} = $props();
+
+	let importing = $state(false);
+	let importMessage = $state('');
+
+	async function importLlmDrafts() {
+		importing = true;
+		const res = await fetch('?/importLlm', { method: 'POST', body: new FormData() }).catch(() => null);
+		const result = res ? deserialize(await res.text()) : null;
+		const imported = result?.type === 'success' ? (result.data as { importedLlm: number }).importedLlm : null;
+		importMessage = imported === null ? 'Import failed' : `Imported ${imported} LLM ${imported === 1 ? 'draft' : 'drafts'}`;
+		importing = false;
+		await invalidateAll();
+	}
 </script>
 
 <div class="home">
@@ -26,6 +43,17 @@
 		<input name="title" bind:value={newTitle} placeholder="New post title…" autocomplete="off" />
 		<button disabled={!newTitle.trim()}>Create post</button>
 	</form>
+
+	{#if llmDrafts > 0 || importMessage}
+		<div class="home-import">
+			{#if llmDrafts > 0}
+				<button type="button" disabled={importing} onclick={importLlmDrafts}>
+					Import {llmDrafts} LLM {llmDrafts === 1 ? 'draft' : 'drafts'}
+				</button>
+			{/if}
+			<span role="status">{importMessage}</span>
+		</div>
+	{/if}
 
 	<div class="home-stats">
 		<button type="button" class="stat" onclick={() => (filter = 'all')}>
@@ -116,6 +144,27 @@
 	.home-new button:disabled {
 		opacity: 0.4;
 		cursor: not-allowed;
+	}
+
+	.home-import {
+		align-items: center;
+		color: var(--ink-3);
+		display: flex;
+		font-size: 13px;
+		gap: 12px;
+	}
+
+	.home-import button {
+		background: var(--bg);
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		cursor: pointer;
+		font: inherit;
+		padding: 8px 14px;
+	}
+
+	.home-import button:hover {
+		background: var(--hover);
 	}
 
 	.home-stats {

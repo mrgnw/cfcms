@@ -422,6 +422,13 @@ const autoImportLlmDrafts = async (files: string[]) => {
 	await importLlmFiles(llmImportPlan(standalone, imported, Number(since)));
 };
 
+export const importAllLlmDrafts = async () => {
+	await ensureCorpusImported();
+	const files = await scanContentDir();
+	const standalone = standaloneLlmFiles(await listLlmFiles(files), listStoredPosts().map((post) => post.path));
+	return importLlmFiles(standalone);
+};
+
 export const purgePost = async (postPath: string) => {
 	deletePostRows(postPath);
 	try {
