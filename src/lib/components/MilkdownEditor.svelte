@@ -5,6 +5,7 @@
 	import { editorViewCtx } from '@milkdown/kit/core';
 	import { codeBlockConfig } from '@milkdown/kit/component/code-block';
 	import { languages, theme } from '$lib/code/twinkleplop';
+	import { fenceMeta } from '$lib/code/fence-meta';
 	import '$blog/styles/code-theme.css';
 	import type { EditorView } from '@milkdown/kit/prose/view';
 	import '@milkdown/crepe/theme/common/style.css';
@@ -35,6 +36,7 @@
 		});
 		// README.md "Code blocks": why One Dark is replaced via theme and languages are set here
 		crepe.editor.config((ctx) => ctx.update(codeBlockConfig.key, (config) => ({ ...config, languages })));
+		crepe.editor.use(fenceMeta);
 		crepe.on((listener) => {
 			listener.markdownUpdated((_, md) => {
 				onChange?.(md);
