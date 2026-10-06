@@ -55,6 +55,7 @@ function highlighter(tokenize: LanguageFn): Extension {
 const tint = (percent: number) => `color-mix(in srgb, var(--twp-identifier) ${percent}%, transparent)`;
 
 export const theme = EditorView.theme({
+	'.cm-scroller': { fontFamily: 'var(--crepe-font-code)', fontSize: '12.5px', lineHeight: '1.6' },
 	'.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--twp-identifier)' },
 	'.cm-gutters': { backgroundColor: 'transparent', color: 'var(--twp-comment)', border: 'none' },
 	'.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'transparent' },

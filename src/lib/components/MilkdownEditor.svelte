@@ -7,6 +7,9 @@
 	import { languages, theme } from '$lib/code/twinkleplop';
 	import { fenceMeta } from '$lib/code/fence-meta';
 	import '$blog/styles/code-theme.css';
+	import '@fontsource/ibm-plex-mono/400.css';
+	import '@fontsource/ibm-plex-mono/500.css';
+	import '@fontsource/ibm-plex-mono/600.css';
 	import type { EditorView } from '@milkdown/kit/prose/view';
 	import '@milkdown/crepe/theme/common/style.css';
 	import '@milkdown/crepe/theme/frame.css';
@@ -133,7 +136,7 @@
 		--crepe-color-inline-area: var(--line);
 		--crepe-font-title: var(--font-display);
 		--crepe-font-default: var(--font-display);
-		--crepe-font-code: var(--font-mono);
+		--crepe-font-code: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
 		--crepe-shadow-1: 0 1px 3px 1px var(--shadow);
 		--crepe-shadow-2: 0 2px 6px 2px var(--shadow);
 		background: transparent;
