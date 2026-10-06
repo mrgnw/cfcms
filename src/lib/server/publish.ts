@@ -1,4 +1,5 @@
 import { env } from '$env/dynamic/private';
+import { mainBranchError } from '$lib/branch';
 import { renderPost } from '$lib/post-text';
 import { parseFrontmatter } from '$lib/frontmatter';
 import { renderSvx, svxSlug } from '$lib/svx';
@@ -10,7 +11,7 @@ import { runBackup } from './backup';
 import { getPostFilePath, getPostGitPath, listPosts, type Post } from './content';
 import { clearStaged, getPublishedPosts, getRevisionByHash, getStagedPaths, setExportedState } from './db';
 import { recordPublishedState } from './deploy-state';
-import { commitPaths, getHeadCommit, pushContent, runGit } from './git';
+import { commitPaths, getCurrentBranch, getHeadCommit, pushContent, runGit } from './git';
 import { contentBaseDirectory, svxDirectory } from './paths';
 import { syncSiteText } from './site-text';
 
@@ -145,6 +146,9 @@ const restoreWorkingTree = async (gitPaths: string[]) => {
 };
 
 export const runPublish = async () => {
+	const branchError = mainBranchError(await getCurrentBranch());
+	if (branchError) throw new Error(branchError);
+
 	await syncSiteText();
 	const posts = await listPosts();
 	const published = getPublishedPosts();

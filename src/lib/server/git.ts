@@ -73,9 +73,14 @@ export const commitPaths = async (requestedPaths: string[], message: string) => 
 	return { ...commit, committed: commit.ok };
 };
 
-export const pushContent = async () => runGit(['push']);
+export const pushContent = async () => runGit(['push', 'origin', 'main']);
 
 export const getHeadCommit = async () => {
 	const result = await runGit(['rev-parse', 'HEAD']);
+	return result.ok ? result.output.trim() : null;
+};
+
+export const getCurrentBranch = async () => {
+	const result = await runGit(['rev-parse', '--abbrev-ref', 'HEAD']);
 	return result.ok ? result.output.trim() : null;
 };
