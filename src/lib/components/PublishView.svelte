@@ -91,7 +91,7 @@
 		error = null;
 		result = null;
 		try {
-			const res = await fetch('/publish', { method: 'POST' });
+			const res = await fetch('/api/publish', { method: 'POST' });
 			const data = await res.json();
 			if (!res.ok) {
 				if (Array.isArray(data.results)) result = data;

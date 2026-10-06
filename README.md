@@ -59,7 +59,7 @@ The blog reads extra settings after a fence's language: ```` ```py {2} title="x.
 
 ## Publishing
 
-The CMS exposes `POST /publish` and a Publish view in the UI. Pending changes are staged per post; only staged posts go out.
+The CMS exposes `POST /api/publish` and a Publish view in the UI. Pending changes are staged per post; only staged posts go out.
 
 Publish renders the full live set to `src/posts/<slug>.svx` in the blog checkout (the CMS owns that directory: unstaged posts keep their published revision, unpublished posts are removed), writes the staged posts to `content/*.md`, runs the blog build as a gate, commits, and pushes `main`. Cloudflare Workers Builds deploys the push. The CMS never runs `wrangler`.
 
@@ -73,7 +73,7 @@ BLOG_BUILD_COMMAND='pnpm build'
 Test the endpoint locally:
 
 ```sh
-curl -X POST http://localhost:5273/publish
+curl -X POST http://localhost:5273/api/publish
 ```
 
 ## Pitchfork Service
