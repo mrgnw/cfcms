@@ -129,7 +129,7 @@
 		--crepe-color-on-secondary: var(--ink);
 		--crepe-color-inverse: var(--ink);
 		--crepe-color-on-inverse: var(--paper);
-		--crepe-color-inline-code: var(--accent-ink);
+		--crepe-color-inline-code: var(--ink);
 		--crepe-color-error: var(--danger);
 		--crepe-color-hover: var(--hover);
 		--crepe-color-selected: var(--hover);
@@ -155,6 +155,13 @@
 	.milkdown-host :global(.ProseMirror ::selection),
 	.milkdown-host :global(.ProseMirror::selection) {
 		background: color-mix(in srgb, var(--accent) 18%, transparent);
+	}
+
+	.milkdown-host :global(.ProseMirror :not(pre) > code) {
+		font-size: 0.84em;
+		padding: 0.1em 0.3em;
+		border-radius: 0;
+		background: color-mix(in oklab, var(--ink) 7%, transparent);
 	}
 
 	.milkdown-host :global(.milkdown-code-block) {
