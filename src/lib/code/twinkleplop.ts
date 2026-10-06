@@ -57,9 +57,9 @@ const tint = (percent: number) => `color-mix(in srgb, var(--twp-identifier) ${pe
 export const theme = EditorView.theme({
 	'.cm-scroller': { fontFamily: 'var(--crepe-font-code)', fontSize: '12.5px', lineHeight: '1.6' },
 	'.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--twp-identifier)' },
-	'.cm-gutters': { backgroundColor: 'transparent', color: 'var(--twp-comment)', border: 'none' },
-	'.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'transparent' },
-	'&.cm-focused .cm-activeLine, &.cm-focused .cm-activeLineGutter': { backgroundColor: tint(6) },
+	'.cm-gutters': { display: 'none' },
+	'.cm-activeLine': { backgroundColor: 'transparent' },
+	'&.cm-focused .cm-activeLine': { backgroundColor: tint(6) },
 	'&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground': {
 		backgroundColor: tint(18)
 	}
