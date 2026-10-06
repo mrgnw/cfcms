@@ -47,6 +47,10 @@ Two Crepe details in `MilkdownEditor.svelte`:
 
 The picker lists every language twinkleplop has a grammar for except C and C++, the same set the blog highlights (the list mirrors the blog's `mdsvex.config.js`). All grammars are bundled into the CMS build, so nothing loads at runtime. `text`, `lua`, `nginx` and `caddy` are listed too because posts use them, but have no grammar and stay plain, as on the site. Typing a fence such as ```` ```sh ```` followed by a space starts a code block in that language. A fence language not in the list is kept as written and shown as plain text.
 
+### Fence meta
+
+The blog reads extra settings after a fence's language: ```` ```py {2} title="x.py" caption="Run it" ```` (highlighted lines, title, caption). Milkdown's code block keeps only the language, so `src/lib/code/fence-meta.ts` adds a `meta` attribute that is read from the fence and written back unchanged. A block with meta shows it as a small label at its top. Meta can't be typed into a new block in the editor, and highlighted lines are not drawn here; edit the meta in the markdown. `node src/lib/code/fence-meta.check.ts` checks the round trip.
+
 ### The `$blog` alias
 
 `svelte.config.js` aliases `$blog` to `BLOG_CONTENT_BASE_DIR` (default `~/dev/blog`)`/src/lib`, so `shell-words.js` and `styles/code-theme.css` are imported straight from the blog checkout rather than copied. Colour changes made there reach the editor the next time this CMS rebuilds (a daemon restart). A missing blog checkout fails the build loudly.
