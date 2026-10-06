@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Post history mockup · xccms</title>
+  <style>
+    :root { color-scheme: light; --paper:#fff; --bg:#f5f4f1; --ink:#1a1c20; --muted:#585c64; --quiet:#9a9ea6; --line:#e4e3de; --hover:#edece7; --accent:#3b6fd4; --accent-ink:#2d57ac; --on-accent:#fff; --font-ui:ui-sans-serif,system-ui,-apple-system,sans-serif; --font-display:'Iowan Old Style',Palatino,Georgia,serif; }
+    @media (prefers-color-scheme: dark) { :root { color-scheme:dark; --paper:#16191f; --bg:#0f1115; --ink:#e4e7ec; --muted:#9aa4b2; --quiet:#6a7484; --line:#262b34; --hover:#1f242c; --accent:#6b9bf0; --accent-ink:#93b6f7; --on-accent:#0f1115; } }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.5 var(--font-ui); }
+    button { font:inherit; cursor:pointer; }
+    button:focus-visible, input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+    .shell { max-width:1180px; min-height:100vh; margin:auto; background:var(--paper); border-inline:1px solid var(--line); }
+    .topbar { height:57px; display:flex; align-items:center; gap:14px; padding:0 24px; border-bottom:1px solid var(--line); }
+    .back { border:0; background:none; color:var(--muted); padding:6px 0; }
+    .back:hover { color:var(--ink); }
+    .slash { color:var(--quiet); }
+    .crumb { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-weight:600; }
+    .topbar .history-label { color:var(--muted); font-weight:500; }
+    .content { display:grid; grid-template-columns:278px minmax(0,1fr); min-height:calc(100vh - 57px); }
+    .rail { border-right:1px solid var(--line); padding:20px 0 24px; }
+    .rail-head { padding:0 18px 15px; border-bottom:1px solid var(--line); }
+    h1 { font-size:17px; line-height:1.25; margin:0 0 5px; }
+    .subtle { color:var(--muted); font-size:12px; }
+    .rail-group { padding:19px 0 0; }
+    .group-title { color:var(--quiet); text-transform:uppercase; letter-spacing:.08em; font-size:10px; font-weight:700; padding:0 18px 7px; }
+    .revision { width:100%; display:flex; gap:10px; text-align:left; align-items:flex-start; border:0; border-left:3px solid transparent; background:none; color:var(--ink); padding:9px 15px; }
+    .revision:hover { background:var(--hover); }
+    .revision[aria-current="true"] { background:color-mix(in srgb,var(--accent) 9%,var(--paper)); border-left-color:var(--accent); }
+    .dot { width:8px; height:8px; margin-top:6px; border-radius:50%; flex:none; background:var(--line); }
+    .dot.named { background:var(--accent); }
+    .rev-copy { min-width:0; display:block; }
+    .rev-title { display:block; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .rev-meta { display:block; color:var(--muted); font-size:12px; }
+    .retention { margin:21px 18px 0; padding-top:15px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; }
+    .main { min-width:0; }
+    .detail-head { display:flex; align-items:start; justify-content:space-between; gap:20px; padding:28px 34px 20px; border-bottom:1px solid var(--line); }
+    .eyebrow { color:var(--muted); font-size:12px; margin-bottom:8px; }
+    h2 { font-size:23px; line-height:1.2; margin:0 0 7px; letter-spacing:-.025em; }
+    .detail-meta { color:var(--muted); font-size:12px; }
+    .actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+    .button { padding:7px 11px; border-radius:7px; border:1px solid var(--line); background:var(--paper); color:var(--ink); white-space:nowrap; }
+    .button:hover { background:var(--hover); }
+    .button.primary { background:var(--accent); border-color:var(--accent); color:var(--on-accent); font-weight:600; }
+    .button.primary:hover { filter:brightness(.93); }
+    .button:disabled { opacity:.45; cursor:default; }
+    .compare { display:flex; gap:10px; align-items:center; padding:12px 34px; border-bottom:1px solid var(--line); color:var(--muted); font-size:12px; }
+    .compare strong { color:var(--ink); }
+    .pill { color:var(--accent-ink); background:color-mix(in srgb,var(--accent) 10%,var(--paper)); border-radius:100px; padding:2px 8px; font-weight:600; }
+    .preview { max-width:720px; margin:0 auto; padding:38px 34px 90px; font:17px/1.7 var(--font-display); }
+    .preview h3 { font-size:33px; line-height:1.2; margin:0 0 25px; font-weight:600; letter-spacing:-.025em; }
+    .preview p { margin:0 0 21px; }
+    .preview .changed { background:color-mix(in srgb,var(--accent) 12%,var(--paper)); border-left:2px solid var(--accent); padding:4px 12px; margin-left:-14px; }
+    .preview .removed { color:var(--muted); text-decoration:line-through; text-decoration-color:#c33c33; }
+    .empty { color:var(--muted); font:14px/1.5 var(--font-ui); }
+    dialog { border:1px solid var(--line); border-radius:12px; padding:22px; background:var(--paper); color:var(--ink); width:min(400px,calc(100% - 30px)); box-shadow:0 18px 60px #0004; }
+    dialog::backdrop { background:#10141b77; }
+    dialog h3 { margin:0 0 5px; font-size:18px; }
+    dialog p { margin:0 0 18px; color:var(--muted); }
+    dialog label { display:block; font-size:12px; font-weight:600; margin-bottom:6px; }
+    dialog input { width:100%; padding:9px 10px; background:var(--paper); border:1px solid var(--line); border-radius:7px; color:var(--ink); font:inherit; }
+    .dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
+    .notice { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); padding:9px 14px; border-radius:8px; background:var(--ink); color:var(--paper); box-shadow:0 6px 20px #0003; display:none; }
+    @media (max-width:700px) { .topbar { padding-inline:16px; } .content { display:block; } .rail { border-right:0; border-bottom:1px solid var(--line); padding-bottom:10px; } .rail-head { border-bottom:0; padding:14px 16px 4px; } .rail-group { padding-top:5px; } .group-title,.retention { display:none; } .revision-list { display:flex; overflow-x:auto; padding:0 10px 6px; gap:5px; } .revision { min-width:155px; border-left:0; border-bottom:3px solid transparent; border-radius:6px; padding:8px; } .revision[aria-current="true"] { border-bottom-color:var(--accent); } .dot { display:none; } .detail-head { display:block; padding:20px 18px 16px; } h2 { font-size:21px; } .actions { justify-content:flex-start; margin-top:17px; } .compare { padding:11px 18px; } .preview { padding:28px 24px 70px; } .preview h3 { font-size:28px; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar"><button class="back" type="button" id="back">← Post</button><span class="slash">/</span><span class="crumb">The shape of a small web</span><span class="history-label">/ History</span></div>
+    <div class="content">
+      <aside class="rail" aria-label="Post revisions">
+        <div class="rail-head"><h1>History</h1><div class="subtle">Browse saved versions of this post</div></div>
+        <div class="rail-group"><div class="group-title">Current</div><div class="revision-list" id="current-list"></div></div>
+        <div class="rail-group"><div class="group-title">Today</div><div class="revision-list" id="today-list"></div></div>
+        <div class="rail-group"><div class="group-title">Earlier</div><div class="revision-list" id="earlier-list"></div></div>
+        <div class="retention">Autosaves: latest 200 · Named versions: kept</div>
+      </aside>
+      <main class="main">
+        <div class="detail-head"><div><div class="eyebrow" id="eyebrow"></div><h2 id="revision-title"></h2><div class="detail-meta" id="revision-meta"></div></div><div class="actions"><button class="button" type="button" id="name-button">Name version</button><button class="button primary" type="button" id="restore-button">Restore this version</button></div></div>
+        <div class="compare"><span class="pill">Preview</span><span id="compare-label"></span></div>
+        <article class="preview" id="preview" aria-label="Revision preview"></article>
+      </main>
+    </div>
+  </div>
+  <dialog id="name-dialog"><form method="dialog" id="name-form"><h3>Name this version</h3><p>Named versions stay in history when old autosaves expire.</p><label for="version-name">Version name</label><input id="version-name" maxlength="60" required placeholder="e.g. Before rewriting the ending" /><div class="dialog-actions"><button class="button" type="button" id="cancel-name">Cancel</button><button class="button primary" type="submit">Save name</button></div></form></dialog>
+  <dialog id="restore-dialog"><h3>Restore this version?</h3><p>This will create a new current revision. Everything saved since this version stays in history.</p><div class="dialog-actions"><button class="button" type="button" id="cancel-restore">Cancel</button><button class="button primary" type="button" id="confirm-restore">Restore</button></div></dialog>
+  <div class="notice" role="status" id="notice"></div>
+  <script>
+    const revisions = [
+      { id: 218, group:'current', title:'Current draft', time:'Now', writer:'mac', kind:'current', content:0 },
+      { id: 217, group:'today', title:'Autosave', time:'10:42 AM', writer:'mac', kind:'auto', content:1 },
+      { id: 214, group:'today', title:'Before rewriting the ending', time:'10:18 AM', writer:'mac', kind:'named', content:2 },
+      { id: 209, group:'today', title:'Autosave', time:'9:56 AM', writer:'mac', kind:'auto', content:3 },
+      { id: 186, group:'earlier', title:'Published version', time:'Sep 28 · 2:14 PM', writer:'site', kind:'published', content:4 },
+      { id: 142, group:'earlier', title:'First complete draft', time:'Sep 22 · 8:30 PM', writer:'mac', kind:'named', content:5 }
+    ];
+    const paragraphs = [
+      ['A small web has room for pages that feel made by a person. They can be specific, strange, useful, or simply worth keeping.', 'The best parts often arrive slowly. A note becomes a post, then changes again after someone reads it.', 'I want this place to keep that shape: a collection of things that can grow without losing where they came from.'],
+      ['A small web has room for pages that feel made by a person. They can be specific, strange, useful, or simply worth keeping.', 'The best parts often arrive slowly. A note becomes a post, then changes again after someone reads it.', 'I want this place to keep that shape.'],
+      ['A small web has room for pages that feel made by a person. They can be specific, strange, useful, or simply worth keeping.', 'The best parts often arrive slowly. A note becomes a post, then changes again after someone reads it.', 'Maybe the important part is that we can see how a page got here.'],
+      ['A small web has room for pages that feel made by a person. They can be specific, strange, useful, or simply worth keeping.', 'A note becomes a post, then changes again after someone reads it.', 'Maybe the important part is that we can see how a page got here.'],
+      ['A small web has room for pages that feel made by a person. They can be specific, strange, useful, or simply worth keeping.', 'A note becomes a post. A post finds its readers.', 'That seems enough reason to keep writing here.'],
+      ['A small web has room for pages that feel made by a person.', 'A note becomes a post. A post finds its readers.', 'That seems enough reason to keep writing here.']
+    ];
+    let selected = 214;
+    const byId = id => revisions.find(revision => revision.id === id);
+    function render() {
+      for (const group of ['current','today','earlier']) {
+        const list = document.getElementById(`${group}-list`);
+        list.replaceChildren(...revisions.filter(revision => revision.group === group).map(revision => {
+          const button = document.createElement('button');
+          button.type = 'button'; button.className = 'revision'; button.setAttribute('aria-current', String(selected === revision.id));
+          const dot = document.createElement('span'); dot.className = `dot ${revision.kind === 'named' || revision.kind === 'published' ? 'named' : ''}`;
+          const copy = document.createElement('span'); copy.className = 'rev-copy';
+          const title = document.createElement('span'); title.className = 'rev-title'; title.textContent = revision.title;
+          const meta = document.createElement('span'); meta.className = 'rev-meta'; meta.textContent = `${revision.time} · ${revision.writer}`;
+          copy.append(title,meta); button.append(dot,copy); button.onclick = () => { selected = revision.id; render(); }; return button;
+        }));
+      }
+      const revision = byId(selected);
+      document.getElementById('eyebrow').textContent = revision.group === 'current' ? 'LATEST REVISION' : `REVISION ${revision.id}`;
+      document.getElementById('revision-title').textContent = revision.title;
+      document.getElementById('revision-meta').textContent = `${revision.time} · Saved by ${revision.writer}${revision.kind === 'published' ? ' · Published' : ''}`;
+      document.getElementById('compare-label').textContent = revision.group === 'current' ? 'This is the current draft.' : 'Read this version before restoring it.';
+      document.getElementById('name-button').disabled = revision.kind === 'published';
+      document.getElementById('name-button').textContent = revision.group === 'current' && revision.kind !== 'named' ? 'Save checkpoint' : revision.kind === 'named' ? 'Rename version' : 'Name version';
+      document.getElementById('restore-button').disabled = revision.group === 'current';
+      const preview = document.getElementById('preview'); preview.replaceChildren();
+      const heading = document.createElement('h3'); heading.textContent = 'The shape of a small web'; preview.append(heading);
+      paragraphs[revision.content].forEach((paragraph, index) => { const p = document.createElement('p'); p.textContent = paragraph; if (revision.group !== 'current' && index === 2) p.className = 'changed'; preview.append(p); });
+    }
+    const nameDialog = document.getElementById('name-dialog');
+    document.getElementById('name-button').onclick = () => { document.getElementById('version-name').value = byId(selected).kind === 'named' ? byId(selected).title : ''; nameDialog.showModal(); };
+    document.getElementById('cancel-name').onclick = () => nameDialog.close();
+    document.getElementById('name-form').onsubmit = event => { event.preventDefault(); const name = document.getElementById('version-name').value.trim(); if (!name) return; const revision = byId(selected); revision.title = name; revision.kind = 'named'; nameDialog.close(); render(); showNotice('Version named in this mockup'); };
+    const restoreDialog = document.getElementById('restore-dialog');
+    document.getElementById('restore-button').onclick = () => restoreDialog.showModal();
+    document.getElementById('cancel-restore').onclick = () => restoreDialog.close();
+    document.getElementById('confirm-restore').onclick = () => { restoreDialog.close(); showNotice('Mockup only — no post was changed'); };
+    document.getElementById('back').onclick = () => showNotice('Mockup only — the editor is not connected');
+    let noticeTimer;
+    function showNotice(message) { const notice = document.getElementById('notice'); notice.textContent = message; notice.style.display = 'block'; clearTimeout(noticeTimer); noticeTimer = setTimeout(() => notice.style.display = 'none', 3300); }
+    render();
+  </script>
+</body>
+</html>
