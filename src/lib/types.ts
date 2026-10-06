@@ -12,7 +12,7 @@ export type PostListItem = {
 	pin?: boolean;
 	editingOrder?: number | null;
 	deleteRequested?: boolean;
-	slug?: string;
+	slug: string;
 	excerpt?: string;
 	updatedAt?: string;
 	contentHash?: string;
@@ -57,6 +57,7 @@ export type PostFilter = 'all' | 'ready' | 'drafts' | 'live';
 
 export type PendingChange = {
 	path: string;
+	slug: string;
 	title: string;
 	date: string;
 	status: DeployStatus;
@@ -77,3 +78,14 @@ export const isPending = (status: DeployStatus = 'draft') => pendingStatuses.has
 export const statusOf = (post: Pick<PostListItem, 'deployStatus'>) => post.deployStatus ?? 'draft';
 
 export const isEditing = (post: Pick<PostListItem, 'editingOrder'>) => post.editingOrder != null;
+
+export const countPosts = (posts: PostListItem[]): PostCounts => {
+	const active = posts.filter((post) => !post.deleteRequested);
+	return {
+		all: active.length,
+		drafts: active.filter((post) => statusOf(post) === 'draft').length,
+		ready: active.filter((post) => isPending(statusOf(post))).length,
+		live: active.filter((post) => statusOf(post) === 'live').length,
+		deleted: posts.length - active.length
+	};
+};

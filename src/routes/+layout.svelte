@@ -1,8 +1,46 @@
 <script lang="ts">
-	let { children } = $props();
+	import { onDestroy } from 'svelte';
+	import { browser } from '$app/environment';
+	import { invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
+	import { startPoll } from '$lib/poll';
+	import Sidebar from '$lib/components/Sidebar.svelte';
+	import { countPosts } from '$lib/types';
+	import { setUiState, type UiState } from '$lib/ui-state';
+
+	let { data, children } = $props();
+
+	const ui: UiState = $state({ sidebarOpen: true, newTitle: '', filter: 'all' });
+	setUiState(ui);
+
+	let counts = $derived(countPosts(data.posts));
+
+	if (browser) {
+		onDestroy(
+			startPoll(async () => {
+				const res = await fetch('/api/posts').catch(() => null);
+				if (!res?.ok) return;
+				const latest = (await res.json()) as { rev: string };
+				if (latest.rev !== data.postsRev) invalidateAll();
+			}, 5000)
+		);
+	}
 </script>
 
-{@render children()}
+<main class="shell" class:sidebar-closed={!ui.sidebarOpen} class:has-post={page.route.id !== '/'}>
+	<Sidebar
+		posts={data.posts}
+		selectedPath={page.data.post?.path}
+		{counts}
+		bind:open={ui.sidebarOpen}
+		bind:newTitle={ui.newTitle}
+		bind:filter={ui.filter}
+	/>
+
+	<section class="workbench" aria-label="Editor">
+		{@render children()}
+	</section>
+</main>
 
 <style>
 	:global(:root) {
@@ -68,6 +106,42 @@
 		:global(*) {
 			animation: none !important;
 			transition: none !important;
+		}
+	}
+
+	.shell {
+		display: grid;
+		grid-template-columns: minmax(260px, 320px) 1fr;
+		height: 100vh;
+		transition: grid-template-columns 200ms ease;
+	}
+
+	.shell.sidebar-closed {
+		grid-template-columns: 44px 1fr;
+	}
+
+	.workbench {
+		background: var(--paper);
+		min-width: 0;
+		padding: 28px 40px;
+		overflow-y: auto;
+	}
+
+	@media (max-width: 720px) {
+		.shell,
+		.shell.sidebar-closed {
+			grid-template-columns: 1fr;
+			height: 100vh;
+		}
+		/* master–detail: show the list OR the editor, never stacked */
+		.shell:not(.has-post) .workbench {
+			display: none;
+		}
+		.shell.has-post :global(.sidebar) {
+			display: none;
+		}
+		.workbench {
+			padding: 16px;
 		}
 	}
 </style>

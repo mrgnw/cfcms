@@ -71,7 +71,7 @@
 	async function postAction(action: string, fields: Record<string, string>) {
 		const fd = new FormData();
 		for (const [key, value] of Object.entries(fields)) fd.set(key, value);
-		const res = await fetch(`?/${action}`, { method: 'POST', body: fd });
+		const res = await fetch(`/?/${action}`, { method: 'POST', body: fd });
 		await invalidateAll();
 		return res.ok;
 	}
@@ -122,7 +122,7 @@
 		<a
 			class="row"
 			class:selected={item.path === selectedPath}
-			href={resolve(`/?post=${encodeURIComponent(item.path)}`)}
+			href={resolve('/posts/[slug]', { slug: item.slug })}
 			draggable="false"
 			onclick={(event) => {
 				if (swipedPath) event.preventDefault();
@@ -185,7 +185,7 @@
 				<path d="M3 4h10M3 8h10M3 12h10" stroke-linecap="round" />
 			</svg>
 		</button>
-		<form class="new-post" method="POST" action="?/create">
+		<form class="new-post" method="POST" action="/?/create">
 			<input name="title" bind:value={newTitle} placeholder="New post title..." autocomplete="off" />
 			<button disabled={!newTitle.trim()} aria-label="Create post" title="Create post">
 				<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -225,7 +225,7 @@
 					{#each queueItems as item (item.id)}
 						<div class="qrow" class:selected={item.post.path === selectedPath}>
 							<span class="grip" aria-hidden="true">⋮⋮</span>
-							<a href={resolve(`/?post=${encodeURIComponent(item.post.path)}`)}>
+							<a href={resolve('/posts/[slug]', { slug: item.post.slug })}>
 								<strong>{item.post.title}</strong>
 								<span class="post-meta">
 									<DeployBadge post={item.post} showEditing={false} />
@@ -266,8 +266,8 @@
 	</nav>
 
 	<footer class="footer-links">
-		<a href={resolve('/?view=deleted')}>Deleted {counts.deleted} ›</a>
-		<a class="publish-link" href={resolve('/?view=publish')}>Publish {counts.ready} ›</a>
+		<a href={resolve('/deleted')}>Deleted {counts.deleted} ›</a>
+		<a class="publish-link" href={resolve('/publish')}>Publish {counts.ready} ›</a>
 	</footer>
 </aside>
 

@@ -74,7 +74,7 @@
 		<h3>Recent</h3>
 		<div class="recent-grid">
 			{#each recentPosts as item (item.path)}
-				<a class="recent-card" href={resolve(`/?post=${encodeURIComponent(item.path)}`)}>
+				<a class="recent-card" href={resolve('/posts/[slug]', { slug: item.slug })}>
 					<strong>{item.title}</strong>
 					<span class="recent-meta">
 						<DeployBadge post={item} />

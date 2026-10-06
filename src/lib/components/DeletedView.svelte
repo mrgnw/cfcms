@@ -41,7 +41,7 @@
 	<div class="rows">
 		{#each posts as post (post.path)}
 			<div class="drow" class:busy={busyPath === post.path}>
-				<a href={resolve(`/?post=${encodeURIComponent(post.path)}`)}>
+				<a href={resolve('/posts/[slug]', { slug: post.slug })}>
 					<strong>{post.title}</strong>
 					<small>{post.date || 'undated'} · {post.path}</small>
 				</a>

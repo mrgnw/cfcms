@@ -361,9 +361,10 @@ export const createPost = async (title: string) => {
 	const date = new Date().toISOString().slice(0, 10);
 	const baseSlug = slugify(title);
 	let postPath = `${baseSlug}.md`;
+	const takenSlugs = new Set(listStoredPosts().map((post) => svxSlug(post.path, post.frontmatter)));
 	let suffix = 2;
 
-	while (getStoredPost(postPath) || existsSync(getPostFilePath(postPath))) {
+	while (getStoredPost(postPath) || existsSync(getPostFilePath(postPath)) || takenSlugs.has(svxSlug(postPath, ''))) {
 		postPath = `${baseSlug}-${suffix}.md`;
 		suffix += 1;
 	}

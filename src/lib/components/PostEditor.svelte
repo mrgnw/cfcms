@@ -17,7 +17,7 @@
 		post,
 		versions = null,
 		onSaved
-	}: { post: Post; versions?: WriterVersion[] | null; onSaved?: () => void } = $props();
+	}: { post: Post; versions?: WriterVersion[] | null; onSaved?: (frontmatter?: string) => void } = $props();
 
 	const initial = untrack(() => parseFrontmatter(post.frontmatter));
 
@@ -165,7 +165,7 @@
 				if (latest.contentHash === knownHash) return;
 				if (status !== 'saved' || conflictInfo || diverged) return;
 				adoptContent(latest);
-				onSaved?.();
+				onSaved?.(latest.frontmatter);
 			}, 5000)
 		);
 
@@ -285,7 +285,7 @@
 				status = 'saved';
 				conflictInfo = null;
 				diverged = false;
-				onSaved?.();
+				onSaved?.(serialized);
 				return;
 			}
 
