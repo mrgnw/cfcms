@@ -18,4 +18,4 @@ Fix:
 
 Other loose ends from the same work:
 
-- `mockups/diff-view-editor.html` still labels the site-text writer `live`. It was renamed to `site` in 1219ace; the margin mockup is already updated.
+- ~~`mockups/diff-view-editor.html` still labels the site-text writer `live`.~~ Renamed to `site`, matching the margin mockup.
