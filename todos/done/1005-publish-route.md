@@ -1,6 +1,7 @@
 ---
 title: /publish and /deleted as routes
 from: PR #9 (closed), plan section by the diff-view-publish agent, 2026-10-04
+branch: posts-routing-refactor
 ---
 
 Today everything is one page: `src/routes/+page.server.ts` loads posts for the sidebar and the view, `+page.svelte` switches on `?view=`. A layout load removes the reason for that.

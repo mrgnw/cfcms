@@ -1,7 +1,7 @@
 ---
 title: Integrated diff view in the Publish view, and /publish as a route
 pull-request: 20
-outcome: rows expand into the editor segment cards (PR #20); the line-hunk design in PR #9 was not taken; route split carried to todos/publish-route.md
+outcome: rows expand into the editor segment cards (PR #20); the line-hunk design in PR #9 was not taken; route split carried to todos/done/1005-publish-route.md
 ---
 
 The Publish view (`src/lib/components/PublishView.svelte`, reached as `/?view=publish`) lists pending changes with +/- counts and a tiny bar. There is no way to see *what* changed without opening the post. Plan and mock up a toggleable **integrated diff** per pending row: expand a row to show the published revision vs the head inline (added / removed / modified in place), so a change can be reviewed and staged from the Publish view.
