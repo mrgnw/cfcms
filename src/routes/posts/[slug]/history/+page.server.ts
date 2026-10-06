@@ -1,16 +1,11 @@
 import { error } from '@sveltejs/kit';
 import { getPost } from '$lib/server/content';
 import { getRevision, getStoredPost, listRevisions } from '$lib/server/db';
-import { normalizeBlock, splitBlocks } from '$lib/blocks';
+import { splitBlocks } from '$lib/blocks';
+import { diffSegments, lineDiffCounts } from '$lib/segment-diff';
 import { parseFrontmatter } from '$lib/frontmatter';
 
 export { actions } from '$lib/server/actions';
-
-// ponytail: block-level "is this new since the previous revision" check, not a real diff
-const changedBlocks = (body: string, previousBody: string | null) => {
-	const before = new Set(splitBlocks(previousBody ?? '').map(normalizeBlock));
-	return splitBlocks(body).map((block) => ({ text: block, changed: previousBody !== null && !before.has(normalizeBlock(block)) }));
-};
 
 export const load = async ({ params, parent, url }) => {
 	const matches = (await parent()).posts.filter((item) => item.slug === params.slug);
@@ -36,7 +31,9 @@ export const load = async ({ params, parent, url }) => {
 		selected: {
 			...entry,
 			title: parseFrontmatter(revision.frontmatter).title,
-			blocks: changedBlocks(revision.body, previousBody)
+			blocks: splitBlocks(revision.body),
+			segments: previousBody === null ? null : diffSegments(previousBody, previousBody, revision.body),
+			lines: previousBody === null ? null : lineDiffCounts(previousBody, revision.body)
 		}
 	};
 };

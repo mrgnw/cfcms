@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
+	import SegmentCard from '$lib/components/SegmentCard.svelte';
 
 	let { data, form } = $props();
 
@@ -69,6 +70,9 @@
 				<h2>{titleOf(data.selected)}</h2>
 				<div class="meta">
 					{day(data.selected.savedAt)} {time(data.selected.savedAt)} · saved by {data.selected.writer} · revision {data.selected.rev}
+					{#if data.selected.lines}
+						· <em class="add">+{data.selected.lines.added}</em> <em class="del">−{data.selected.lines.deleted}</em>
+					{/if}
 				</div>
 			</div>
 			<div class="actions">
@@ -122,10 +126,24 @@
 			<p class="error-banner">{form.message}</p>
 		{/if}
 
+		{#if data.selected.segments?.length}
+			<section class="segments" aria-label="Changes since the previous revision">
+				{#each data.selected.segments as segment, index (index)}
+					<SegmentCard
+						kind={segment.kind}
+						label={segment.kind}
+						theirs={segment.kind === 'removed' ? null : segment.theirs}
+						yours={segment.kind === 'removed' ? segment.yours : segment.kind === 'modified' ? `was: ${segment.yours}` : null}
+						strike={segment.kind === 'removed'}
+					/>
+				{/each}
+			</section>
+		{/if}
+
 		<article class="preview" aria-label="Revision preview">
 			<h3>{data.selected.title}</h3>
 			{#each data.selected.blocks as block, index (index)}
-				<p class:changed={block.changed}>{block.text}</p>
+				<p>{block}</p>
 			{:else}
 				<p class="empty">Empty body.</p>
 			{/each}
@@ -325,11 +343,22 @@
 		white-space: pre-wrap;
 	}
 
-	.preview .changed {
-		background: color-mix(in srgb, var(--accent) 12%, transparent);
-		border-left: 2px solid var(--accent);
-		margin-left: -14px;
-		padding: 4px 12px;
+	.segments {
+		margin: 20px auto 0;
+		max-width: 68ch;
+	}
+
+	.add,
+	.del {
+		font-style: normal;
+	}
+
+	.add {
+		color: var(--ok);
+	}
+
+	.del {
+		color: var(--danger);
 	}
 
 	.empty {
