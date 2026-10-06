@@ -39,6 +39,17 @@ try {
 	migrated.close();
 	for (const column of ['head_rev', 'exported_hash', 'llm_hash', 'staged']) assert.ok(columns.includes(column), column);
 
+	const { appendRevision, labelRevision, listRevisions } = await import('./db.ts');
+	appendRevision('busy.md', '', 'v1', 'h1', 'mac');
+	appendRevision('busy.md', '', 'v2', 'h2', 'mac');
+	assert.ok(labelRevision('busy.md', 2, 'checkpoint'));
+	assert.ok(!labelRevision('busy.md', 99, 'missing'), 'labelling an unknown revision reports no change');
+	for (let rev = 3; rev <= 203; rev += 1) appendRevision('busy.md', '', `v${rev}`, `h${rev}`, 'mac');
+	const kept = listRevisions('busy.md').map((entry) => entry.rev);
+	assert.ok(kept.includes(2), 'a named revision outlives the autosave cap');
+	assert.ok(!kept.includes(3), 'unnamed revisions past the cap are pruned');
+	assert.equal(kept[0], 203, 'newest first');
+
 	console.log('db.check: ok');
 } finally {
 	rmSync(root, { recursive: true, force: true });

@@ -82,6 +82,8 @@ const db = () => {
 		if (!postColumns.has(name)) instance.exec(`ALTER TABLE posts ADD COLUMN ${name} ${type}`);
 	}
 	instance.exec('CREATE UNIQUE INDEX IF NOT EXISTS posts_by_id ON posts(id)');
+	const revisionColumns = instance.prepare(`SELECT name FROM pragma_table_info('revisions')`).all() as { name: string }[];
+	if (!revisionColumns.some((row) => row.name === 'label')) instance.exec('ALTER TABLE revisions ADD COLUMN label TEXT');
 	backfillPostIds();
 
 	instance.exec("UPDATE versions SET writer = 'site' WHERE writer = 'live'; UPDATE revisions SET writer = 'site' WHERE writer = 'live'");
@@ -391,6 +393,7 @@ export type StoredPost = {
 	id: string;
 };
 
+// named revisions are checkpoints: only unnamed autosaves count against the cap
 const revisionCap = 200;
 
 const pruneRevisions = (path: string, headRev: number, publishedHash: string | null) => {
@@ -398,7 +401,7 @@ const pruneRevisions = (path: string, headRev: number, publishedHash: string | n
 	const anchored = [publishedHash, ...bases.map((row) => row.base_hash)].filter((hash): hash is string => Boolean(hash));
 	const placeholders = anchored.length ? anchored.map(() => '?').join(',') : "''";
 	db()
-		.prepare(`DELETE FROM revisions WHERE path = ? AND rev <= ? AND hash NOT IN (${placeholders})`)
+		.prepare(`DELETE FROM revisions WHERE path = ? AND rev <= ? AND label IS NULL AND hash NOT IN (${placeholders})`)
 		.run(path, headRev - revisionCap, ...anchored);
 };
 
@@ -531,4 +534,20 @@ export const getRevision = (path: string, rev: number): { hash: string; frontmat
 		.prepare('SELECT hash, frontmatter, body FROM revisions WHERE path = ? AND rev = ?')
 		.get(path, rev) as { hash: string; frontmatter: string; body: string } | undefined;
 	return row ?? null;
+};
+
+export type RevisionEntry = { rev: number; hash: string; writer: string; savedAt: string; label: string | null };
+
+const revisionListLimit = 500;
+
+export const listRevisions = (path: string): RevisionEntry[] =>
+	(
+		db()
+			.prepare('SELECT rev, hash, writer, saved_at, label FROM revisions WHERE path = ? ORDER BY rev DESC LIMIT ?')
+			.all(path, revisionListLimit) as { rev: number; hash: string; writer: string; saved_at: string; label: string | null }[]
+	).map((row) => ({ rev: row.rev, hash: row.hash, writer: row.writer, savedAt: row.saved_at, label: row.label }));
+
+export const labelRevision = (path: string, rev: number, label: string | null) => {
+	const result = db().prepare('UPDATE revisions SET label = ? WHERE path = ? AND rev = ?').run(label, path, rev);
+	return result.changes > 0;
 };
