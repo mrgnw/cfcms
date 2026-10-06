@@ -28,9 +28,11 @@ The dev server uses port `5273` and allows `cms.xcc.es` plus local/tailnet hosts
 ## Checks
 
 ```sh
-pnpm check
+pnpm test
 pnpm build
 ```
+
+`pnpm test` runs every `src/**/*.check.ts` under `node --test`, then `pnpm check`. `scripts/check-hooks.ts` resolves `$lib` and `$env/dynamic/private` so server modules load in plain node; server checks build a throwaway blog checkout and database under the system temp directory.
 
 ## Code blocks
 
