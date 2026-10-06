@@ -483,6 +483,11 @@ export const deletePostRows = (path: string) => {
 export const getMetaValue = (key: string) => getMeta(key);
 export const setMetaValue = (key: string, value: string) => setMeta(key, value);
 
+export const listMetaKeys = (prefix: string): string[] =>
+	(db().prepare('SELECT key FROM meta WHERE substr(key, 1, ?) = ?').all(prefix.length, prefix) as { key: string }[]).map(
+		(row) => row.key
+	);
+
 export const vacuumInto = (targetPath: string) => {
 	db().exec(`VACUUM INTO '${targetPath.replaceAll("'", "''")}'`);
 };

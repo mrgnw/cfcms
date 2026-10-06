@@ -180,7 +180,7 @@ export const actions = {
 
 		if (!llmPath.endsWith('.llm.md')) return fail(400, { message: 'Not an .llm.md draft' });
 
-		const userPath = await createUserVersion(llmPath);
+		const { path: userPath } = await createUserVersion(llmPath);
 
 		throw redirect(303, `/?post=${encodeURIComponent(userPath)}`);
 	},

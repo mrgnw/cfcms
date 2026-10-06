@@ -4,16 +4,20 @@ import { readdir, readFile, stat, unlink } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
 import { formatYamlScalar, parseYamlScalar } from '$lib/frontmatter';
 import { canonicalBody, hashPostContent, splitRawPost } from '$lib/post-text';
-import { slugKey, slugify, svxSlug } from '$lib/svx';
+import { slugify, svxSlug } from '$lib/svx';
+import { llmImportPlan, llmOwnerPath, llmUserPath, standaloneLlmFiles, type LlmFile } from '$lib/llm-drafts';
 import {
 	appendRevision,
 	deletePostRows,
 	getEditingOrder,
+	getMetaValue,
 	getStoredPost,
+	listMetaKeys,
 	listStoredPosts,
 	seedEditingQueue,
 	setExportedState,
 	setLlmState,
+	setMetaValue,
 	upsertVersion,
 	type StoredPost
 } from './db';
@@ -225,28 +229,30 @@ const ingestLlmFile = async (llmPath: string, filePath: string, stored: StoredPo
 	setLlmState(stored.path, hash, meta.mtimeMs);
 };
 
-const baseName = (postPath: string) => postPath.replace(/\.md$/, '').split('/').at(-1) ?? '';
-
-// An llm draft belongs to the post at the same path, else to the one post anywhere whose name matches it.
-const llmOwner = (llmPath: string, stored: StoredPost[]): StoredPost | null => {
-	const samePath = llmPath.replace(/\.llm\.md$/, '.md');
-	const exact = stored.filter((post) => post.path === samePath);
-	if (exact.length) return exact[0];
-	const key = slugKey(baseName(samePath));
-	const byName = stored.filter((post) => slugKey(baseName(post.path)) === key);
-	return byName.length === 1 ? byName[0] : null;
+const listLlmFiles = async (files: string[]): Promise<LlmFile[]> => {
+	const llmFiles = await Promise.all(
+		files
+			.filter((file) => file.endsWith('.llm.md'))
+			.map(async (file) => ({
+				path: normalizePostPath(relative(contentDirectory, file)),
+				mtimeMs: (await stat(file).catch(() => null))?.mtimeMs ?? 0
+			}))
+	);
+	return llmFiles;
 };
 
 const scanContentDir = async (): Promise<string[]> => {
 	const files = await listMarkdownFiles(contentDirectory);
-	const storedList = listStoredPosts();
-	const stored = new Map(storedList.map((post) => [post.path, post]));
+	const stored = new Map(listStoredPosts().map((post) => [post.path, post]));
+	const postPaths = [...stored.keys()];
+	const llmPaths = new Set((await listLlmFiles(files)).map((file) => file.path));
 
 	for (const filePath of files) {
 		const postPath = normalizePostPath(relative(contentDirectory, filePath));
 		try {
 			if (postPath.endsWith('.llm.md')) {
-				await ingestLlmFile(postPath, filePath, llmOwner(postPath, storedList));
+				const owner = llmOwnerPath(postPath, postPaths, llmPaths);
+				await ingestLlmFile(postPath, filePath, owner ? (stored.get(owner) ?? null) : null);
 			} else {
 				await ingestUserFile(postPath, filePath, stored.get(postPath) ?? null);
 			}
@@ -263,15 +269,15 @@ export const listPosts = async () => {
 	await ensureSvxBaseline();
 	await ensureSiteBaseRepaired();
 	const files = await scanContentDir();
+	await autoImportLlmDrafts(files);
 	const deployState = await readDeployState();
 	let order = getEditingOrder();
 	let posts = listStoredPosts().map((stored) => postFromStored(stored, deployState, order));
 
-	const storedList = listStoredPosts();
-	const standaloneLlm = files.filter(
-		(file) => file.endsWith('.llm.md') && !llmOwner(normalizePostPath(relative(contentDirectory, file)), storedList)
+	const standaloneLlm = standaloneLlmFiles(await listLlmFiles(files), listStoredPosts().map((post) => post.path));
+	posts = posts.concat(
+		await Promise.all(standaloneLlm.map((file) => parseFilePost(getPostFilePath(file.path), deployState, order)))
 	);
-	posts = posts.concat(await Promise.all(standaloneLlm.map((file) => parseFilePost(file, deployState, order))));
 
 	const legacyEditPaths = posts.filter((post) => readBoolean(post.frontmatter, 'edit')).map((post) => post.path);
 	if (seedEditingQueue(legacyEditPaths)) {
@@ -369,8 +375,8 @@ export const createPost = async (title: string) => {
 
 export const createUserVersion = async (llmPath: string) => {
 	if (!llmPath.endsWith('.llm.md')) throw new Error('Can only fork .llm.md drafts');
-	const userPath = llmPath.replace(/\.llm\.md$/, '.md');
-	if (getStoredPost(userPath)) return userPath;
+	const userPath = llmUserPath(llmPath);
+	if (getStoredPost(userPath)) return { path: userPath, created: false };
 
 	const raw = normalizeNewlines(await readFile(getPostFilePath(llmPath), 'utf8'));
 	const frontmatter = splitRawPost(raw)
@@ -379,8 +385,41 @@ export const createUserVersion = async (llmPath: string) => {
 		.join('\n')
 		.trim();
 
+	// re-checked after the read: a concurrent import may have created it while this one awaited the file
+	if (getStoredPost(userPath)) return { path: userPath, created: false };
 	appendRevision(userPath, frontmatter, '', hashPostContent(frontmatter, ''), 'cms');
-	return userPath;
+	return { path: userPath, created: true };
+};
+
+const llmAutoImportSinceKey = 'llmAutoImportSince';
+const llmImportedPrefix = 'llmImported:';
+
+const importLlmFiles = async (llmFiles: LlmFile[]) => {
+	let imported = 0;
+	for (const file of llmFiles) {
+		try {
+			const { path, created } = await createUserVersion(file.path);
+			setMetaValue(`${llmImportedPrefix}${file.path}`, new Date().toISOString());
+			if (!created) continue;
+			await ingestLlmFile(file.path, getPostFilePath(file.path), getStoredPost(path));
+			imported += 1;
+		} catch {
+			// unreadable draft stays standalone — retried next scan
+		}
+	}
+	return imported;
+};
+
+// The first run only records the baseline: drafts already on disk wait for the bulk import.
+const autoImportLlmDrafts = async (files: string[]) => {
+	const since = getMetaValue(llmAutoImportSinceKey);
+	if (!since) {
+		setMetaValue(llmAutoImportSinceKey, String(Date.now()));
+		return;
+	}
+	const standalone = standaloneLlmFiles(await listLlmFiles(files), listStoredPosts().map((post) => post.path));
+	const imported = new Set(listMetaKeys(llmImportedPrefix).map((key) => key.slice(llmImportedPrefix.length)));
+	await importLlmFiles(llmImportPlan(standalone, imported, Number(since)));
 };
 
 export const purgePost = async (postPath: string) => {
