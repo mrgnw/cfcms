@@ -1,4 +1,7 @@
 import { codeBlockSchema } from '@milkdown/kit/preset/commonmark';
+import { $prose } from '@milkdown/kit/utils';
+import { Plugin } from '@milkdown/kit/prose/state';
+import { Decoration, DecorationSet } from '@milkdown/kit/prose/view';
 
 const codeBlockWithMeta = codeBlockSchema.extendSchema((prev) => (ctx) => {
 	const base = prev(ctx);
@@ -26,4 +29,20 @@ const codeBlockWithMeta = codeBlockSchema.extendSchema((prev) => (ctx) => {
 	};
 });
 
-export const fenceMeta = codeBlockWithMeta;
+const metaLabel = $prose(
+	() =>
+		new Plugin({
+			props: {
+				decorations: (state) => {
+					const decorations: Decoration[] = [];
+					state.doc.descendants((node, pos) => {
+						if (node.type.name === 'code_block' && node.attrs.meta)
+							decorations.push(Decoration.node(pos, pos + node.nodeSize, { 'data-meta': node.attrs.meta }));
+					});
+					return DecorationSet.create(state.doc, decorations);
+				}
+			}
+		})
+);
+
+export const fenceMeta = [codeBlockWithMeta, metaLabel].flat();

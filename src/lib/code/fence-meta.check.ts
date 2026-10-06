@@ -43,15 +43,20 @@ async function editIntro(markdown: string) {
 		view.dispatch(view.state.tr.insertText('New ', 1));
 	});
 	const saved = crepe.getMarkdown();
+	const labels = [...root.querySelectorAll('.milkdown-code-block')].map((el) => el.getAttribute('data-meta'));
 	await crepe.destroy();
 	root.remove();
-	return saved;
+	return { saved, labels };
 }
 
 const withMeta = ['Intro', '', '```py {2} title="x.py" caption="Run it"', 'a = 1', 'b = 2', '```', '', 'Outro', ''].join('\n');
-assert.equal(await editIntro(withMeta), withMeta.replace('Intro', 'New Intro'));
+const metaResult = await editIntro(withMeta);
+assert.equal(metaResult.saved, withMeta.replace('Intro', 'New Intro'));
+assert.deepEqual(metaResult.labels, ['{2} title="x.py" caption="Run it"']);
 
 const plain = ['Intro', '', '```sh', 'ls', '```', '', 'Outro', ''].join('\n');
-assert.equal(await editIntro(plain), plain.replace('Intro', 'New Intro'));
+const plainResult = await editIntro(plain);
+assert.equal(plainResult.saved, plain.replace('Intro', 'New Intro'));
+assert.deepEqual(plainResult.labels, [null]);
 
 console.log('fence-meta ok');

@@ -160,4 +160,13 @@
 		border: 1px solid var(--line);
 		border-radius: 8px;
 	}
+
+	.milkdown-host :global(.milkdown-code-block[data-meta])::before {
+		content: attr(data-meta);
+		display: block;
+		margin-bottom: 4px;
+		font-family: var(--font-mono);
+		font-size: 12px;
+		color: var(--ink-2);
+	}
 </style>
