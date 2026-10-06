@@ -5,6 +5,8 @@ import {
 	addToEditing,
 	claimWriter,
 	deleteVersion,
+	getRevision,
+	labelRevision,
 	listVersions,
 	removeFromEditing,
 	reorderEditing,
@@ -16,6 +18,8 @@ import { hasSiteVersion, shipsHeadText } from '$lib/server/pending';
 import { setDeleteFlag } from '$lib/frontmatter';
 import { isValidWriter, normalizeNewlines } from '$lib/save-rules';
 import { statusOf } from '$lib/types';
+
+const maxRevisionLabel = 60;
 
 export const actions = {
 	create: async ({ request }) => {
@@ -94,6 +98,32 @@ export const actions = {
 		const { path: userPath } = await createUserVersion(llmPath);
 
 		throw redirect(303, resolve('/posts/[slug]', { slug: (await getPost(userPath)).slug }));
+	},
+	labelRevision: async ({ request }) => {
+		const form = await request.formData();
+		const path = String(form.get('path') ?? '');
+		const rev = Number(form.get('rev'));
+		const label = String(form.get('label') ?? '').trim();
+
+		if (!path || !Number.isInteger(rev)) return fail(400, { message: 'path and rev are required' });
+		if (label.length > maxRevisionLabel) return fail(400, { message: `Name must be ${maxRevisionLabel} characters or fewer` });
+		if (!labelRevision(path, rev, label || null)) return fail(404, { message: `No revision ${rev} for ${path}` });
+		return { labelled: rev };
+	},
+	restoreRevision: async ({ request }) => {
+		const form = await request.formData();
+		const path = String(form.get('path') ?? '');
+		const rev = Number(form.get('rev'));
+
+		if (!path || !Number.isInteger(rev)) return fail(400, { message: 'path and rev are required' });
+		const revision = getRevision(path, rev);
+		if (!revision) return fail(404, { message: `No revision ${rev} for ${path}` });
+
+		const post = await getPost(path);
+		const result = await savePost(path, revision.frontmatter, revision.body, post.contentHash, 'cms');
+		if (result.outcome === 'conflict') return fail(409, { message: 'Post changed while restoring — retry' });
+
+		throw redirect(303, resolve('/posts/[slug]', { slug: result.post.slug }));
 	},
 	importLlm: async () => ({ importedLlm: await importAllLlmDrafts() }),
 	stage: async ({ request }) => {
