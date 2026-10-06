@@ -30,6 +30,7 @@ import { decideSave, normalizeNewlines, type SaveDecision } from '$lib/save-rule
 export { splitRawPost };
 
 export type PostSummary = {
+	id?: string;
 	path: string;
 	title: string;
 	date: string;
@@ -108,6 +109,7 @@ const postFromStored = (stored: StoredPost, deployState: DeployState, editingOrd
 
 	return {
 		path,
+		id: stored.id,
 		title: readFrontmatterValue(frontmatter, 'title') || fallbackTitle,
 		date: readFrontmatterValue(frontmatter, 'date'),
 		tags: readTags(frontmatter),

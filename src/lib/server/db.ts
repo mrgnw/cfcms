@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { contentBaseDirectory } from './paths';
+import { randomPostId } from '$lib/post-id';
 
 // Lazy init: opening at module load would run during `vite build` with
 // build-time cwd/env and poison the db with a wrong-path legacy import.
@@ -74,18 +75,47 @@ const db = () => {
 		['exported_mtime_ms', 'INTEGER'],
 		['llm_hash', 'TEXT'],
 		['llm_mtime_ms', 'INTEGER'],
-		['staged', 'INTEGER']
+		['staged', 'INTEGER'],
+		['id', 'TEXT']
 	];
 	for (const [name, type] of newColumns) {
 		if (!postColumns.has(name)) instance.exec(`ALTER TABLE posts ADD COLUMN ${name} ${type}`);
 	}
+	instance.exec('CREATE UNIQUE INDEX IF NOT EXISTS posts_by_id ON posts(id)');
+	backfillPostIds();
 
 	instance.exec("UPDATE versions SET writer = 'site' WHERE writer = 'live'; UPDATE revisions SET writer = 'site' WHERE writer = 'live'");
 	importLegacyDeployState();
 	return instance;
 };
 
-const getMeta = (key: string): string | null => {
+const maxIdAttempts = 8;
+
+const newPostId = () => {
+	const taken = db().prepare('SELECT 1 FROM posts WHERE id = ?');
+	for (let attempt = 0; attempt < maxIdAttempts; attempt += 1) {
+		const id = randomPostId();
+		if (!taken.get(id)) return id;
+	}
+	throw new Error(`No free post id after ${maxIdAttempts} attempts`);
+};
+
+const backfillPostIds = () => {
+	const missing = db().prepare('SELECT path FROM posts WHERE id IS NULL AND head_rev IS NOT NULL').all() as {
+		path: string;
+	}[];
+	const assign = db().prepare('UPDATE posts SET id = ? WHERE path = ?');
+	for (const row of missing) assign.run(newPostId(), row.path);
+};
+
+export const getPathById = (id: string): string | null => {
+	const row = db().prepare('SELECT path FROM posts WHERE id = ? AND head_rev IS NOT NULL').get(id) as
+		| { path: string }
+		| undefined;
+	return row?.path ?? null;
+};
+
+const getMeta =(key: string): string | null => {
 	const row = db().prepare('SELECT value FROM meta WHERE key = ?').get(key) as { value: string } | undefined;
 	return row?.value ?? null;
 };
@@ -358,6 +388,7 @@ export type StoredPost = {
 	exportedMtimeMs: number | null;
 	llmHash: string | null;
 	llmMtimeMs: number | null;
+	id: string;
 };
 
 const revisionCap = 200;
@@ -375,13 +406,14 @@ export const appendRevision = (path: string, frontmatter: string, body: string, 
 	const now = new Date().toISOString();
 	db().exec('BEGIN');
 	try {
-		const row = db().prepare('SELECT head_rev, published_hash FROM posts WHERE path = ?').get(path) as
-			| { head_rev: number | null; published_hash: string | null }
+		const row = db().prepare('SELECT head_rev, published_hash, id FROM posts WHERE path = ?').get(path) as
+			| { head_rev: number | null; published_hash: string | null; id: string | null }
 			| undefined;
 		const nextRev = (row?.head_rev ?? 0) + 1;
+		const id = row?.id ?? newPostId();
 		db()
-			.prepare('INSERT INTO posts (path, head_rev) VALUES (?, ?) ON CONFLICT(path) DO UPDATE SET head_rev = ?')
-			.run(path, nextRev, nextRev);
+			.prepare('INSERT INTO posts (path, head_rev, id) VALUES (?, ?, ?) ON CONFLICT(path) DO UPDATE SET head_rev = ?, id = ?')
+			.run(path, nextRev, id, nextRev, id);
 		db()
 			.prepare('INSERT INTO revisions (path, rev, hash, frontmatter, body, writer, saved_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
 			.run(path, nextRev, hash, frontmatter, body, writer, now);
@@ -397,7 +429,7 @@ export const appendRevision = (path: string, frontmatter: string, body: string, 
 const storedPostQuery = `
 	SELECT posts.path, revisions.rev, revisions.hash, revisions.frontmatter, revisions.body,
 		revisions.writer, revisions.saved_at, posts.published_hash, posts.exported_hash,
-		posts.exported_mtime_ms, posts.llm_hash, posts.llm_mtime_ms
+		posts.exported_mtime_ms, posts.llm_hash, posts.llm_mtime_ms, posts.id
 	FROM posts JOIN revisions ON revisions.path = posts.path AND revisions.rev = posts.head_rev
 	WHERE posts.head_rev IS NOT NULL`;
 
@@ -414,6 +446,7 @@ type StoredPostRow = {
 	exported_mtime_ms: number | null;
 	llm_hash: string | null;
 	llm_mtime_ms: number | null;
+	id: string;
 };
 
 const toStoredPost = (row: StoredPostRow): StoredPost => ({
@@ -428,7 +461,8 @@ const toStoredPost = (row: StoredPostRow): StoredPost => ({
 	exportedHash: row.exported_hash,
 	exportedMtimeMs: row.exported_mtime_ms,
 	llmHash: row.llm_hash,
-	llmMtimeMs: row.llm_mtime_ms
+	llmMtimeMs: row.llm_mtime_ms,
+	id: row.id
 });
 
 export const getStoredPost = (path: string): StoredPost | null => {

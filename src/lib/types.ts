@@ -4,6 +4,7 @@ export type { Segment };
 export type DeployStatus = 'draft' | 'ready' | 'live' | 'changed' | 'unpublish' | 'delete' | 'deleted';
 
 export type PostListItem = {
+	id?: string;
 	path: string;
 	title: string;
 	date?: string;

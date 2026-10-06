@@ -4,6 +4,7 @@
 	import { isValidWriter } from '$lib/save-rules';
 	import { browser } from '$app/environment';
 	import { deserialize } from '$app/forms';
+	import { resolve } from '$app/paths';
 	import { TextareaAutosize } from 'runed';
 	import MilkdownEditor from './MilkdownEditor.svelte';
 	import ReferencePane from './ReferencePane.svelte';
@@ -350,7 +351,10 @@
 </script>
 
 <header class="post-head">
-	<div class="path">{post.path}</div>
+	<div class="path">
+		{post.path}
+		{#if post.id}<a class="post-id" href={resolve('/p/[id=postId]', { id: post.id })}>p/{post.id}</a>{/if}
+	</div>
 	<div class="status-row">
 		{#if post.path.endsWith('.llm.md')}
 			<form method="POST" action="?/fork">
@@ -612,6 +616,11 @@
 		align-items: center;
 		gap: 12px;
 		margin-bottom: 24px;
+	}
+
+	.post-id {
+		margin-left: 8px;
+		color: inherit;
 	}
 
 	.path {
