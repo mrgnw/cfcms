@@ -47,14 +47,9 @@ Two Crepe details in `MilkdownEditor.svelte`:
 
 The picker lists every language twinkleplop has a grammar for except C and C++, the same set the blog highlights (the list mirrors the blog's `mdsvex.config.js`). All grammars are bundled into the CMS build, so nothing loads at runtime. `text`, `lua`, `nginx` and `caddy` are listed too because posts use them, but have no grammar and stay plain, as on the site. Typing a fence such as ```` ```sh ```` followed by a space starts a code block in that language. A fence language not in the list is kept as written and shown as plain text.
 
-### Files copied from the blog
+### The `$blog` alias
 
-Two files are copies from the blog repo (`~/dev/blog`):
-
-- `src/lib/code/code-theme.css` from `src/lib/styles/code-theme.css`: the colours. It only changes when the blog's code colours change (a twinkleplop theme upgrade, or editing `scripts/gen-code-theme.mjs`).
-- `src/lib/code/shell-words.js` from `src/lib/shell-words.js`: the shell recolouring. It only changes when the blog changes how shell commands are coloured. Keep the `// @ts-nocheck` first line; the blog's file has no type annotations.
-
-If the blog changes either file, copy it here again, or the editor's colours drift from the site's.
+`svelte.config.js` aliases `$blog` to `BLOG_CONTENT_BASE_DIR` (default `~/dev/blog`)`/src/lib`, so `shell-words.js` and `styles/code-theme.css` are imported straight from the blog checkout rather than copied. Colour changes made there reach the editor the next time this CMS rebuilds (a daemon restart). A missing blog checkout fails the build loudly.
 
 ## Publishing
 

@@ -5,7 +5,7 @@
 	import { editorViewCtx } from '@milkdown/kit/core';
 	import { codeBlockConfig } from '@milkdown/kit/component/code-block';
 	import { languages, theme } from '$lib/code/twinkleplop';
-	import '$lib/code/code-theme.css';
+	import '$blog/styles/code-theme.css';
 	import type { EditorView } from '@milkdown/kit/prose/view';
 	import '@milkdown/crepe/theme/common/style.css';
 	import '@milkdown/crepe/theme/frame.css';

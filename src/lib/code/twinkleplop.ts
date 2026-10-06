@@ -26,7 +26,7 @@ import { tokenize as toml } from '@twinkleplop/toml';
 import { tokenize as tsx } from '@twinkleplop/tsx';
 import { tokenize as typescript } from '@twinkleplop/typescript';
 import { tokenize as yaml } from '@twinkleplop/yaml';
-import { shellWords } from './shell-words.js';
+import { shellWords } from '$blog/shell-words.js';
 
 function decorations(tokenize: LanguageFn, text: string): DecorationSet {
 	const { tokens, token_types } = tokenize(text);
