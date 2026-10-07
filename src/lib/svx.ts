@@ -1,5 +1,5 @@
 import { formatYamlScalar, parseFrontmatter } from './frontmatter.ts';
-import { canonicalBody } from './post-text.ts';
+import { canonicalBody } from './post-body.ts';
 
 export const slugify = (value: string) =>
 	value
