@@ -5,7 +5,7 @@ import { relative, resolve, sep } from 'node:path';
 import { parseFrontmatter, parseYamlScalar } from '$lib/frontmatter';
 import { canonicalBody, hashPostContent, splitRawPost } from '$lib/post-text';
 import { slugify, svxSlug } from '$lib/svx';
-import { llmImportPlan, llmOwnerPath, llmUserPath, standaloneLlmFiles, type LlmFile } from '$lib/llm-drafts';
+import { classifyLlmDrafts, llmImportPlan, llmOwnerPath, llmUserPath, standaloneLlmFiles, type LlmFile } from '$lib/llm-drafts';
 import {
 	appendRevision,
 	deletePostRows,
@@ -399,15 +399,22 @@ export const createUserVersion = async (llmPath: string) => {
 const llmAutoImportSinceKey = 'llmAutoImportSince';
 const llmImportedPrefix = 'llmImported:';
 
+// One draft becomes the post at its own path, with the draft's text as that post's llm version. Idempotent: a
+// second call finds the post and creates nothing. Works on a by-name draft too, which detaches it from the post it
+// was feeding, because same path wins from then on.
+export const importLlmDraft = (llmPath: string) =>
+	chainSave(llmUserPath(llmPath), async () => {
+		const { path, created } = await createUserVersion(llmPath);
+		setMetaValue(`${llmImportedPrefix}${llmPath}`, new Date().toISOString());
+		if (created) await ingestLlmFile(llmPath, getPostFilePath(llmPath), getStoredPost(path));
+		return { path, created };
+	});
+
 const importLlmFiles = async (llmFiles: LlmFile[]) => {
 	let imported = 0;
 	for (const file of llmFiles) {
 		try {
-			const { path, created } = await createUserVersion(file.path);
-			setMetaValue(`${llmImportedPrefix}${file.path}`, new Date().toISOString());
-			if (!created) continue;
-			await ingestLlmFile(file.path, getPostFilePath(file.path), getStoredPost(path));
-			imported += 1;
+			if ((await importLlmDraft(file.path)).created) imported += 1;
 		} catch {
 			// unreadable draft stays standalone — retried next scan
 		}
@@ -432,6 +439,13 @@ export const importAllLlmDrafts = async () => {
 	const files = await scanContentDir();
 	const standalone = standaloneLlmFiles(await listLlmFiles(files), listStoredPosts().map((post) => post.path));
 	return importLlmFiles(standalone);
+};
+
+export const listLlmDrafts = async () => {
+	await ensureCorpusImported();
+	const files = await scanContentDir();
+	const drafts = classifyLlmDrafts(await listLlmFiles(files), listStoredPosts().map((post) => post.path));
+	return drafts.sort((first, second) => first.path.localeCompare(second.path));
 };
 
 export const purgePost = async (postPath: string) => {

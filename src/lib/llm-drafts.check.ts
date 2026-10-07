@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { llmImportPlan, llmOwnerPath, llmUserPath, standaloneLlmFiles, type LlmFile } from './llm-drafts.ts';
+import { classifyLlmDrafts, llmImportPlan, llmOwnerPath, llmUserPath, standaloneLlmFiles, type LlmFile } from './llm-drafts.ts';
 
 const file = (path: string, mtimeMs = 100): LlmFile => ({ path, mtimeMs });
 
@@ -38,6 +38,25 @@ assert.deepEqual(
 	llmImportPlan(standalone, new Set(['purged.llm.md']), 100).map((item) => item.path),
 	['new.llm.md'],
 	'auto-import takes only drafts written since the baseline and never re-imports a recorded one'
+);
+
+assert.deepEqual(
+	classifyLlmDrafts([file('a.llm.md'), file('drafts/b.llm.md'), file('c.llm.md')], ['a.md', 'blog/b.md']).map((item) => [
+		item.path,
+		item.owner,
+		item.relation
+	]),
+	[
+		['a.llm.md', 'a.md', 'same-path'],
+		['drafts/b.llm.md', 'blog/b.md', 'by-name'],
+		['c.llm.md', null, 'standalone']
+	],
+	'each draft is classified by where its text goes'
+);
+assert.deepEqual(
+	classifyLlmDrafts([file('drafts/b.llm.md')], ['blog/b.md', 'drafts/b.md']).map((item) => [item.owner, item.relation]),
+	[['drafts/b.md', 'same-path']],
+	'once a by-name draft is imported at its own path, same path wins and it stops feeding the other post'
 );
 
 console.log('llm-drafts.check: ok');

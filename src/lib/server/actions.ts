@@ -1,6 +1,6 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
-import { createPost, createUserVersion, getPost, importAllLlmDrafts, purgePost, savePost } from '$lib/server/content';
+import { createPost, getPost, importAllLlmDrafts, importLlmDraft, purgePost, savePost } from '$lib/server/content';
 import {
 	addToEditing,
 	claimWriter,
@@ -94,16 +94,6 @@ export const actions = {
 		deleteVersion(path, writer);
 		return { dismissed: writer };
 	},
-	fork: async ({ request }) => {
-		const form = await request.formData();
-		const llmPath = String(form.get('path') ?? '');
-
-		if (!llmPath.endsWith('.llm.md')) return fail(400, { message: 'Not an .llm.md draft' });
-
-		const { path: userPath } = await createUserVersion(llmPath);
-
-		throw redirect(303, resolve('/posts/[slug]', { slug: (await getPost(userPath)).slug }));
-	},
 	labelRevision: async ({ request }) => {
 		const form = await request.formData();
 		const path = String(form.get('path') ?? '');
@@ -131,6 +121,15 @@ export const actions = {
 		throw redirect(303, resolve('/posts/[slug]', { slug: result.post.slug }));
 	},
 	importLlm: async () => ({ importedLlm: await importAllLlmDrafts() }),
+	importLlmDraft: async ({ request }) => {
+		const form = await request.formData();
+		const llmPath = String(form.get('path') ?? '');
+
+		if (!llmPath.endsWith('.llm.md')) return fail(400, { message: 'Not an .llm.md draft' });
+
+		const { path, created } = await importLlmDraft(llmPath);
+		return { imported: { path, created, slug: (await getPost(path)).slug } };
+	},
 	stage: async ({ request }) => {
 		const form = await request.formData();
 		const path = String(form.get('path') ?? '');

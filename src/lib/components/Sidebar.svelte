@@ -262,7 +262,10 @@
 	</nav>
 
 	<footer class="footer-links">
-		<a href={resolve('/deleted')}>Deleted {counts.deleted} ›</a>
+		<span class="footer-left">
+			<a href={resolve('/deleted')}>Deleted {counts.deleted} ›</a>
+			<a href={resolve('/admin')}>Admin ›</a>
+		</span>
 		<a class="publish-link" href={resolve('/publish')}>Publish {counts.ready} ›</a>
 	</footer>
 </aside>
@@ -565,6 +568,11 @@
 		align-items: center;
 		font-size: 11.5px;
 		padding: 0 2px;
+	}
+
+	.footer-left {
+		display: flex;
+		gap: 10px;
 	}
 
 	.footer-links a {

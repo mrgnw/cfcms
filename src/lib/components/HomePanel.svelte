@@ -1,7 +1,5 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { deserialize } from '$app/forms';
-	import { invalidateAll } from '$app/navigation';
 	import DeployBadge from './DeployBadge.svelte';
 	import { type PostCounts, type PostFilter, type PostListItem } from '$lib/types';
 
@@ -17,18 +15,6 @@
 		filter?: PostFilter;
 	} = $props();
 
-	let importing = $state(false);
-	let importMessage = $state('');
-
-	async function importLlmDrafts() {
-		importing = true;
-		const res = await fetch('?/importLlm', { method: 'POST', body: new FormData() }).catch(() => null);
-		const result = res ? deserialize(await res.text()) : null;
-		const imported = result?.type === 'success' ? (result.data as { importedLlm: number }).importedLlm : null;
-		importMessage = imported === null ? 'Import failed' : `Imported ${imported} LLM ${imported === 1 ? 'draft' : 'drafts'}`;
-		importing = false;
-		await invalidateAll();
-	}
 </script>
 
 <div class="home">
@@ -39,15 +25,10 @@
 
 	<a class="home-new" href={resolve('/new')}>New post</a>
 
-	{#if llmDrafts > 0 || importMessage}
-		<div class="home-import">
-			{#if llmDrafts > 0}
-				<button type="button" disabled={importing} onclick={importLlmDrafts}>
-					Import {llmDrafts} LLM {llmDrafts === 1 ? 'draft' : 'drafts'}
-				</button>
-			{/if}
-			<span role="status">{importMessage}</span>
-		</div>
+	{#if llmDrafts > 0}
+		<a class="home-import" href={resolve('/admin')}>
+			{llmDrafts} LLM {llmDrafts === 1 ? 'draft' : 'drafts'} to import ›
+		</a>
 	{/if}
 
 	<div class="home-stats">
@@ -116,23 +97,17 @@
 	}
 
 	.home-import {
-		align-items: center;
-		color: var(--ink-3);
-		display: flex;
-		font-size: 13px;
-		gap: 12px;
-	}
-
-	.home-import button {
 		background: var(--bg);
 		border: 1px solid var(--line);
 		border-radius: 10px;
-		cursor: pointer;
-		font: inherit;
+		color: var(--ink-2);
+		font-size: 13px;
+		justify-self: start;
 		padding: 8px 14px;
+		text-decoration: none;
 	}
 
-	.home-import button:hover {
+	.home-import:hover {
 		background: var(--hover);
 	}
 

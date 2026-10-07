@@ -365,12 +365,6 @@
 		{#if !post.path.endsWith('.llm.md')}<a class="post-id" href={resolve('/posts/[slug]/history', { slug: post.slug })}>history</a>{/if}
 	</div>
 	<div class="status-row">
-		{#if post.path.endsWith('.llm.md')}
-			<form method="POST" action="?/fork">
-				<input type="hidden" name="path" value={post.path} />
-				<button class="fork-button">Start your version</button>
-			</form>
-		{/if}
 		{#if sources.length > 0}
 			<button
 				class="reference-toggle"
@@ -642,22 +636,6 @@
 		display: flex;
 		gap: 10px;
 		align-items: center;
-	}
-
-	.fork-button {
-		background: var(--accent);
-		border: none;
-		border-radius: 6px;
-		color: var(--on-accent);
-		cursor: pointer;
-		font: inherit;
-		font-size: 12px;
-		font-weight: 600;
-		padding: 5px 10px;
-	}
-
-	.fork-button:hover {
-		background: var(--accent-ink);
 	}
 
 	.reference-toggle {

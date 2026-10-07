@@ -1,5 +1,6 @@
-import { error } from '@sveltejs/kit';
-import { getPost } from '$lib/server/content';
+import { error, redirect } from '@sveltejs/kit';
+import { resolve } from '$app/paths';
+import { getPost, importLlmDraft } from '$lib/server/content';
 import { getRevisionByHash, listVersions } from '$lib/server/db';
 import { parseFrontmatter } from '$lib/frontmatter';
 import { diffSegments } from '$lib/segment-diff';
@@ -38,6 +39,12 @@ export const load = async ({ params, parent }) => {
 	if (matches.length === 0) throw error(404, `No post with slug ${params.slug}`);
 	if (matches.length > 1) {
 		throw error(409, `Slug ${params.slug} is used by ${matches.map((item) => item.path).join(', ')}`);
+	}
+
+	// opening a standalone .llm.md imports it: the post is born at its own path with the draft as its llm version
+	if (matches[0].path.endsWith('.llm.md')) {
+		const { path } = await importLlmDraft(matches[0].path);
+		throw redirect(303, resolve('/posts/[slug]', { slug: (await getPost(path)).slug }));
 	}
 
 	const post = await getPost(matches[0].path);

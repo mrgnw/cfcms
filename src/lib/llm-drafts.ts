@@ -29,3 +29,17 @@ export const standaloneLlmFiles = (llmFiles: LlmFile[], postPaths: string[]) => 
 // post stays purged). The bulk action skips this filter and imports every standalone draft.
 export const llmImportPlan = (standalone: LlmFile[], imported: Set<string>, sinceMs: number) =>
 	standalone.filter((file) => file.mtimeMs >= sinceMs && !imported.has(file.path));
+
+export type LlmDraftRelation = 'same-path' | 'by-name' | 'standalone';
+export type LlmDraftStatus = LlmFile & { owner: string | null; relation: LlmDraftRelation };
+
+// Where each draft's text goes today: into the post at its own path, into the one post that shares its name, or
+// nowhere until it is imported. The admin page lists all three so a by-name attachment is visible, not silent.
+export const classifyLlmDrafts = (llmFiles: LlmFile[], postPaths: string[]): LlmDraftStatus[] => {
+	const llmPaths = new Set(llmFiles.map((file) => file.path));
+	return llmFiles.map((file) => {
+		const owner = llmOwnerPath(file.path, postPaths, llmPaths);
+		const relation: LlmDraftRelation = !owner ? 'standalone' : owner === llmUserPath(file.path) ? 'same-path' : 'by-name';
+		return { ...file, owner, relation };
+	});
+};
