@@ -15,7 +15,7 @@ import {
 } from '$lib/server/db';
 import { commitPost } from '$lib/server/git';
 import { hasSiteVersion, shipsHeadText } from '$lib/server/pending';
-import { setDeleteFlag } from '$lib/frontmatter';
+import { isBlankDraft, setDeleteFlag } from '$lib/frontmatter';
 import { isValidWriter, normalizeNewlines } from '$lib/save-rules';
 import { statusOf } from '$lib/types';
 
@@ -24,13 +24,18 @@ const maxRevisionLabel = 60;
 export const actions = {
 	create: async ({ request }) => {
 		const form = await request.formData();
-		const title = String(form.get('title') ?? '').trim();
+		const frontmatter = normalizeNewlines(String(form.get('frontmatter') ?? ''));
+		const body = normalizeNewlines(String(form.get('body') ?? ''));
+		const writer = String(form.get('writer') ?? '');
+		const sessionId = String(form.get('sessionId') ?? '');
 
-		if (!title) return fail(400, { message: 'Title is required' });
+		if (isBlankDraft(frontmatter, body)) return fail(400, { message: 'Nothing to save yet' });
+		if (!isValidWriter(writer)) return fail(400, { message: `Invalid writer label: ${writer}` });
+		if (!/^[a-z0-9]{4,16}$/.test(sessionId)) return fail(400, { message: 'Invalid session id' });
 
-		const post = await createPost(title);
+		const post = await createPost(frontmatter, body, claimWriter(writer, sessionId));
 
-		throw redirect(303, resolve('/posts/[slug]', { slug: post.slug }));
+		return { created: { path: post.path, slug: post.slug, id: post.id ?? null, contentHash: post.contentHash } };
 	},
 	save: async ({ request }) => {
 		const form = await request.formData();

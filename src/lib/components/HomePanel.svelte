@@ -9,13 +9,11 @@
 		recentPosts,
 		counts,
 		llmDrafts,
-		newTitle = $bindable(''),
 		filter = $bindable('all')
 	}: {
 		recentPosts: PostListItem[];
 		counts: PostCounts;
 		llmDrafts: number;
-		newTitle?: string;
 		filter?: PostFilter;
 	} = $props();
 
@@ -39,10 +37,7 @@
 		<p>Pick up where you left off, or start something new.</p>
 	</header>
 
-	<form class="home-new" method="POST" action="?/create">
-		<input name="title" bind:value={newTitle} placeholder="New post title…" autocomplete="off" />
-		<button disabled={!newTitle.trim()}>Create post</button>
-	</form>
+	<a class="home-new" href={resolve('/new')}>New post</a>
 
 	{#if llmDrafts > 0 || importMessage}
 		<div class="home-import">
@@ -111,39 +106,13 @@
 	}
 
 	.home-new {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto;
-		gap: 8px;
-	}
-
-	.home-new input {
-		border: 1px solid var(--line);
-		border-radius: 10px;
-		padding: 11px 14px;
-		background: var(--bg);
-		font: inherit;
-		min-width: 0;
-	}
-
-	.home-new input:focus {
-		outline: none;
-		border-color: var(--accent);
-	}
-
-	.home-new button {
 		background: var(--accent);
-		border: none;
 		border-radius: 10px;
 		color: var(--on-accent);
-		cursor: pointer;
-		font: inherit;
 		font-weight: 600;
-		padding: 0 16px;
-	}
-
-	.home-new button:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
+		justify-self: start;
+		padding: 11px 18px;
+		text-decoration: none;
 	}
 
 	.home-import {

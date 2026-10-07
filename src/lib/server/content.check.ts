@@ -25,10 +25,13 @@ const { listVersions, upsertVersion, getStoredPost } = await import('./db.ts');
 const { setDeleteFlag } = await import('../frontmatter.ts');
 
 try {
-	const created = await createPost('Hello World');
+	const draftFm = (title: string) => `title: ${title}\ndate: 2026-01-01\ntags: []\npublish: false`;
+	const created = await createPost(draftFm('Hello World'), '', 'mac');
 	assert.equal(created.path, 'hello-world.md');
 	assert.equal(created.slug, 'hello-world');
-	assert.equal((await createPost('Hello World')).path, 'hello-world-2.md', 'a second post with the same title gets its own path');
+	assert.equal((await createPost(draftFm('Hello World'), '', 'mac')).path, 'hello-world-2.md', 'a second post with the same title gets its own path');
+	assert.equal((await createPost(draftFm(''), 'just a body', 'mac')).path, 'untitled.md', 'a post without a title still gets a path');
+	await purgePost('untitled.md');
 	assert.deepEqual((await listPosts()).map((post) => post.path).sort(), ['hello-world-2.md', 'hello-world.md', 'live-post.md']);
 
 	const saved = await savePost(created.path, created.frontmatter, 'first draft', created.contentHash, 'mac');

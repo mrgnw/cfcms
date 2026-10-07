@@ -8,7 +8,7 @@
 	import { TextareaAutosize } from 'runed';
 	import MilkdownEditor from './MilkdownEditor.svelte';
 	import ReferencePane from './ReferencePane.svelte';
-	import { parseFrontmatter, serializeFrontmatter } from '$lib/frontmatter';
+	import { isBlankDraft, parseFrontmatter, serializeFrontmatter } from '$lib/frontmatter';
 	import { applySegment as applySegmentTo } from '$lib/segment-diff';
 	import type { FieldSegment, Post, Segment, WriterVersion } from '$lib/types';
 
@@ -17,8 +17,14 @@
 	let {
 		post,
 		versions = null,
-		onSaved
-	}: { post: Post; versions?: WriterVersion[] | null; onSaved?: (frontmatter?: string) => void } = $props();
+		onSaved,
+		onCreated
+	}: {
+		post: Post;
+		versions?: WriterVersion[] | null;
+		onSaved?: (frontmatter?: string) => void;
+		onCreated?: (created: { path: string; slug: string; id: string | null; contentHash: string }) => void;
+	} = $props();
 
 	const initial = untrack(() => parseFrontmatter(post.frontmatter));
 
@@ -147,7 +153,7 @@
 
 		onDestroy(
 			startPoll(async () => {
-				if (status !== 'saved' || conflictInfo || diverged) return;
+				if (!post.path || status !== 'saved' || conflictInfo || diverged) return;
 				const res = await fetch(`/api/post?path=${encodeURIComponent(post.path)}`).catch(() => null);
 				if (!res?.ok) return;
 				const latest = (await res.json()) as { contentHash: string; frontmatter: string; body: string };
@@ -232,6 +238,12 @@
 				custom: customField
 			});
 
+			const creating = !post.path;
+			if (creating && isBlankDraft(serialized, bodyField)) {
+				status = 'saved';
+				return;
+			}
+
 			const fd = new FormData();
 			fd.set('path', post.path);
 			fd.set('frontmatter', serialized);
@@ -240,12 +252,13 @@
 			fd.set('writer', writerName);
 			fd.set('sessionId', sessionId);
 
-			const res = await fetch('?/save', { method: 'POST', body: fd });
+			const res = await fetch(creating ? '?/create' : '?/save', { method: 'POST', body: fd });
 			const result = deserialize(await res.text());
 
 			if (result.type === 'success') {
 				const data = result.data as
 					| {
+							created?: { path: string; slug: string; id: string | null; contentHash: string };
 							savedHash?: string;
 							conflict?: boolean;
 							writer?: string;
@@ -267,6 +280,13 @@
 					status = 'saved';
 					diverged = true;
 					onSaved?.();
+					return;
+				}
+
+				if (data?.created) {
+					knownHash = data.created.contentHash;
+					status = 'saved';
+					onCreated?.(data.created);
 					return;
 				}
 
@@ -340,7 +360,7 @@
 
 <header class="post-head">
 	<div class="path">
-		{post.path}
+		{post.path || 'New post'}
 		{#if post.id}<a class="post-id" href={resolve('/p/[id=postId]', { id: post.id })}>p/{post.id}</a>{/if}
 		{#if !post.path.endsWith('.llm.md')}<a class="post-id" href={resolve('/posts/[slug]/history', { slug: post.slug })}>history</a>{/if}
 	</div>

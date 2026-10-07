@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readdir, readFile, stat, unlink } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
-import { formatYamlScalar, parseYamlScalar } from '$lib/frontmatter';
+import { parseFrontmatter, parseYamlScalar } from '$lib/frontmatter';
 import { canonicalBody, hashPostContent, splitRawPost } from '$lib/post-text';
 import { slugify, svxSlug } from '$lib/svx';
 import { llmImportPlan, llmOwnerPath, llmUserPath, standaloneLlmFiles, type LlmFile } from '$lib/llm-drafts';
@@ -359,22 +359,24 @@ export const savePost = (
 		return { outcome, post: await getPost(postPath) };
 	});
 
-export const createPost = async (title: string) => {
-	const date = new Date().toISOString().slice(0, 10);
-	const baseSlug = slugify(title);
-	let postPath = `${baseSlug}.md`;
-	const takenSlugs = new Set(listStoredPosts().map((post) => svxSlug(post.path, post.frontmatter)));
-	let suffix = 2;
+// A post is born on its first real content, so there is no blank row to clean up later.
+export const createPost = (rawFrontmatter: string, rawBody: string, writer: string) =>
+	chainSave('create', async () => {
+		const frontmatter = normalizeNewlines(rawFrontmatter).trim();
+		const body = canonicalBody(normalizeNewlines(rawBody));
+		const baseSlug = slugify(parseFrontmatter(frontmatter).title) || 'untitled';
+		let postPath = `${baseSlug}.md`;
+		const takenSlugs = new Set(listStoredPosts().map((post) => svxSlug(post.path, post.frontmatter)));
+		let suffix = 2;
 
-	while (getStoredPost(postPath) || existsSync(getPostFilePath(postPath)) || takenSlugs.has(svxSlug(postPath, ''))) {
-		postPath = `${baseSlug}-${suffix}.md`;
-		suffix += 1;
-	}
+		while (getStoredPost(postPath) || existsSync(getPostFilePath(postPath)) || takenSlugs.has(svxSlug(postPath, ''))) {
+			postPath = `${baseSlug}-${suffix}.md`;
+			suffix += 1;
+		}
 
-	const frontmatter = `title: ${formatYamlScalar(title)}\ndate: ${date}\ntags: \npublish: false`;
-	appendRevision(postPath, frontmatter, '', hashPostContent(frontmatter, ''), 'cms');
-	return getPost(postPath);
-};
+		appendRevision(postPath, frontmatter, body, hashPostContent(frontmatter, body), writer);
+		return getPost(postPath);
+	});
 
 export const createUserVersion = async (llmPath: string) => {
 	if (!llmPath.endsWith('.llm.md')) throw new Error('Can only fork .llm.md drafts');

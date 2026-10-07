@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { parseFrontmatter, serializeFrontmatter, setDeleteFlag } from './frontmatter.ts';
+import { isBlankDraft, parseFrontmatter, serializeFrontmatter, setDeleteFlag } from './frontmatter.ts';
 
 const raw = `title: 'Simple… where?'
 date: 2026-08-05
@@ -34,3 +34,9 @@ assert.deepEqual(parseFrontmatter(serializeFrontmatter(parsed)), parsed, 'serial
 assert.equal(parseFrontmatter(setDeleteFlag(trashed, false)).deleteRequested, false);
 
 console.log('frontmatter.check: ok');
+
+const blankFm = "title: ''\ndate: 2026-01-01\ntags: []\npublish: false";
+assert.ok(isBlankDraft(blankFm, '  \n'), 'defaults and whitespace are not content');
+assert.ok(!isBlankDraft(blankFm, 'hi'), 'a body is content');
+assert.ok(!isBlankDraft(blankFm.replace("''", 'Hello'), ''), 'a title is content');
+assert.ok(!isBlankDraft(blankFm.replace('[]', '[a]'), ''), 'a tag is content');

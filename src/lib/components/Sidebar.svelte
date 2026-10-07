@@ -12,14 +12,12 @@
 		selectedPath,
 		counts,
 		open = $bindable(true),
-		newTitle = $bindable(''),
 		filter = $bindable('all')
 	}: {
 		posts: PostListItem[];
 		selectedPath?: string;
 		counts: PostCounts;
 		open?: boolean;
-		newTitle?: string;
 		filter?: PostFilter;
 	} = $props();
 
@@ -185,14 +183,12 @@
 				<path d="M3 4h10M3 8h10M3 12h10" stroke-linecap="round" />
 			</svg>
 		</button>
-		<form class="new-post" method="POST" action="/?/create">
-			<input name="title" bind:value={newTitle} placeholder="New post title..." autocomplete="off" />
-			<button disabled={!newTitle.trim()} aria-label="Create post" title="Create post">
-				<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
-					<path d="M8 3v10M3 8h10" stroke-linecap="round" />
-				</svg>
-			</button>
-		</form>
+		<a class="new-post" href={resolve('/new')}>
+			<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+				<path d="M8 3v10M3 8h10" stroke-linecap="round" />
+			</svg>
+			New post
+		</a>
 	</header>
 
 	<div class="filters" aria-label="Filters">
@@ -317,35 +313,17 @@
 	}
 
 	.new-post {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) 34px;
-		gap: 6px;
-		flex: 1;
-	}
-
-	.new-post input {
-		border: 1px solid var(--line);
-		border-radius: 8px;
-		padding: 8px 10px;
-		background: var(--paper);
-		font: inherit;
-		font-size: 13px;
-		min-width: 0;
-	}
-
-	.new-post button {
+		align-items: center;
 		background: var(--ink);
-		color: var(--paper);
-		border: none;
 		border-radius: 8px;
-		cursor: pointer;
-		display: inline-grid;
-		place-items: center;
-	}
-
-	.new-post button:disabled {
-		opacity: 0.45;
-		cursor: not-allowed;
+		color: var(--paper);
+		display: inline-flex;
+		flex: 1;
+		font-size: 13px;
+		gap: 6px;
+		justify-content: center;
+		padding: 8px 10px;
+		text-decoration: none;
 	}
 
 	.filters {

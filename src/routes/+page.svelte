@@ -18,7 +18,6 @@
 	{recentPosts}
 	counts={countPosts(data.posts)}
 	llmDrafts={data.posts.filter((post) => post.path.endsWith('.llm.md')).length}
-	bind:newTitle={ui.newTitle}
 	bind:filter={ui.filter}
 />
 

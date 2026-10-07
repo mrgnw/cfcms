@@ -107,3 +107,9 @@ export const serializeFrontmatter = (fields: ParsedFrontmatter): string => {
 	if (custom) lines.push(custom);
 	return lines.join('\n');
 };
+
+// date and publish are defaults, so only what the user typed counts as content
+export const isBlankDraft = (frontmatter: string, body: string) => {
+	const fields = parseFrontmatter(frontmatter);
+	return !fields.title.trim() && !fields.tags.length && !fields.custom.trim() && !body.trim();
+};

@@ -10,7 +10,7 @@
 
 	let { data, children } = $props();
 
-	const ui: UiState = $state({ sidebarOpen: true, newTitle: '', filter: 'all' });
+	const ui: UiState = $state({ sidebarOpen: true, filter: 'all' });
 	setUiState(ui);
 
 	let counts = $derived(countPosts(data.posts));
@@ -30,10 +30,9 @@
 <main class="shell" class:sidebar-closed={!ui.sidebarOpen} class:has-post={page.route.id !== '/'}>
 	<Sidebar
 		posts={data.posts}
-		selectedPath={page.data.post?.path}
+		selectedPath={page.data.post?.path ?? page.state.createdPath}
 		{counts}
 		bind:open={ui.sidebarOpen}
-		bind:newTitle={ui.newTitle}
 		bind:filter={ui.filter}
 	/>
 
