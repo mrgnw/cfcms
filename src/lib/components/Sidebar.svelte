@@ -2,7 +2,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { MediaQuery } from 'svelte/reactivity';
-	import { dndzone, type DndEvent } from 'svelte-dnd-action';
+	import { dragHandle, dragHandleZone, type DndEvent } from 'svelte-dnd-action';
 	import { swipeable, type SwipeEndEventDetail } from '@svelte-put/swipeable';
 	import DeployBadge from './DeployBadge.svelte';
 	import { isEditing, isPending, statusOf, type PostCounts, type PostFilter, type PostListItem } from '$lib/types';
@@ -218,13 +218,13 @@
 				<h3 class="section-label editing-label">Editing</h3>
 				<div
 					class="queue"
-					use:dndzone={{ items: queueItems, flipDurationMs: 150, dragHandle: '.grip' }}
+					use:dragHandleZone={{ items: queueItems, flipDurationMs: 150 }}
 					onconsider={handleDnd}
 					onfinalize={handleDndFinalize}
 				>
 					{#each queueItems as item (item.id)}
 						<div class="qrow" class:selected={item.post.path === selectedPath}>
-							<span class="grip" aria-hidden="true">⋮⋮</span>
+							<span class="grip" use:dragHandle aria-label="Drag to reorder">⋮⋮</span>
 							<a href={resolve('/posts/[slug]', { slug: item.post.slug })}>
 								<strong>{item.post.title}</strong>
 								<span class="post-meta">
