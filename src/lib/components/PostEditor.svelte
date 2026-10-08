@@ -403,14 +403,6 @@
 		{#if post.slug && !post.path.endsWith('.llm.md')}<a class="post-id" href={resolve('/posts/[slug]/history', { slug: post.slug })}>history</a>{/if}
 	</div>
 	<div class="status-row">
-		<button
-			class="reference-toggle"
-			type="button"
-			title="Switch the body editor (spike)"
-			onclick={toggleEditor}
-		>
-			{editorKind === 'aragonite' ? 'Aragonite' : 'Milkdown'}
-		</button>
 		{#if editorKind === 'aragonite'}
 			<select
 				class="mode-select"
@@ -423,6 +415,14 @@
 				{/each}
 			</select>
 		{/if}
+		<button
+			class="reference-toggle editor-switch"
+			type="button"
+			title="Switch the body editor (spike)"
+			onclick={toggleEditor}
+		>
+			{editorKind === 'aragonite' ? 'Aragonite' : 'Milkdown'}
+		</button>
 		{#if sources.length > 0}
 			<button
 				class="reference-toggle"
@@ -806,6 +806,10 @@
 		color: var(--ink);
 	}
 
+	.editor-switch {
+		min-width: calc(9ch + 16px);
+	}
+
 	.mode-select {
 		background: transparent;
 		border: none;
@@ -815,7 +819,7 @@
 		font: inherit;
 		font-size: 12px;
 		padding: 4px 4px;
-		margin-left: -8px;
+		margin-right: -8px;
 	}
 
 	.mode-select:hover {
