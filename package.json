@@ -58,6 +58,7 @@
 		"@twinkleplop/tsx": "^0.1.7",
 		"@twinkleplop/typescript": "^0.1.7",
 		"@twinkleplop/yaml": "^0.1.7",
+		"@voithos-labs/aragonite": "0.10.8",
 		"runed": "^0.37.1",
 		"svelte-dnd-action": "^0.9.78"
 	},

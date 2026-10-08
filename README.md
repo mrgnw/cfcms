@@ -57,6 +57,12 @@ The blog reads extra settings after a fence's language: ```` ```py {2} title="x.
 
 The `sveltekit(...)` plugin in `vite.config.ts` aliases `$blog` to `BLOG_CONTENT_BASE_DIR` (default `~/dev/blog`)`/src/lib`, so `shell-words.js` and `styles/code-theme.css` are imported straight from the blog checkout rather than copied. Colour changes made there reach the editor the next time this CMS rebuilds (a daemon restart). A missing blog checkout fails the build loudly.
 
+## Editor spike: Aragonite
+
+The button left of the writer chip in a post's header switches the body editor between Milkdown (the default) and [Aragonite](https://github.com/voithos-labs/aragonite), a Markdown editor that saves what it loaded byte for byte. The choice is remembered per browser. Both editors read and write the same body, so switching mid-edit keeps your text.
+
+The Aragonite side is a spike: `src/lib/components/AragoniteEditor.svelte`, plugins in `src/lib/aragonite/plugins.ts`. Its code blocks use Aragonite's own highlight.js colours rather than twinkleplop, so they won't match the blog. A Mode menu above it switches between Aragonite's presentation modes (`live` is closest to Milkdown). Aragonite is AGPL-3.0, which matters only if other people use the CMS.
+
 ## Publishing
 
 The CMS exposes `POST /api/publish` and a Publish view in the UI. Pending changes are staged per post; only staged posts go out.

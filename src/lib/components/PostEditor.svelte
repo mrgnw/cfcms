@@ -7,6 +7,7 @@
 	import { resolve } from '$app/paths';
 	import { TextareaAutosize } from 'runed';
 	import MilkdownEditor from './MilkdownEditor.svelte';
+	import AragoniteEditor from './AragoniteEditor.svelte';
 	import ReferencePane from './ReferencePane.svelte';
 	import { isBlankDraft, parseFrontmatter, serializeFrontmatter } from '#lib/frontmatter.js';
 	import { applySegment as applySegmentTo } from '#lib/segment-diff.js';
@@ -105,23 +106,40 @@
 
 	let tagsInput = $state<HTMLTextAreaElement | undefined>();
 	let customInput = $state<HTMLTextAreaElement | undefined>();
-	let milkdown = $state<
+	let bodyEditor = $state<
 		{
 			setContent: (markdown: string) => void;
 			insertMarkdown: (markdown: string, inline?: boolean) => void
 		 } |
 		undefined>();
 
+	// Spike: switch the body editor between Milkdown and Aragonite to compare them.
+	type EditorKind = 'milkdown' | 'aragonite';
+	const EDITOR_KEY = 'xccms:editor';
+	let editorKind = $state<EditorKind>('milkdown');
+	$effect(() => {
+		try {
+			if (localStorage.getItem(EDITOR_KEY) === 'aragonite') editorKind = 'aragonite';
+		} catch {}
+	});
+
+	function toggleEditor() {
+		editorKind = editorKind === 'milkdown' ? 'aragonite' : 'milkdown';
+		try {
+			localStorage.setItem(EDITOR_KEY, editorKind);
+		} catch {}
+	}
+
 	let referenceOpen = $state(untrack(() => (versions?.length ?? 0) > 0));
 
 	function insertFromReference(markdown: string, inline: boolean) {
-		milkdown?.insertMarkdown(markdown, inline);
+		bodyEditor?.insertMarkdown(markdown, inline);
 		markDirty();
 	}
 
 	function replaceBody(next: string) {
 		bodyField = next;
-		milkdown?.setContent(next);
+		bodyEditor?.setContent(next);
 		markDirty();
 	}
 
@@ -205,7 +223,7 @@
 		deleteField = fields.deleteRequested;
 		customField = fields.custom;
 		bodyField = next.body;
-		milkdown?.setContent(next.body);
+		bodyEditor?.setContent(next.body);
 		knownHash = next.contentHash;
 		status = 'saved';
 		conflictInfo = null;
@@ -372,6 +390,14 @@
 		{#if !post.path.endsWith('.llm.md')}<a class="post-id" href={resolve('/posts/[slug]/history', { slug: post.slug })}>history</a>{/if}
 	</div>
 	<div class="status-row">
+		<button
+			class="reference-toggle"
+			type="button"
+			title="Switch the body editor (spike)"
+			onclick={toggleEditor}
+		>
+			{editorKind === 'aragonite' ? 'Aragonite' : 'Milkdown'}
+		</button>
 		{#if sources.length > 0}
 			<button
 				class="reference-toggle"
@@ -704,7 +730,11 @@
 		</section>
 
 		<section class="editor-body">
-			<MilkdownEditor bind:this={milkdown} value={bodyField} onChange={onBodyChange} />
+			{#if editorKind === 'aragonite'}
+				<AragoniteEditor bind:this={bodyEditor} value={bodyField} onChange={onBodyChange} />
+			{:else}
+				<MilkdownEditor bind:this={bodyEditor} value={bodyField} onChange={onBodyChange} />
+			{/if}
 		</section>
 	</div>
 </div>
