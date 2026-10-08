@@ -1,11 +1,11 @@
 import { error, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
-import { getPost, importLlmDraft } from '$lib/server/content';
-import { getRevisionByHash, listVersions } from '$lib/server/db';
-import { parseFrontmatter } from '$lib/frontmatter';
-import { diffSegments } from '$lib/segment-diff';
+import { getPost, importLlmDraft } from '#lib/server/content.js';
+import { getRevisionByHash, listVersions } from '#lib/server/db.js';
+import { parseFrontmatter } from '#lib/frontmatter.js';
+import { diffSegments } from '#lib/segment-diff.js';
 
-export { actions } from '$lib/server/actions';
+export { actions } from '#lib/server/actions.js';
 
 const diffFields = (mainFrontmatter: string, versionFrontmatter: string) => {
 	const yours = parseFrontmatter(mainFrontmatter);

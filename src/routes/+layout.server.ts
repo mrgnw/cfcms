@@ -1,5 +1,5 @@
-import { listPosts, postsRev } from '$lib/server/content';
-import { getLastPublishedAt } from '$lib/server/db';
+import { listPosts, postsRev } from '#lib/server/content.js';
+import { getLastPublishedAt } from '#lib/server/db.js';
 
 export const load = async () => {
 	const posts = await listPosts();

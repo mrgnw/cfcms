@@ -32,7 +32,7 @@ pnpm test
 pnpm build
 ```
 
-`pnpm test` runs every `src/**/*.check.ts` under `node --test`, then `pnpm check`. `scripts/check-hooks.ts` resolves `$lib` and `$env/dynamic/private` so server modules load in plain node; server checks build a throwaway blog checkout and database under the system temp directory.
+`pnpm test` runs every `src/**/*.check.ts` under `node --test`, then `pnpm check`. `scripts/check-hooks.ts` resolves `#lib` and `$env/dynamic/private` so server modules load in plain node; server checks build a throwaway blog checkout and database under the system temp directory.
 
 ## Code blocks
 
@@ -55,7 +55,7 @@ The blog reads extra settings after a fence's language: ```` ```py {2} title="x.
 
 ### The `$blog` alias
 
-`svelte.config.js` aliases `$blog` to `BLOG_CONTENT_BASE_DIR` (default `~/dev/blog`)`/src/lib`, so `shell-words.js` and `styles/code-theme.css` are imported straight from the blog checkout rather than copied. Colour changes made there reach the editor the next time this CMS rebuilds (a daemon restart). A missing blog checkout fails the build loudly.
+The `sveltekit(...)` plugin in `vite.config.ts` aliases `$blog` to `BLOG_CONTENT_BASE_DIR` (default `~/dev/blog`)`/src/lib`, so `shell-words.js` and `styles/code-theme.css` are imported straight from the blog checkout rather than copied. Colour changes made there reach the editor the next time this CMS rebuilds (a daemon restart). A missing blog checkout fails the build loudly.
 
 ## Publishing
 

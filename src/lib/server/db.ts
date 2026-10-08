@@ -1,9 +1,9 @@
-import { env } from '$env/dynamic/private';
+import { BLOG_CMS_DB, BLOG_CMS_DEPLOY_STATE_FILE } from '$app/env/private';
 import { DatabaseSync } from 'node:sqlite';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { contentBaseDirectory } from './paths';
-import { randomPostId } from '$lib/post-id';
+import { randomPostId } from '#lib/post-id.js';
 
 // Lazy init: opening at module load would run during `vite build` with
 // build-time cwd/env and poison the db with a wrong-path legacy import.
@@ -12,9 +12,9 @@ let instance: DatabaseSync | null = null;
 const db = () => {
 	if (instance) return instance;
 
-	const databasePath = resolve(env.BLOG_CMS_DB ?? resolve(process.cwd(), '.data/cms.db'));
-	mkdirSync(dirname(databasePath), { recursive: true });
+	const databasePath = resolve(BLOG_CMS_DB ?? resolve(process.cwd(), '.data/cms.db'));
 
+	mkdirSync(dirname(databasePath), { recursive: true });
 	instance = new DatabaseSync(databasePath);
 	instance.exec(`
 		PRAGMA journal_mode = WAL;
@@ -111,9 +111,8 @@ const backfillPostIds = () => {
 };
 
 export const getPathById = (id: string): string | null => {
-	const row = db().prepare('SELECT path FROM posts WHERE id = ? AND head_rev IS NOT NULL').get(id) as
-		| { path: string }
-		| undefined;
+	const row = db().prepare('SELECT path FROM posts WHERE id = ? AND head_rev IS NOT NULL').get(id) as { path: string } | undefined;
+
 	return row?.path ?? null;
 };
 
@@ -138,9 +137,7 @@ type LegacyDeployState = {
 const importLegacyDeployState = () => {
 	if (getMeta('importedLegacyDeployState')) return;
 
-	const legacyDeployStatePath = resolve(
-		env.BLOG_CMS_DEPLOY_STATE_FILE ?? resolve(contentBaseDirectory, '.cms/deploy-state.json')
-	);
+	const legacyDeployStatePath = resolve(BLOG_CMS_DEPLOY_STATE_FILE ?? resolve(contentBaseDirectory, '.cms/deploy-state.json'));
 
 	if (existsSync(legacyDeployStatePath)) {
 		const legacy = JSON.parse(readFileSync(legacyDeployStatePath, 'utf8')) as LegacyDeployState;
@@ -410,8 +407,13 @@ export const appendRevision = (path: string, frontmatter: string, body: string, 
 	db().exec('BEGIN');
 	try {
 		const row = db().prepare('SELECT head_rev, published_hash, id FROM posts WHERE path = ?').get(path) as
-			| { head_rev: number | null; published_hash: string | null; id: string | null }
-			| undefined;
+			{
+				head_rev: number | null;
+				published_hash: string | null;
+				id: string | null
+			 } |
+			undefined;
+
 		const nextRev = (row?.head_rev ?? 0) + 1;
 		const id = row?.id ?? newPostId();
 		db()

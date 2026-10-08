@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { relative, resolve } from 'node:path';
-import { canonicalBody, hashPostContent, splitRawPost } from '$lib/post-text';
-import { normalizeNewlines } from '$lib/save-rules';
+import { canonicalBody, hashPostContent, splitRawPost } from '#lib/post-text.js';
+import { normalizeNewlines } from '#lib/save-rules.js';
 import {
 	appendRevision, deletePostRows, getMetaValue, getPublishedPosts, getStoredPost,
 	listStoredPosts, setExportedState, setMetaValue, updatePublishedHash

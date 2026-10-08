@@ -1,6 +1,6 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
-import { createPost, getPost, importAllLlmDrafts, importLlmDraft, purgePost, savePost } from '$lib/server/content';
+import { createPost, getPost, importAllLlmDrafts, importLlmDraft, purgePost, savePost } from '#lib/server/content.js';
 import {
 	addToEditing,
 	claimWriter,
@@ -12,12 +12,12 @@ import {
 	reorderEditing,
 	setStaged,
 	upsertVersion
-} from '$lib/server/db';
-import { commitPost } from '$lib/server/git';
-import { hasSiteVersion, shipsHeadText } from '$lib/server/pending';
-import { isBlankDraft, setDeleteFlag } from '$lib/frontmatter';
-import { isValidWriter, normalizeNewlines } from '$lib/save-rules';
-import { statusOf } from '$lib/types';
+} from '#lib/server/db.js';
+import { commitPost } from '#lib/server/git.js';
+import { hasSiteVersion, shipsHeadText } from '#lib/server/pending.js';
+import { isBlankDraft, setDeleteFlag } from '#lib/frontmatter.js';
+import { isValidWriter, normalizeNewlines } from '#lib/save-rules.js';
+import { statusOf } from '#lib/types.js';
 
 const maxRevisionLabel = 60;
 

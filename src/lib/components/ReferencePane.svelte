@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { isProse, normalizeBlock, splitBlocks, splitSentences } from '$lib/blocks';
+	import { isProse, normalizeBlock, splitBlocks, splitSentences } from '#lib/blocks.js';
 	import SegmentCard from './SegmentCard.svelte';
-	import type { FieldSegment, Segment } from '$lib/types';
+	import type { FieldSegment, Segment } from '#lib/types.js';
 
 	type Props = {
 		label: string;

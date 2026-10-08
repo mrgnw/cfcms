@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { invalidateAll, replaceState } from '$app/navigation';
+	import { goto, refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import PostEditor from '$lib/components/PostEditor.svelte';
-	import { svxSlug } from '$lib/svx';
-	import type { Post } from '$lib/types';
+	import PostEditor from '#lib/components/PostEditor.svelte';
+	import { svxSlug } from '#lib/svx.js';
+	import type { Post } from '#lib/types.js';
 
 	let { data } = $props();
 
@@ -17,13 +17,12 @@
 		body: ''
 	});
 
-	const moveTo = (slug: string, path: string) =>
-		replaceState(resolve('/posts/[slug]', { slug }), { createdPath: path });
+	const moveTo = (slug: string, path: string) => goto(resolve('/posts/[slug]', { slug }), { shallow: true, replace: true, state: { createdPath: path } });
 
 	function onCreated(created: { path: string; slug: string; id: string | null; contentHash: string }) {
 		post = { ...post, path: created.path, slug: created.slug, id: created.id ?? undefined, contentHash: created.contentHash };
 		moveTo(created.slug, created.path);
-		invalidateAll();
+		refreshAll();
 	}
 
 	function onSaved(frontmatter?: string) {
@@ -33,7 +32,7 @@
 			post = { ...post, slug };
 			moveTo(slug, post.path);
 		}
-		return invalidateAll();
+		return refreshAll();
 	}
 </script>
 
@@ -41,8 +40,17 @@
 	<title>New post · cms.xcc.es</title>
 </svelte:head>
 
-<a class="mobile-back" href={resolve('/')} aria-label="Back to post list">Posts</a>
-<PostEditor {post} {onSaved} {onCreated} />
+<a
+	class="mobile-back"
+	href={resolve('/')}
+	aria-label="Back to post list"
+>Posts</a>
+
+<PostEditor
+	post={post}
+	onSaved={onSaved}
+	onCreated={onCreated}
+/>
 
 <style>
 	.mobile-back {

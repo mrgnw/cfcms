@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { canonicalBody, hashPostContent, splitRawPost } from '$lib/post-text';
-import { normalizeNewlines } from '$lib/save-rules';
+import { canonicalBody, hashPostContent, splitRawPost } from '#lib/post-text.js';
+import { normalizeNewlines } from '#lib/save-rules.js';
 import {
 	appendRevision,
 	deleteVersion,

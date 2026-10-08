@@ -1,5 +1,5 @@
 <script lang="ts">
-	import PublishView from '$lib/components/PublishView.svelte';
+	import PublishView from '#lib/components/PublishView.svelte';
 
 	let { data } = $props();
 </script>

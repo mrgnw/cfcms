@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import DeployBadge from './DeployBadge.svelte';
-	import { type PostCounts, type PostFilter, type PostListItem } from '$lib/types';
+	import { type PostCounts, type PostFilter, type PostListItem } from '#lib/types.js';
 
 	let {
 		recentPosts,
@@ -23,27 +23,36 @@
 		<p>Pick up where you left off, or start something new.</p>
 	</header>
 
-	<a class="home-new" href={resolve('/new')}>New post</a>
+	<a class="home-new" href={resolve('new')}>New post</a>
 
 	{#if llmDrafts > 0}
-		<a class="home-import" href={resolve('/admin')}>
-			{llmDrafts} LLM {llmDrafts === 1 ? 'draft' : 'drafts'} to import ›
-		</a>
+		<a class="home-import" href={resolve('admin')}>{llmDrafts} LLM {llmDrafts === 1 ? 'draft' : 'drafts'} to import ›</a>
 	{/if}
 
 	<div class="home-stats">
-		<button type="button" class="stat" onclick={() => (filter = 'all')}>
-			<em>{counts.all}</em><span>All</span>
-		</button>
-		<button type="button" class="stat" onclick={() => (filter = 'drafts')}>
-			<em>{counts.drafts}</em><span>Drafts</span>
-		</button>
-		<button type="button" class="stat" onclick={() => (filter = 'ready')}>
-			<em>{counts.ready}</em><span>Ready</span>
-		</button>
-		<button type="button" class="stat" onclick={() => (filter = 'live')}>
-			<em>{counts.live}</em><span>Live</span>
-		</button>
+		<button
+			type="button"
+			class="stat"
+			onclick={() => filter = 'all'}
+		><em>{counts.all}</em><span>All</span></button>
+
+		<button
+			type="button"
+			class="stat"
+			onclick={() => filter = 'drafts'}
+		><em>{counts.drafts}</em><span>Drafts</span></button>
+
+		<button
+			type="button"
+			class="stat"
+			onclick={() => filter = 'ready'}
+		><em>{counts.ready}</em><span>Ready</span></button>
+
+		<button
+			type="button"
+			class="stat"
+			onclick={() => filter = 'live'}
+		><em>{counts.live}</em><span>Live</span></button>
 	</div>
 
 	<section class="home-recent">

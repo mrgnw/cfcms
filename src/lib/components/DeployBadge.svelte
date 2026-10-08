@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { isEditing, statusOf, type PostListItem } from '$lib/types';
+	import { isEditing, statusOf, type PostListItem } from '#lib/types.js';
 
 	let {
 		post,

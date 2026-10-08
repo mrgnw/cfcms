@@ -1,5 +1,5 @@
 <script lang="ts">
-	import AdminView from '$lib/components/AdminView.svelte';
+	import AdminView from '#lib/components/AdminView.svelte';
 
 	let { data } = $props();
 </script>

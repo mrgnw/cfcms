@@ -1,6 +1,6 @@
 import { error, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
-import { getPathById } from '$lib/server/db';
+import { getPathById } from '#lib/server/db.js';
 
 // 307, not 308: the id is permanent but the slug it points at can change
 export const load = async ({ params, parent }) => {

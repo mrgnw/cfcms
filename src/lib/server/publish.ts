@@ -1,9 +1,9 @@
-import { env } from '$env/dynamic/private';
-import { mainBranchError } from '$lib/branch';
-import { renderPost } from '$lib/post-text';
-import { parseFrontmatter } from '$lib/frontmatter';
-import { renderSvx, svxSlug } from '$lib/svx';
-import { isPending, statusOf } from '$lib/types';
+import { BLOG_BUILD_COMMAND } from '$app/env/private';
+import { mainBranchError } from '#lib/branch.js';
+import { renderPost } from '#lib/post-text.js';
+import { parseFrontmatter } from '#lib/frontmatter.js';
+import { renderSvx, svxSlug } from '#lib/svx.js';
+import { isPending, statusOf } from '#lib/types.js';
 import { spawn } from 'node:child_process';
 import { mkdir, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -42,14 +42,26 @@ const runCommand = (name: string, command: string, cwd: string): Promise<Command
 		child.stdout.on('data', appendOutput);
 		child.stderr.on('data', appendOutput);
 
-		child.on('close', (status) => {
-			resolveResult({ name, ok: status === 0, status, durationMs: Date.now() - startedAt, output });
-		});
-
-		child.on('error', (caught) => {
-			resolveResult({ name, ok: false, status: null, durationMs: Date.now() - startedAt, output: caught.message });
+	child.on('close', (status) => {
+		resolveResult({
+			name,
+			ok: status === 0,
+			status,
+			durationMs: Date.now() - startedAt,
+			output
 		});
 	});
+
+	child.on('error', (caught) => {
+		resolveResult({
+			name,
+			ok: false,
+			status: null,
+			durationMs: Date.now() - startedAt,
+			output: caught.message
+		});
+	});
+});
 
 export type LiveEntry = {
 	path: string;
@@ -158,9 +170,9 @@ export const runPublish = async () => {
 
 	const liveSet = buildLiveSet(posts, published, staged);
 	await renderSvxDirectory(liveSet);
-	const { gitPaths, exports } = await renderBoundary(going);
 
-	const build = await runCommand('build', env.BLOG_BUILD_COMMAND ?? 'pnpm build', contentBaseDirectory);
+	const { gitPaths, exports } = await renderBoundary(going);
+	const build = await runCommand('build', BLOG_BUILD_COMMAND ?? 'pnpm build', contentBaseDirectory);
 	const runAt = new Date().toISOString();
 	if (!build.ok) {
 		await restoreWorkingTree(gitPaths);

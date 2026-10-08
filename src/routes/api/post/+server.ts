@@ -1,5 +1,5 @@
-import { error, json } from '@sveltejs/kit';
-import { getPost } from '$lib/server/content';
+import { error } from '@sveltejs/kit';
+import { getPost } from '#lib/server/content.js';
 
 export const GET = async ({ url }) => {
 	const path = url.searchParams.get('path') ?? '';
@@ -10,5 +10,5 @@ export const GET = async ({ url }) => {
 
 	if (!post) throw error(404, `Unknown post: ${path}`);
 
-	return json({ contentHash: post.contentHash, frontmatter: post.frontmatter, body: post.body });
+	return Response.json({ contentHash: post.contentHash, frontmatter: post.frontmatter, body: post.body });
 };

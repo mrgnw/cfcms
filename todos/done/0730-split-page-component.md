@@ -13,7 +13,7 @@ for all three. It is the largest file in the repo and every new feature lands in
   `PublishData`, plus `pendingStatuses` and `statusLabel`. `DeployStatus` is
   currently declared twice (here and `server/deploy-state.ts`) and `Post` twice
   (here and `PostEditor.svelte`). `deploy-state.ts` imports the type from here so
-  there is one definition; `$lib/types` stays client-safe (no server imports).
+  there is one definition; `#lib/types.js` stays client-safe (no server imports).
 - **`DeployBadge.svelte`** — the `edit`/status badge pair, duplicated between the
   post list and the recent card, with its own styles.
 - **`Sidebar.svelte`** — toggle, new-post form, filters, search, post list,

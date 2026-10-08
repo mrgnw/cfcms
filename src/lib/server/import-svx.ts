@@ -1,8 +1,8 @@
 import { appendFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { canonicalBody, hashPostContent, splitRawPost } from '$lib/post-text';
-import { normalizeNewlines } from '$lib/save-rules';
-import { slugKey, svxSlug, svxToPostFrontmatter } from '$lib/svx';
+import { canonicalBody, hashPostContent, splitRawPost } from '#lib/post-text.js';
+import { normalizeNewlines } from '#lib/save-rules.js';
+import { slugKey, svxSlug, svxToPostFrontmatter } from '#lib/svx.js';
 import {
 	appendRevision,
 	clearStaged,

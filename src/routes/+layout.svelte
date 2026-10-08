@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import { browser } from '$app/environment';
-	import { invalidateAll } from '$app/navigation';
+	import { browser } from '$app/env';
+	import { refreshAll } from '$app/navigation';
 	import { page } from '$app/state';
-	import { startPoll } from '$lib/poll';
-	import Sidebar from '$lib/components/Sidebar.svelte';
-	import { countPosts } from '$lib/types';
-	import { setUiState, type UiState } from '$lib/ui-state';
+	import { startPoll } from '#lib/poll.js';
+	import Sidebar from '#lib/components/Sidebar.svelte';
+	import { countPosts } from '#lib/types.js';
+	import { setUiState, type UiState } from '#lib/ui-state.js';
 
 	let { data, children } = $props();
 
@@ -20,8 +20,8 @@
 			startPoll(async () => {
 				const res = await fetch('/api/posts').catch(() => null);
 				if (!res?.ok) return;
-				const latest = (await res.json()) as { rev: string };
-				if (latest.rev !== data.postsRev) invalidateAll();
+				const latest = await res.json() as { rev: string };
+				if (latest.rev !== data.postsRev) refreshAll();
 			}, 5000)
 		);
 	}
@@ -31,7 +31,7 @@
 	<Sidebar
 		posts={data.posts}
 		selectedPath={page.data.post?.path ?? page.state.createdPath}
-		{counts}
+		counts={counts}
 		bind:open={ui.sidebarOpen}
 		bind:filter={ui.filter}
 	/>

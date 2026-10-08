@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { deserialize } from '$app/forms';
-	import { goto, invalidateAll } from '$app/navigation';
+	import { goto, refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import type { LlmDraftStatus } from '$lib/llm-drafts';
+	import type { LlmDraftStatus } from '#lib/llm-drafts.js';
 
 	let { llmDrafts }: { llmDrafts: LlmDraftStatus[] } = $props();
 
@@ -33,11 +33,11 @@
 		try {
 			const data = (await post('importLlmDraft', fd)) as { imported: { path: string; created: boolean; slug: string } };
 			if (open) {
-				await goto(resolve('/posts/[slug]', { slug: data.imported.slug }), { invalidateAll: true });
+				await goto(resolve('/posts/[slug]', { slug: data.imported.slug }), { refreshAll: true });
 				return;
 			}
 			message = data.imported.created ? `Imported ${draft.path} as ${data.imported.path}` : `${data.imported.path} already exists`;
-			await invalidateAll();
+			await refreshAll();
 		} catch (caught) {
 			error = caught instanceof Error ? caught.message : String(caught);
 		} finally {
@@ -52,7 +52,7 @@
 		try {
 			const data = (await post('importLlm', new FormData())) as { importedLlm: number };
 			message = `Imported ${data.importedLlm} LLM ${data.importedLlm === 1 ? 'draft' : 'drafts'}`;
-			await invalidateAll();
+			await refreshAll();
 		} catch (caught) {
 			error = caught instanceof Error ? caught.message : String(caught);
 		} finally {

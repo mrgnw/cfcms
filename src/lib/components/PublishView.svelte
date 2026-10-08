@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { slide } from 'svelte/transition';
 	import SegmentCard from './SegmentCard.svelte';
-	import type { PendingChange, PublishData } from '$lib/types';
+	import type { PendingChange, PublishData } from '#lib/types.js';
 
 	let { changes, lastPublishedAt }: { changes: PendingChange[]; lastPublishedAt: string | null } = $props();
 
@@ -72,7 +72,7 @@
 		const outcomes = await Promise.all(responses.map((res) => res.json().catch(() => ({ type: 'error' }))));
 		const refused = paths.filter((_, index) => outcomes[index].type !== 'success');
 		if (refused.length) error = `Not staged: ${refused.join(', ')}`;
-		await invalidateAll();
+		await refreshAll();
 	}
 
 	async function resolveSite(path: string, choice: 'mine' | 'theirs') {
@@ -83,7 +83,7 @@
 		const res = await fetch('?/resolveSite', { method: 'POST', body: fd });
 		const outcome = await res.json().catch(() => ({ type: 'error' }));
 		if (outcome.type !== 'success') error = `Could not resolve ${path}`;
-		await invalidateAll();
+		await refreshAll();
 	}
 
 	async function runPublish() {
@@ -98,7 +98,7 @@
 				throw new Error(data.message ?? 'Publish failed');
 			}
 			result = data;
-			await invalidateAll();
+			await refreshAll();
 		} catch (caught) {
 			error = caught instanceof Error ? caught.message : String(caught);
 		} finally {

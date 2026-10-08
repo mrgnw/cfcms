@@ -1,11 +1,11 @@
 import { error } from '@sveltejs/kit';
-import { getPost } from '$lib/server/content';
-import { getRevision, getStoredPost, listRevisions } from '$lib/server/db';
-import { splitBlocks } from '$lib/blocks';
-import { diffSegments, lineDiffCounts } from '$lib/segment-diff';
-import { parseFrontmatter } from '$lib/frontmatter';
+import { getPost } from '#lib/server/content.js';
+import { getRevision, getStoredPost, listRevisions } from '#lib/server/db.js';
+import { splitBlocks } from '#lib/blocks.js';
+import { diffSegments, lineDiffCounts } from '#lib/segment-diff.js';
+import { parseFrontmatter } from '#lib/frontmatter.js';
 
-export { actions } from '$lib/server/actions';
+export { actions } from '#lib/server/actions.js';
 
 export const load = async ({ params, parent, url }) => {
 	const matches = (await parent()).posts.filter((item) => item.slug === params.slug);

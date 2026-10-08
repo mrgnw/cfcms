@@ -1,16 +1,16 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
-	import { startPoll } from '$lib/poll';
-	import { isValidWriter } from '$lib/save-rules';
-	import { browser } from '$app/environment';
+	import { startPoll } from '#lib/poll.js';
+	import { isValidWriter } from '#lib/save-rules.js';
+	import { browser } from '$app/env';
 	import { deserialize } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { TextareaAutosize } from 'runed';
 	import MilkdownEditor from './MilkdownEditor.svelte';
 	import ReferencePane from './ReferencePane.svelte';
-	import { isBlankDraft, parseFrontmatter, serializeFrontmatter } from '$lib/frontmatter';
-	import { applySegment as applySegmentTo } from '$lib/segment-diff';
-	import type { FieldSegment, Post, Segment, WriterVersion } from '$lib/types';
+	import { isBlankDraft, parseFrontmatter, serializeFrontmatter } from '#lib/frontmatter.js';
+	import { applySegment as applySegmentTo } from '#lib/segment-diff.js';
+	import type { FieldSegment, Post, Segment, WriterVersion } from '#lib/types.js';
 
 	type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error';
 
@@ -38,8 +38,8 @@
 	let bodyField = $state(untrack(() => post.body));
 	let knownHash = $state(untrack(() => post.contentHash ?? ''));
 	const defaultWriter = () => {
-		if (/iPhone/.test(navigator.userAgent)) return 'ph';
-		if (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1) return 'pad';
+		if ((/iPhone/).test(navigator.userAgent)) return 'ph';
+		if ((/Macintosh/).test(navigator.userAgent) && navigator.maxTouchPoints > 1) return 'pad';
 		return 'mac';
 	};
 	const initialWriter = () => {
@@ -59,12 +59,11 @@
 		localStorage.setItem('cms-writer', next);
 	}
 	const sessionId = browser
-		? (sessionStorage.getItem('cms-session') ??
-			(() => {
-				const id = crypto.randomUUID().replaceAll('-', '').slice(0, 8);
-				sessionStorage.setItem('cms-session', id);
-				return id;
-			})())
+		? sessionStorage.getItem('cms-session') ?? (() => {
+			const id = crypto.randomUUID().replaceAll('-', '').slice(0, 8);
+			sessionStorage.setItem('cms-session', id);
+			return id;
+		})()
 		: 'ssrnoop00';
 	let conflictInfo = $state<{ writer: string; currentHash: string; currentFrontmatter: string; currentBody: string } | null>(null);
 	let diverged = $state(false);
@@ -107,9 +106,12 @@
 	let tagsInput = $state<HTMLTextAreaElement | undefined>();
 	let customInput = $state<HTMLTextAreaElement | undefined>();
 	let milkdown = $state<
-		| { setContent: (markdown: string) => void; insertMarkdown: (markdown: string, inline?: boolean) => void }
-		| undefined
-	>();
+		{
+			setContent: (markdown: string) => void;
+			insertMarkdown: (markdown: string, inline?: boolean) => void
+		 } |
+		undefined>();
+
 	let referenceOpen = $state(untrack(() => (versions?.length ?? 0) > 0));
 
 	function insertFromReference(markdown: string, inline: boolean) {
@@ -156,7 +158,7 @@
 				if (!post.path || status !== 'saved' || conflictInfo || diverged) return;
 				const res = await fetch(`/api/post?path=${encodeURIComponent(post.path)}`).catch(() => null);
 				if (!res?.ok) return;
-				const latest = (await res.json()) as { contentHash: string; frontmatter: string; body: string };
+				const latest = await res.json() as { contentHash: string; frontmatter: string; body: string };
 				if (latest.contentHash === knownHash) return;
 				if (status !== 'saved' || conflictInfo || diverged) return;
 				adoptContent(latest);
@@ -257,13 +259,18 @@
 
 			if (result.type === 'success') {
 				const data = result.data as
-					| {
-							created?: { path: string; slug: string; id: string | null; contentHash: string };
-							savedHash?: string;
-							conflict?: boolean;
-							writer?: string;
-							currentHash?: string;
-							currentFrontmatter?: string;
+					{
+						created?: {
+							path: string;
+							slug: string;
+							id: string | null;
+							contentHash: string
+						 };
+						savedHash?: string;
+						conflict?: boolean;
+						writer?: string;
+						currentHash?: string;
+						currentFrontmatter?: string;
 							currentBody?: string;
 					  }
 					| undefined;
@@ -370,10 +377,8 @@
 				class="reference-toggle"
 				type="button"
 				aria-pressed={referenceOpen}
-				onclick={() => (referenceOpen = !referenceOpen)}
-			>
-				Reference
-			</button>
+				onclick={() => referenceOpen = !referenceOpen}
+			>Reference</button>
 		{/if}
 		{#if editingWriter}
 			<input
@@ -402,9 +407,11 @@
 		<button
 			class="status-button"
 			type="button"
-			onclick={() => (autosaveOn ? (status === 'dirty' ? save() : null) : save())}
-			disabled={status === 'saving' || (autosaveOn && status !== 'dirty')}
-			title={autosaveOn ? `Autosave on · ${status}` : `Autosave off · ${status === 'dirty' ? 'click to save' : status}`}
+			onclick={() => autosaveOn ? status === 'dirty' ? save() : null : save()}
+			disabled={status === 'saving' || autosaveOn && status !== 'dirty'}
+			title={autosaveOn
+				? `Autosave on · ${status}`
+				: `Autosave off · ${status === 'dirty' ? 'click to save' : status}`}
 			class:saved={status === 'saved'}
 			class:dirty={status === 'dirty'}
 			class:saving={status === 'saving'}
@@ -433,13 +440,32 @@
 				onclick={copyMarkdown}
 			>
 				{#if copyState === 'copied'}
-					<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<path d="M20 6 9 17l-5-5" />
-					</svg>
+					<svg
+						width="15"
+						height="15"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					><path d="M20 6 9 17l-5-5"></path></svg>
 				{:else}
-					<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
-						<path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+					<svg
+						width="15"
+						height="15"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>
+
+						<path
+							d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"
+						></path>
 					</svg>
 				{/if}
 			</button>
@@ -449,10 +475,19 @@
 				title="Download markdown"
 				onclick={downloadMarkdown}
 			>
-				<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-					<polyline points="7 10 12 15 17 10"/>
-					<line x1="12" x2="12" y1="15" y2="3"/>
+				<svg
+					width="15"
+					height="15"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				>
+					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+					<polyline points="7 10 12 15 17 10"></polyline>
+					<line x1="12" x2="12" y1="15" y2="3"></line>
 				</svg>
 			</button>
 		</div>
@@ -471,12 +506,12 @@
 			onclick={() =>
 				conflictInfo &&
 				adoptContent({
-					contentHash: conflictInfo.currentHash,
-					frontmatter: conflictInfo.currentFrontmatter,
-					body: conflictInfo.currentBody
-				})}>Load theirs</button
-		>
-		<button type="button" onclick={() => (conflictInfo = null)}>Keep typing</button>
+				contentHash: conflictInfo.currentHash,
+				frontmatter: conflictInfo.currentFrontmatter,
+				body: conflictInfo.currentBody
+			})}
+		>Load theirs</button>
+		<button type="button" onclick={() => conflictInfo = null}>Keep typing</button>
 	</p>
 {/if}
 
@@ -490,10 +525,8 @@
 							type="button"
 							class="source-tab"
 							class:active={source.id === activeSource.id}
-							onclick={() => (selectedSourceId = source.id)}
-						>
-							{source.id}
-						</button>
+							onclick={() => selectedSourceId = source.id}
+						>{source.id}</button>
 					{/each}
 					{#if activeSource.dismissible}
 						<button type="button" class="source-dismiss" onclick={() => activeSource && dismissSource(activeSource.id)}>
@@ -518,93 +551,157 @@
 	{/if}
 
 	<div class="draft">
-<section class="frontmatter">
-	<div class="meta-line">
-		<input
-			id="title"
-			aria-label="Title"
-			bind:value={titleField}
-			oninput={markDirty}
-			placeholder="Untitled"
-		/>
-		<input
-			id="date"
-			aria-label="Date"
-			bind:value={dateField}
-			oninput={markDirty}
-			placeholder="YYYY-MM-DD"
-			inputmode="numeric"
-			pattern="[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]"
-			maxlength="10"
-		/>
+		<section class="frontmatter">
+			<div class="meta-line">
+				<input
+					id="title"
+					aria-label="Title"
+					bind:value={titleField}
+					oninput={markDirty}
+					placeholder="Untitled"
+				/>
+				<input
+					id="date"
+					aria-label="Date"
+					bind:value={dateField}
+					oninput={markDirty}
+					placeholder="YYYY-MM-DD"
+					inputmode="numeric"
+					pattern="[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]"
+					maxlength="10"
+				/>
 
-		<label class="icon-toggle" title="Publish">
-			<input aria-label="Publish" type="checkbox" bind:checked={publishField} onchange={togglePublish} />
-			<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-				<path d="M5 12.5 9.2 17 19 7" />
-			</svg>
-		</label>
+				<label class="icon-toggle" title="Publish">
+					<input
+						aria-label="Publish"
+						type="checkbox"
+						bind:checked={publishField}
+						onchange={togglePublish}
+					/>
 
-		<label class="icon-toggle" title="Pin">
-			<input aria-label="Pin" type="checkbox" bind:checked={pinField} onchange={markDirty} />
-			<svg class="pin-outline" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-				<path d="m3 21 4.63-4.631m.005-.005-2.78-2.78c-.954-.953.006-2.996 1.31-3.078 1.178-.075 3.905.352 4.812-.555l2.49-2.49c.617-.618.225-2 .185-2.762-.058-1.016 1.558-2.271 2.415-1.414l4.647 4.648c.86.858-.4 2.469-1.413 2.415-.762-.04-2.145-.432-2.763.185l-2.49 2.49c-.906.907-.48 3.633-.554 4.811-.082 1.305-2.125 2.265-3.08 1.31z" />
-			</svg>
-			<svg class="pin-solid" width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
-				<path d="M14.102 2.664c.628-.416 1.692-.713 2.495.09l4.647 4.648c.806.804.508 1.868.091 2.495a2.95 2.95 0 0 1-.863.85c-.334.213-.756.374-1.211.35a9 9 0 0 1-.658-.071l-.068-.01a9 9 0 0 0-.707-.073c-.504-.025-.698.06-.76.12l-2.49 2.491c-.08.08-.18.258-.256.6-.073.33-.105.736-.113 1.186-.007.432.008.874.024 1.3l.001.047c.015.423.03.855.009 1.194-.065 1.031-.868 1.79-1.658 2.141-.79.35-1.917.437-2.7-.347l-2.25-2.25L3.53 21.53a.75.75 0 1 1-1.06-1.06l4.104-4.105-2.25-2.25c-.783-.784-.697-1.91-.346-2.7.35-.79 1.11-1.593 2.14-1.658.34-.021.772-.006 1.195.009l.047.001c.426.015.868.031 1.3.024.45-.008.856-.04 1.186-.113.342-.076.52-.177.6-.257l2.49-2.49c.061-.061.146-.256.12-.76a9 9 0 0 0-.073-.707l-.009-.068a9 9 0 0 1-.071-.658c-.025-.455.136-.877.348-1.211.216-.34.515-.64.851-.863" />
-			</svg>
-		</label>
+					<svg
+						width="17"
+						height="17"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.8"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					><path d="M5 12.5 9.2 17 19 7"></path></svg>
+				</label>
+
+				<label class="icon-toggle" title="Pin">
+					<input
+						aria-label="Pin"
+						type="checkbox"
+						bind:checked={pinField}
+						onchange={markDirty}
+					/>
+
+					<svg
+						class="pin-outline"
+						width="17"
+						height="17"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path
+							d="m3 21 4.63-4.631m.005-.005-2.78-2.78c-.954-.953.006-2.996 1.31-3.078 1.178-.075 3.905.352 4.812-.555l2.49-2.49c.617-.618.225-2 .185-2.762-.058-1.016 1.558-2.271 2.415-1.414l4.647 4.648c.86.858-.4 2.469-1.413 2.415-.762-.04-2.145-.432-2.763.185l-2.49 2.49c-.906.907-.48 3.633-.554 4.811-.082 1.305-2.125 2.265-3.08 1.31z"
+						></path>
+					</svg>
+
+					<svg
+						class="pin-solid"
+						width="17"
+						height="17"
+						viewBox="0 0 24 24"
+						fill="currentColor"
+					>
+						<path
+							d="M14.102 2.664c.628-.416 1.692-.713 2.495.09l4.647 4.648c.806.804.508 1.868.091 2.495a2.95 2.95 0 0 1-.863.85c-.334.213-.756.374-1.211.35a9 9 0 0 1-.658-.071l-.068-.01a9 9 0 0 0-.707-.073c-.504-.025-.698.06-.76.12l-2.49 2.491c-.08.08-.18.258-.256.6-.073.33-.105.736-.113 1.186-.007.432.008.874.024 1.3l.001.047c.015.423.03.855.009 1.194-.065 1.031-.868 1.79-1.658 2.141-.79.35-1.917.437-2.7-.347l-2.25-2.25L3.53 21.53a.75.75 0 1 1-1.06-1.06l4.104-4.105-2.25-2.25c-.783-.784-.697-1.91-.346-2.7.35-.79 1.11-1.593 2.14-1.658.34-.021.772-.006 1.195.009l.047.001c.426.015.868.031 1.3.024.45-.008.856-.04 1.186-.113.342-.076.52-.177.6-.257l2.49-2.49c.061-.061.146-.256.12-.76a9 9 0 0 0-.073-.707l-.009-.068a9 9 0 0 1-.071-.658c-.025-.455.136-.877.348-1.211.216-.34.515-.64.851-.863"
+						></path>
+					</svg>
+				</label>
 
 		<form class="queue-form" method="POST" action={post.editingOrder != null ? '?/queueRemove' : '?/queueAdd'}>
-			<input type="hidden" name="path" value={post.path} />
-			<button
-				class="icon-toggle edit-toggle"
-				class:queued={post.editingOrder != null}
-				title={post.editingOrder != null ? 'Remove from editing queue' : 'Add to editing queue'}
-			>
-				<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0" />
-					<path d="M12 7a5 5 0 1 0 5 5" />
-					<path d="M13 3.055A9 9 0 1 0 20.941 11" />
-					<path d="M15 6v3h3l3-3h-3V3zm0 3l-3 3" />
-				</svg>
-			</button>
-		</form>
+					<input type="hidden" name="path" value={post.path} />
+					<button
+						class="icon-toggle edit-toggle"
+						class:queued={post.editingOrder != null}
+						title={post.editingOrder != null ? 'Remove from editing queue' : 'Add to editing queue'}
+					>
+						<svg
+							width="17"
+							height="17"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.7"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0"></path>
+							<path d="M12 7a5 5 0 1 0 5 5"></path>
+							<path d="M13 3.055A9 9 0 1 0 20.941 11"></path>
+							<path d="M15 6v3h3l3-3h-3V3zm0 3l-3 3"></path>
+						</svg>
+					</button>
+				</form>
 
-		<label class="icon-toggle delete-toggle" title="Delete">
-			<input aria-label="Delete" type="checkbox" bind:checked={deleteField} onchange={toggleDelete} />
-			<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-				<path d="M4 7h16" />
-				<path d="M10 11v6" />
-				<path d="M14 11v6" />
-				<path d="M6 7l1 14h10l1-14" />
-				<path d="M9 7V4h6v3" />
-			</svg>
-		</label>
-	</div>
+				<label class="icon-toggle delete-toggle" title="Delete">
+					<input
+						aria-label="Delete"
+						type="checkbox"
+						bind:checked={deleteField}
+						onchange={toggleDelete}
+					/>
 
-	<div class="tags-line">
-		<textarea
-			id="tags"
-			bind:this={tagsInput}
-			bind:value={tagsText}
-			oninput={markDirty}
-			placeholder="comma-separated tags"
-			rows="1"
-		></textarea>
-	</div>
+					<svg
+						width="17"
+						height="17"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.7"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path d="M4 7h16"></path>
+						<path d="M10 11v6"></path>
+						<path d="M14 11v6"></path>
+						<path d="M6 7l1 14h10l1-14"></path>
+						<path d="M9 7V4h6v3"></path>
+					</svg>
+				</label>
+			</div>
 
-	<div class="custom-field">
-		<textarea
-			id="custom"
-			bind:this={customInput}
-			bind:value={customField}
-			oninput={markDirty}
-			placeholder="key: value"
-			spellcheck="false"
-		></textarea>
-	</div>
-</section>
+			<div class="tags-line">
+				<textarea
+					id="tags"
+					bind:this={tagsInput}
+					bind:value={tagsText}
+					oninput={markDirty}
+					placeholder="comma-separated tags"
+					rows="1"
+				></textarea>
+			</div>
+
+			<div class="custom-field">
+				<textarea
+					id="custom"
+					bind:this={customInput}
+					bind:value={customField}
+					oninput={markDirty}
+					placeholder="key: value"
+					spellcheck="false"
+				></textarea>
+			</div>
+		</section>
 
 		<section class="editor-body">
 			<MilkdownEditor bind:this={milkdown} value={bodyField} onChange={onBodyChange} />
@@ -654,7 +751,7 @@
 		color: var(--ink);
 	}
 
-	.reference-toggle[aria-pressed='true'] {
+	.reference-toggle[aria-pressed="true"] {
 		background: var(--hover);
 		color: var(--accent-ink);
 	}

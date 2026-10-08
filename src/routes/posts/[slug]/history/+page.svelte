@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
-	import SegmentCard from '$lib/components/SegmentCard.svelte';
+	import SegmentCard from '#lib/components/SegmentCard.svelte';
 
 	let { data, form } = $props();
 
@@ -51,7 +51,7 @@
 					href="?rev={entry.rev}"
 					aria-current={entry.rev === data.selected.rev ? 'true' : undefined}
 					data-sveltekit-replacestate
-					data-sveltekit-noscroll
+					data-sveltekit-reset="false"
 				>
 					<span class="dot" class:named={entry.label || entry.hash === data.publishedHash}></span>
 					<span class="rev-copy">

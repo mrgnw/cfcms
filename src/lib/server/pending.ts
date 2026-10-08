@@ -1,8 +1,8 @@
-import { listPosts } from '$lib/server/content';
-import { getPublishedPosts, getRevisionByHash, getStagedPaths, listVersions } from '$lib/server/db';
-import { syncSiteText } from '$lib/server/site-text';
-import { diffSegments, lineDiffCounts } from '$lib/segment-diff';
-import { isPending, statusOf } from '$lib/types';
+import { listPosts } from '#lib/server/content.js';
+import { getPublishedPosts, getRevisionByHash, getStagedPaths, listVersions } from '#lib/server/db.js';
+import { syncSiteText } from '#lib/server/site-text.js';
+import { diffSegments, lineDiffCounts } from '#lib/segment-diff.js';
+import { isPending, statusOf } from '#lib/types.js';
 
 export const shipsHeadText = (status: ReturnType<typeof statusOf>) => status === 'ready' || status === 'changed';
 

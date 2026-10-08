@@ -1,7 +1,7 @@
 import { getLastPublishedAt, getPublishedPosts, recordPublished, type PublishedPostState } from './db';
-import type { DeployStatus } from '$lib/types';
+import type { DeployStatus } from '#lib/types.js';
 
-export { hashPostContent } from '$lib/post-text';
+export { hashPostContent } from '#lib/post-text.js';
 
 export type { DeployStatus };
 

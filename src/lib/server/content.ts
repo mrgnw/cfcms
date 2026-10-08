@@ -2,10 +2,10 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readdir, readFile, stat, unlink } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
-import { parseFrontmatter, parseYamlScalar } from '$lib/frontmatter';
-import { canonicalBody, hashPostContent, splitRawPost } from '$lib/post-text';
-import { slugify, svxSlug } from '$lib/svx';
-import { classifyLlmDrafts, llmImportPlan, llmOwnerPath, llmUserPath, standaloneLlmFiles, type LlmFile } from '$lib/llm-drafts';
+import { parseFrontmatter, parseYamlScalar } from '#lib/frontmatter.js';
+import { canonicalBody, hashPostContent, splitRawPost } from '#lib/post-text.js';
+import { slugify, svxSlug } from '#lib/svx.js';
+import { classifyLlmDrafts, llmImportPlan, llmOwnerPath, llmUserPath, standaloneLlmFiles, type LlmFile } from '#lib/llm-drafts.js';
 import {
 	appendRevision,
 	deletePostRows,
@@ -25,7 +25,7 @@ import { getDeployStatus, readDeployState, type DeployState, type DeployStatus }
 import { ensureCorpusImported } from './import-corpus';
 import { ensureSiteBaseRepaired, ensureSvxBaseline } from './import-svx';
 import { contentBaseDirectory, contentDirectory } from './paths';
-import { decideSave, normalizeNewlines, type SaveDecision } from '$lib/save-rules';
+import { decideSave, normalizeNewlines, type SaveDecision } from '#lib/save-rules.js';
 
 export { splitRawPost };
 

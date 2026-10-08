@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import type { PostListItem } from '$lib/types';
+	import type { PostListItem } from '#lib/types.js';
 
 	let { posts }: { posts: PostListItem[] } = $props();
 
@@ -18,7 +18,7 @@
 		try {
 			const res = await fetch(`/?/${action}`, { method: 'POST', body: fd });
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			await invalidateAll();
+			await refreshAll();
 		} catch (caught) {
 			error = caught instanceof Error ? caught.message : String(caught);
 		} finally {

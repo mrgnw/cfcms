@@ -1,5 +1,5 @@
 <script lang="ts">
-	import DeletedView from '$lib/components/DeletedView.svelte';
+	import DeletedView from '#lib/components/DeletedView.svelte';
 
 	let { data } = $props();
 </script>

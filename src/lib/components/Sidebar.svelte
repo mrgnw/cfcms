@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { MediaQuery } from 'svelte/reactivity';
 	import { dragHandle, dragHandleZone, type DndEvent } from 'svelte-dnd-action';
 	import { swipeable, type SwipeEndEventDetail } from '@svelte-put/swipeable';
 	import DeployBadge from './DeployBadge.svelte';
-	import { isEditing, isPending, statusOf, type PostCounts, type PostFilter, type PostListItem } from '$lib/types';
+	import { isEditing, isPending, statusOf, type PostCounts, type PostFilter, type PostListItem } from '#lib/types.js';
 
 	let {
 		posts,
@@ -43,11 +43,15 @@
 		const term = query.trim().toLowerCase();
 		return (post: PostListItem) => {
 			if (!term) return true;
-			return [post.title, post.path, post.slug, post.excerpt, statusOf(post), ...(post.tags ?? [])]
-				.filter(Boolean)
-				.join(' ')
-				.toLowerCase()
-				.includes(term);
+
+			return [
+				post.title,
+				post.path,
+				post.slug,
+				post.excerpt,
+				statusOf(post),
+				...post.tags ?? []
+			].filter(Boolean).join(' ').toLowerCase().includes(term);
 		};
 	});
 
@@ -55,11 +59,11 @@
 
 	let filteredPosts = $derived(
 		visiblePosts.filter((post) => {
-			const status = statusOf(post);
-			if (filter === 'ready' && !isPending(status)) return false;
-			if (filter === 'drafts' && status !== 'draft') return false;
-			if (filter === 'live' && status !== 'live') return false;
-			return matchesQuery(post);
+		const status = statusOf(post);
+		if (filter === 'ready' && !isPending(status)) return false;
+		if (filter === 'drafts' && status !== 'draft') return false;
+		if (filter === 'live' && status !== 'live') return false;
+		return matchesQuery(post);
 		})
 	);
 
@@ -70,7 +74,7 @@
 		const fd = new FormData();
 		for (const [key, value] of Object.entries(fields)) fd.set(key, value);
 		const res = await fetch(`/?/${action}`, { method: 'POST', body: fd });
-		await invalidateAll();
+		await refreshAll();
 		return res.ok;
 	}
 
@@ -87,7 +91,7 @@
 			swipedPath = null;
 			return;
 		}
-		if (!(await postAction('trash', { path }))) {
+		if (!await postAction('trash', { path })) {
 			wrap.style.setProperty('--swipe-distance-x', '0px');
 			swipedPath = null;
 		}
@@ -113,7 +117,7 @@
 			disableTouchEvents: false,
 			enabled: touchLayout.current
 		}}
-		onswipestart={() => (swipedPath = item.path)}
+		onswipestart={() => swipedPath = item.path}
 		onswipeend={(event) => finishSwipe(event, item.path)}
 	>
 		<span class="swipe-hint" aria-hidden="true">Delete</span>
@@ -145,11 +149,20 @@
 					aria-label="Add to editing queue"
 					onclick={() => !swipedPath && postAction('queueAdd', { path: item.path })}
 				>
-					<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0" />
-						<path d="M12 7a5 5 0 1 0 5 5" />
-						<path d="M13 3.055A9 9 0 1 0 20.941 11" />
-						<path d="M15 6v3h3l3-3h-3V3zm0 3l-3 3" />
+					<svg
+						width="15"
+						height="15"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0"></path>
+						<path d="M12 7a5 5 0 1 0 5 5"></path>
+						<path d="M13 3.055A9 9 0 1 0 20.941 11"></path>
+						<path d="M15 6v3h3l3-3h-3V3zm0 3l-3 3"></path>
 					</svg>
 				</button>
 			{/if}
@@ -160,50 +173,80 @@
 				aria-label="Delete post"
 				onclick={() => postAction('trash', { path: item.path })}
 			>
-				<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M4 7h16M10 4h4M9 11v6M15 11v6M6 7l1 13h10l1-13" />
-				</svg>
+				<svg
+					width="15"
+					height="15"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.9"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				><path d="M4 7h16M10 4h4M9 11v6M15 11v6M6 7l1 13h10l1-13"></path></svg>
 			</button>
 		</span>
 	</div>
 {/snippet}
 
-<svelte:window onpointercancel={cancelSwipe} />
+<svelte:window onpointercancel={cancelSwipe}></svelte:window>
 
 <aside class="sidebar" class:closed={!open} aria-label="Posts">
 	<header class="sidebar-head">
 		<button
 			class="icon-btn"
 			type="button"
-			onclick={() => (open = !open)}
+			onclick={() => open = !open}
 			aria-label="Toggle sidebar"
 			title="Toggle sidebar"
 		>
-			<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
-				<path d="M3 4h10M3 8h10M3 12h10" stroke-linecap="round" />
-			</svg>
+			<svg
+				width="16"
+				height="16"
+				viewBox="0 0 16 16"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="1.6"
+			><path d="M3 4h10M3 8h10M3 12h10" stroke-linecap="round"></path></svg>
 		</button>
-		<a class="new-post" href={resolve('/new')}>
-			<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
-				<path d="M8 3v10M3 8h10" stroke-linecap="round" />
-			</svg>
+
+		<a class="new-post" href={resolve('new')}>
+			<svg
+				width="15"
+				height="15"
+				viewBox="0 0 16 16"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="1.8"
+			><path d="M8 3v10M3 8h10" stroke-linecap="round"></path></svg>
+
 			New post
 		</a>
 	</header>
 
 	<div class="filters" aria-label="Filters">
-		<button class:active={filter === 'all'} onclick={() => (filter = 'all')} type="button">
-			All <em>{counts.all}</em>
-		</button>
-		<button class:active={filter === 'drafts'} onclick={() => (filter = 'drafts')} type="button">
-			Drafts <em>{counts.drafts}</em>
-		</button>
-		<button class:active={filter === 'ready'} onclick={() => (filter = 'ready')} type="button">
-			Ready <em>{counts.ready}</em>
-		</button>
-		<button class:active={filter === 'live'} onclick={() => (filter = 'live')} type="button">
-			Live <em>{counts.live}</em>
-		</button>
+		<button
+			class:active={filter === 'all'}
+			onclick={() => filter = 'all'}
+			type="button"
+		>All <em>{counts.all}</em></button>
+
+		<button
+			class:active={filter === 'drafts'}
+			onclick={() => filter = 'drafts'}
+			type="button"
+		>Drafts <em>{counts.drafts}</em></button>
+
+		<button
+			class:active={filter === 'ready'}
+			onclick={() => filter = 'ready'}
+			type="button"
+		>Ready <em>{counts.ready}</em></button>
+
+		<button
+			class:active={filter === 'live'}
+			onclick={() => filter = 'live'}
+			type="button"
+		>Live <em>{counts.live}</em></button>
 	</div>
 
 	<input class="search" type="search" bind:value={query} placeholder="Search…" aria-label="Search posts" />
@@ -263,10 +306,10 @@
 
 	<footer class="footer-links">
 		<span class="footer-left">
-			<a href={resolve('/deleted')}>Deleted {counts.deleted} ›</a>
-			<a href={resolve('/admin')}>Admin ›</a>
+			<a href={resolve('deleted')}>Deleted {counts.deleted} ›</a>
+			<a href={resolve('admin')}>Admin ›</a>
 		</span>
-		<a class="publish-link" href={resolve('/publish')}>Publish {counts.ready} ›</a>
+		<a class="publish-link" href={resolve('publish')}>Publish {counts.ready} ›</a>
 	</footer>
 </aside>
 

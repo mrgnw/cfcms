@@ -4,8 +4,8 @@
 	import { replaceAll, insert, insertPos } from '@milkdown/kit/utils';
 	import { editorViewCtx } from '@milkdown/kit/core';
 	import { codeBlockConfig } from '@milkdown/kit/component/code-block';
-	import { languages, theme } from '$lib/code/twinkleplop';
-	import { fenceMeta } from '$lib/code/fence-meta';
+	import { languages, theme } from '#lib/code/twinkleplop.js';
+	import { fenceMeta } from '#lib/code/fence-meta.js';
 	import '$blog/styles/code-theme.css';
 	import '@fontsource/ibm-plex-mono/400.css';
 	import '@fontsource/ibm-plex-mono/500.css';

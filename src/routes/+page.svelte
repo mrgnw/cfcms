@@ -1,7 +1,7 @@
 <script lang="ts">
-	import HomePanel from '$lib/components/HomePanel.svelte';
-	import { countPosts } from '$lib/types';
-	import { getUiState } from '$lib/ui-state';
+	import HomePanel from '#lib/components/HomePanel.svelte';
+	import { countPosts } from '#lib/types.js';
+	import { getUiState } from '#lib/ui-state.js';
 
 	let { data } = $props();
 

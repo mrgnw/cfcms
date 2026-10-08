@@ -1,8 +1,7 @@
-import { json } from '@sveltejs/kit';
-import { maybeDailyBackup } from '$lib/server/backup';
-import { listPosts, postsRev } from '$lib/server/content';
+import { maybeDailyBackup } from '#lib/server/backup.js';
+import { listPosts, postsRev } from '#lib/server/content.js';
 
 export const GET = async () => {
 	maybeDailyBackup();
-	return json({ rev: postsRev(await listPosts()) });
+	return Response.json({ rev: postsRev(await listPosts()) });
 };

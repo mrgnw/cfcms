@@ -1,4 +1,4 @@
-import type { Segment } from '$lib/segment-diff';
+import type { Segment } from '#lib/segment-diff.js';
 export type { Segment };
 
 export type DeployStatus = 'draft' | 'ready' | 'live' | 'changed' | 'unpublish' | 'delete' | 'deleted';

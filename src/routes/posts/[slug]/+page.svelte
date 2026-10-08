@@ -1,16 +1,16 @@
 <script lang="ts">
-	import { goto, invalidateAll } from '$app/navigation';
+	import { goto, refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import PostEditor from '$lib/components/PostEditor.svelte';
-	import { svxSlug } from '$lib/svx';
+	import PostEditor from '#lib/components/PostEditor.svelte';
+	import { svxSlug } from '#lib/svx.js';
 
 	let { data } = $props();
 
 	// editing the slug field moves the post to a new URL; follow it instead of reloading into a 404
 	function onSaved(frontmatter?: string) {
 		const slug = frontmatter === undefined ? data.post.slug : svxSlug(data.post.path, frontmatter);
-		if (slug === data.post.slug) return invalidateAll();
-		return goto(resolve('/posts/[slug]', { slug }), { replaceState: true, invalidateAll: true });
+		if (slug === data.post.slug) return refreshAll();
+		return goto(resolve('/posts/[slug]', { slug }), { replace: true, refreshAll: true });
 	}
 </script>
 
