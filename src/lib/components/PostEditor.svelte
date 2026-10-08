@@ -387,7 +387,7 @@
 	<div class="path">
 		{post.path || 'New post'}
 		{#if post.id}<a class="post-id" href={resolve('/p/[id=postId]', { id: post.id })}>p/{post.id}</a>{/if}
-		{#if !post.path.endsWith('.llm.md')}<a class="post-id" href={resolve('/posts/[slug]/history', { slug: post.slug })}>history</a>{/if}
+		{#if post.slug && !post.path.endsWith('.llm.md')}<a class="post-id" href={resolve('/posts/[slug]/history', { slug: post.slug })}>history</a>{/if}
 	</div>
 	<div class="status-row">
 		<button
