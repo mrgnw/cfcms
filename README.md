@@ -32,7 +32,7 @@ pnpm test
 pnpm build
 ```
 
-`pnpm test` runs every `src/**/*.check.ts` under `node --test`, then `pnpm check`. `scripts/check-hooks.ts` resolves `#lib` and `$env/dynamic/private` so server modules load in plain node; server checks build a throwaway blog checkout and database under the system temp directory.
+`pnpm test` runs every `src/**/*.check.ts` under `node --test`, then `pnpm check`. `scripts/check-hooks.ts` resolves `#lib` and `$app/env/private` so server modules load in plain node; server checks build a throwaway blog checkout and database under the system temp directory.
 
 ## Code blocks
 
