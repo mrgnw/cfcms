@@ -8,6 +8,7 @@
 	import { TextareaAutosize } from 'runed';
 	import MilkdownEditor from './MilkdownEditor.svelte';
 	import AragoniteEditor from './AragoniteEditor.svelte';
+	import type { PresentationMode } from '@voithos-labs/aragonite';
 	import ReferencePane from './ReferencePane.svelte';
 	import { isBlankDraft, parseFrontmatter, serializeFrontmatter } from '#lib/frontmatter.js';
 	import { applySegment as applySegmentTo } from '#lib/segment-diff.js';
@@ -117,9 +118,14 @@
 	type EditorKind = 'milkdown' | 'aragonite';
 	const EDITOR_KEY = 'xccms:editor';
 	let editorKind = $state<EditorKind>('milkdown');
+	const MODE_KEY = 'xccms:aragonite-mode';
+	const aragoniteModes: PresentationMode[] = ['live', 'preview-inline', 'preview-block', 'source', 'reading'];
+	let aragoniteMode = $state<PresentationMode>('live');
 	$effect(() => {
 		try {
 			if (localStorage.getItem(EDITOR_KEY) === 'aragonite') editorKind = 'aragonite';
+			const saved = localStorage.getItem(MODE_KEY) as PresentationMode | null;
+			if (saved && aragoniteModes.includes(saved)) aragoniteMode = saved;
 		} catch {}
 	});
 
@@ -127,6 +133,13 @@
 		editorKind = editorKind === 'milkdown' ? 'aragonite' : 'milkdown';
 		try {
 			localStorage.setItem(EDITOR_KEY, editorKind);
+		} catch {}
+	}
+
+	function setAragoniteMode(next: PresentationMode) {
+		aragoniteMode = next;
+		try {
+			localStorage.setItem(MODE_KEY, next);
 		} catch {}
 	}
 
@@ -398,6 +411,18 @@
 		>
 			{editorKind === 'aragonite' ? 'Aragonite' : 'Milkdown'}
 		</button>
+		{#if editorKind === 'aragonite'}
+			<select
+				class="mode-select"
+				aria-label="Aragonite mode"
+				value={aragoniteMode}
+				onchange={(e) => setAragoniteMode(e.currentTarget.value as PresentationMode)}
+			>
+				{#each aragoniteModes as m (m)}
+					<option value={m}>{m}</option>
+				{/each}
+			</select>
+		{/if}
 		{#if sources.length > 0}
 			<button
 				class="reference-toggle"
@@ -731,7 +756,7 @@
 
 		<section class="editor-body">
 			{#if editorKind === 'aragonite'}
-				<AragoniteEditor bind:this={bodyEditor} value={bodyField} onChange={onBodyChange} />
+				<AragoniteEditor bind:this={bodyEditor} value={bodyField} mode={aragoniteMode} onChange={onBodyChange} />
 			{:else}
 				<MilkdownEditor bind:this={bodyEditor} value={bodyField} onChange={onBodyChange} />
 			{/if}
@@ -777,6 +802,23 @@
 	}
 
 	.reference-toggle:hover {
+		background: var(--hover);
+		color: var(--ink);
+	}
+
+	.mode-select {
+		background: transparent;
+		border: none;
+		border-radius: 6px;
+		color: var(--ink-3);
+		cursor: pointer;
+		font: inherit;
+		font-size: 12px;
+		padding: 4px 4px;
+		margin-left: -8px;
+	}
+
+	.mode-select:hover {
 		background: var(--hover);
 		color: var(--ink);
 	}

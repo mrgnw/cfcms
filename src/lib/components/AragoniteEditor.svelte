@@ -7,10 +7,11 @@
 
 	type Props = {
 		value: string;
+		mode: PresentationMode;
 		onChange?: (markdown: string) => void;
 	};
 
-	let { value, onChange }: Props = $props();
+	let { value, mode, onChange }: Props = $props();
 
 	// A new object on every load, so a write of the same text still reaches the editor
 	// (Aragonite consumer guide, "Loading another document").
@@ -18,15 +19,7 @@
 	let editor = $state<EditorInstance>();
 	let theme = $state<'light' | 'dark'>('light');
 
-	const MODE_KEY = 'xccms:aragonite-mode';
-	const modes: PresentationMode[] = ['live', 'preview-inline', 'preview-block', 'source', 'reading'];
-	let mode = $state<PresentationMode>('live');
-
 	onMount(() => {
-		try {
-			const saved = localStorage.getItem(MODE_KEY) as PresentationMode | null;
-			if (saved && modes.includes(saved)) mode = saved;
-		} catch {}
 		const dark = matchMedia('(prefers-color-scheme: dark)');
 		const sync = () => (theme = dark.matches ? 'dark' : 'light');
 		sync();
@@ -39,13 +32,6 @@
 		const ed = editor;
 		return ed.getEvents().on('edit', () => onChange?.(ed.getSource()));
 	});
-
-	function setMode(next: PresentationMode) {
-		mode = next;
-		try {
-			localStorage.setItem(MODE_KEY, next);
-		} catch {}
-	}
 
 	export function setContent(markdown: string) {
 		doc = { text: markdown };
@@ -82,17 +68,6 @@
 	}
 </script>
 
-<div class="aragonite-bar">
-	<label>
-		Mode
-		<select value={mode} onchange={(e) => setMode(e.currentTarget.value as PresentationMode)}>
-			{#each modes as m (m)}
-				<option value={m}>{m}</option>
-			{/each}
-		</select>
-	</label>
-</div>
-
 <div
 	class="aragonite-host"
 	role="group"
@@ -111,21 +86,6 @@
 </div>
 
 <style>
-	.aragonite-bar {
-		display: flex;
-		justify-content: flex-end;
-		max-width: 68ch;
-		margin: 0 auto 8px;
-		font-family: var(--font-ui);
-		font-size: 12px;
-		color: var(--ink-2);
-	}
-
-	.aragonite-bar select {
-		font: inherit;
-		margin-left: 4px;
-	}
-
 	/* Host-chrome tokens from the CMS palette (Aragonite consumer guide, "Theme tokens"). No
 	   aragonite-editor-theme wrapper, so these reach the editor directly. */
 	.aragonite-host {
