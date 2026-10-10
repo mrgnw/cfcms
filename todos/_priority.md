@@ -4,3 +4,5 @@
 2. todos/link-to-drafts.md — spike only so far; decide whether id-based links resolved at publish are worth building
 
 Backlog, not ordered: the logged edges and store-as-truth follow-ons in todos/versions-roadmap.md (all four roadmap phases are merged).
+
+Backlog: todos/sidebar-followups.md — remote functions for the sidebar actions, PostList split.
