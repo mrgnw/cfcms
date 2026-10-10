@@ -2,6 +2,14 @@
 
 User-visible changes to the CMS, newest first. Add an entry under today's date with every PR merged to main. History before 2026-10-05 is in `git log`.
 
+## 2026-10-10
+
+### Changed
+
+- The post list filters are now a Drafts › Ready → Publish → Live stepper. Publish sits between Ready and Live instead of in the footer. Tap a stage again to show all posts.
+- Post rows show a status dot, the title and a short date on one line. Tags and the full date are gone from the list.
+- On phones the whole page scrolls, so nothing is hidden under the Safari bar. Long-press an editing-queue post to reorder it. Remove it from the queue in the editor.
+
 ## 2026-10-09
 
 ### Changed
