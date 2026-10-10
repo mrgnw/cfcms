@@ -4,6 +4,7 @@
 	import { refreshAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { startPoll } from '#lib/poll.js';
+	import { startLagRecorder } from '#lib/lag-recorder.js';
 	import Sidebar from '#lib/components/Sidebar.svelte';
 	import { countPosts } from '#lib/types.js';
 	import { setUiState, type UiState } from '#lib/ui-state.js';
@@ -24,6 +25,7 @@
 				if (latest.rev !== data.postsRev) refreshAll();
 			}, 5000)
 		);
+		onDestroy(startLagRecorder());
 	}
 </script>
 
