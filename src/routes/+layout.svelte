@@ -138,6 +138,9 @@
 		.shell:not(.has-post) .workbench {
 			display: none;
 		}
+		.shell:not(.has-post) {
+			height: auto;
+		}
 		.shell.has-post :global(.sidebar) {
 			display: none;
 		}

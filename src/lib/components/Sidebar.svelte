@@ -2,9 +2,9 @@
 	import { refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { MediaQuery } from 'svelte/reactivity';
-	import { dragHandle, dragHandleZone, type DndEvent } from 'svelte-dnd-action';
+	import { dndzone, type DndEvent } from 'svelte-dnd-action';
 	import { swipeable, type SwipeEndEventDetail } from '@svelte-put/swipeable';
-	import DeployBadge from './DeployBadge.svelte';
+	import { shortDate } from '#lib/short-date.js';
 	import { isEditing, isPending, statusOf, type PostCounts, type PostFilter, type PostListItem } from '#lib/types.js';
 
 	let {
@@ -25,6 +25,11 @@
 	let swipedPath = $state<string | null>(null);
 
 	const touchLayout = new MediaQuery('max-width: 720px');
+	const currentYear = new Date().getFullYear();
+
+	function toggleFilter(stage: PostFilter) {
+		filter = filter === stage ? 'all' : stage;
+	}
 
 	let visiblePosts = $derived(posts.filter((post) => !post.deleteRequested));
 
@@ -108,6 +113,14 @@
 	}
 </script>
 
+{#snippet rowBody(item: PostListItem)}
+	{@const status = statusOf(item)}
+	{@const date = shortDate(item.date, currentYear)}
+	<i class="dot {status}" title={status} aria-label={status}></i>
+	<strong>{item.title}</strong>
+	<span class="date" class:missing={!date}>{date ?? 'no date'}</span>
+{/snippet}
+
 {#snippet postRow(item: PostListItem)}
 	<div
 		class="row-wrap"
@@ -130,15 +143,7 @@
 				if (swipedPath) event.preventDefault();
 			}}
 		>
-			<strong>{item.title}</strong>
-			<span class="post-meta">
-				<DeployBadge post={item} />
-				<span>{item.date || 'undated'}</span>
-				{#if item.pin}<span>pinned</span>{/if}
-			</span>
-			{#if item.tags?.length}
-				<small>{item.tags.join(' · ')}</small>
-			{/if}
+			{@render rowBody(item)}
 		</a>
 		<span class="row-actions" class:swiping={swipedPath === item.path}>
 			{#if !isEditing(item)}
@@ -223,30 +228,46 @@
 		</a>
 	</header>
 
-	<div class="filters" aria-label="Filters">
+	<div class="pipeline" aria-label="Filter by stage">
 		<button
-			class:active={filter === 'all'}
-			onclick={() => filter = 'all'}
-			type="button"
-		>All <em>{counts.all}</em></button>
-
-		<button
+			class="stage"
 			class:active={filter === 'drafts'}
-			onclick={() => filter = 'drafts'}
+			aria-pressed={filter === 'drafts'}
+			onclick={() => toggleFilter('drafts')}
 			type="button"
-		>Drafts <em>{counts.drafts}</em></button>
+		><b>{counts.drafts}</b>Drafts</button>
+
+		<span class="step" aria-hidden="true">›</span>
 
 		<button
+			class="stage ready"
 			class:active={filter === 'ready'}
-			onclick={() => filter = 'ready'}
+			aria-pressed={filter === 'ready'}
+			onclick={() => toggleFilter('ready')}
 			type="button"
-		>Ready <em>{counts.ready}</em></button>
+		><b>{counts.ready}</b>Ready</button>
+
+		<a class="publish" class:idle={!counts.ready} href={resolve('publish')}>
+			<svg
+				width="15"
+				height="15"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2.2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+			Publish
+		</a>
 
 		<button
+			class="stage live"
 			class:active={filter === 'live'}
-			onclick={() => filter = 'live'}
+			aria-pressed={filter === 'live'}
+			onclick={() => toggleFilter('live')}
 			type="button"
-		>Live <em>{counts.live}</em></button>
+		><b>{counts.live}</b>Live</button>
 	</div>
 
 	<input class="search" type="search" bind:value={query} placeholder="Search…" aria-label="Search posts" />
@@ -257,19 +278,15 @@
 				<h3 class="section-label editing-label">Editing</h3>
 				<div
 					class="queue"
-					use:dragHandleZone={{ items: queueItems, flipDurationMs: 150 }}
+					aria-label="Editing queue, long-press or drag to reorder"
+					use:dndzone={{ items: queueItems, flipDurationMs: 150, delayTouchStart: 300, dropTargetStyle: {} }}
 					onconsider={handleDnd}
 					onfinalize={handleDndFinalize}
 				>
 					{#each queueItems as item (item.id)}
-						<div class="qrow" class:selected={item.post.path === selectedPath}>
-							<span class="grip" use:dragHandle aria-label="Drag to reorder">⋮⋮</span>
-							<a href={resolve('/posts/[slug]', { slug: item.post.slug })}>
-								<strong>{item.post.title}</strong>
-								<span class="post-meta">
-									<DeployBadge post={item.post} showEditing={false} />
-									<span>{item.post.date || 'undated'}</span>
-								</span>
+						<div class="qrow" class:selected={item.post.path === selectedPath} aria-label={item.post.title}>
+							<a class="row" href={resolve('/posts/[slug]', { slug: item.post.slug })} draggable="false">
+								{@render rowBody(item.post)}
 							</a>
 							<button
 								class="remove-q"
@@ -305,11 +322,8 @@
 	</nav>
 
 	<footer class="footer-links">
-		<span class="footer-left">
-			<a href={resolve('deleted')}>Deleted {counts.deleted} ›</a>
-			<a href={resolve('admin')}>Admin ›</a>
-		</span>
-		<a class="publish-link" href={resolve('publish')}>Publish {counts.ready} ›</a>
+		<a href={resolve('deleted')}>Deleted {counts.deleted} ›</a>
+		<a href={resolve('admin')}>Admin ›</a>
 	</footer>
 </aside>
 
@@ -372,40 +386,80 @@
 		text-decoration: none;
 	}
 
-	.filters {
-		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-		gap: 4px;
+	.pipeline {
+		display: flex;
+		align-items: stretch;
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		background: var(--paper);
+		overflow: hidden;
+		flex: none;
 	}
 
-	.filters button {
+	.stage {
+		flex: 1;
+		min-width: 0;
 		background: transparent;
 		border: none;
-		border-radius: 7px;
 		color: var(--ink-2);
 		cursor: pointer;
 		font: inherit;
-		font-size: 12px;
-		padding: 6px 4px;
-		display: inline-flex;
-		gap: 5px;
-		align-items: center;
-		justify-content: center;
+		font-size: 11.5px;
+		line-height: 1.2;
+		padding: 6px 0 5px;
 	}
 
-	.filters button em {
-		font-style: normal;
-		color: var(--ink-3);
-		font-size: 11px;
-	}
-
-	.filters button.active {
-		background: var(--hover);
+	.stage b {
+		display: block;
 		color: var(--ink);
+		font-size: 16px;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
 	}
 
-	.filters button:hover:not(.active) {
+	.stage.ready b {
+		color: var(--warn);
+	}
+
+	.stage.live b {
+		color: var(--ok);
+	}
+
+	.stage:hover,
+	.stage.active {
 		background: var(--hover);
+	}
+
+	.stage.active {
+		box-shadow: inset 0 -2px 0 var(--accent);
+	}
+
+	.step {
+		display: grid;
+		place-items: center;
+		width: 12px;
+		color: var(--ink-3);
+		font-size: 12px;
+	}
+
+	.publish {
+		display: grid;
+		place-items: center;
+		align-content: center;
+		gap: 1px;
+		padding: 0 9px;
+		background: var(--accent);
+		color: var(--on-accent);
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.03em;
+		text-decoration: none;
+		text-transform: uppercase;
+	}
+
+	.publish.idle {
+		background: var(--hover);
+		color: var(--ink-3);
 	}
 
 	.search {
@@ -456,46 +510,35 @@
 	}
 
 	.qrow {
-		display: grid;
-		grid-template-columns: 14px minmax(0, 1fr) 20px;
-		gap: 8px;
-		align-items: center;
-		background: var(--paper);
-		border: 1px solid var(--line);
-		border-radius: 8px;
-		padding: 8px 6px;
+		position: relative;
 		cursor: grab;
 	}
 
-	.qrow.selected {
+	.qrow.selected .row {
+		background: var(--hover);
 		box-shadow: inset 2px 0 0 var(--accent);
 	}
 
-	.qrow .grip {
-		color: var(--ink-3);
-		font-size: 13px;
-		letter-spacing: -1px;
-		text-align: center;
-	}
-
-	.qrow a {
-		display: grid;
-		gap: 3px;
-		color: inherit;
-		text-decoration: none;
-		font-size: 13px;
-		min-width: 0;
-	}
-
 	.remove-q {
-		background: transparent;
-		border: none;
-		border-radius: 6px;
+		position: absolute;
+		right: 6px;
+		top: 50%;
+		transform: translateY(-50%);
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 999px;
 		color: var(--ink-3);
 		cursor: pointer;
 		font-size: 14px;
 		line-height: 1;
-		padding: 3px;
+		padding: 3px 6px;
+		opacity: 0;
+		transition: opacity 120ms;
+	}
+
+	.qrow:hover .remove-q,
+	.remove-q:focus-visible {
+		opacity: 1;
 	}
 
 	.remove-q:hover {
@@ -526,13 +569,64 @@
 	.row {
 		position: relative;
 		display: grid;
-		gap: 3px;
+		grid-template-columns: 7px minmax(0, 1fr) auto;
+		gap: 9px;
+		align-items: baseline;
 		border-radius: 8px;
 		color: inherit;
-		padding: 8px 10px;
+		padding: 7px 8px;
 		text-decoration: none;
 		font-size: 13px;
 		transform: translateX(var(--swipe-distance-x, 0px));
+	}
+
+	.row strong {
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		overflow: hidden;
+		font-weight: 560;
+		line-height: 1.3;
+	}
+
+	.date {
+		color: var(--ink-3);
+		font-size: 11px;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+
+	.date.missing {
+		color: var(--danger);
+		opacity: 0.7;
+	}
+
+	.dot {
+		align-self: center;
+		width: 7px;
+		height: 7px;
+		border: 1.5px solid var(--ink-3);
+		border-radius: 50%;
+	}
+
+	.dot.ready {
+		background: var(--warn);
+		border-color: var(--warn);
+	}
+
+	.dot.changed {
+		border-color: var(--warn);
+	}
+
+	.dot.live {
+		background: var(--ok);
+		border-color: var(--ok);
+	}
+
+	.dot.unpublish,
+	.dot.delete {
+		border-color: var(--danger);
 	}
 
 	.row:hover {
@@ -584,20 +678,6 @@
 		opacity: 1;
 	}
 
-	.post-meta,
-	.row small,
-	.qrow small {
-		color: var(--ink-3);
-		font-size: 11px;
-	}
-
-	.post-meta {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		min-width: 0;
-	}
-
 	.empty {
 		color: var(--ink-3);
 		font-size: 13px;
@@ -607,15 +687,9 @@
 
 	.footer-links {
 		display: flex;
-		justify-content: space-between;
-		align-items: center;
+		gap: 12px;
 		font-size: 11.5px;
 		padding: 0 2px;
-	}
-
-	.footer-left {
-		display: flex;
-		gap: 10px;
 	}
 
 	.footer-links a {
@@ -627,31 +701,24 @@
 		color: var(--ink-2);
 	}
 
-	.footer-links a.publish-link {
-		color: var(--accent-ink);
-		font-weight: 600;
-		font-size: 12px;
-		border: 1px solid var(--line);
-		background: var(--paper);
-		border-radius: 999px;
-		padding: 5px 12px;
-	}
-
-	.footer-links a.publish-link:hover {
-		border-color: var(--accent);
-	}
-
 	@media (max-width: 720px) {
+		/* the page scrolls, not the list, so iOS Safari can collapse its bar and nothing sits under it */
 		.sidebar {
 			border-right: none;
+			overflow: visible;
+			padding-bottom: calc(96px + env(safe-area-inset-bottom));
 		}
-		.row-actions {
-			opacity: 1;
+		.post-list {
+			overflow: visible;
 		}
-		.row-actions.swiping {
-			opacity: 0;
+		.row {
+			font-size: 15px;
+			padding: 10px 8px;
+			border-radius: 0;
+			border-bottom: 1px solid var(--line);
 		}
-		.row-actions .del-q {
+		.row-actions,
+		.remove-q {
 			display: none;
 		}
 		.swipe-hint {
