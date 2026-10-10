@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import DeployBadge from './DeployBadge.svelte';
-	import { type PostCounts, type PostFilter, type PostListItem } from '#lib/types.js';
+	import { shortDate } from '#lib/short-date.js';
+	import { statusOf, type PostCounts, type PostFilter, type PostListItem } from '#lib/types.js';
+	import StagePipeline from './StagePipeline.svelte';
+	import StatusDot from './StatusDot.svelte';
 
 	let {
 		recentPosts,
@@ -15,6 +17,7 @@
 		filter?: PostFilter;
 	} = $props();
 
+	const currentYear = new Date().getFullYear();
 </script>
 
 <div class="home">
@@ -29,31 +32,7 @@
 		<a class="home-import" href={resolve('admin')}>{llmDrafts} LLM {llmDrafts === 1 ? 'draft' : 'drafts'} to import ›</a>
 	{/if}
 
-	<div class="home-stats">
-		<button
-			type="button"
-			class="stat"
-			onclick={() => filter = 'all'}
-		><em>{counts.all}</em><span>All</span></button>
-
-		<button
-			type="button"
-			class="stat"
-			onclick={() => filter = 'drafts'}
-		><em>{counts.drafts}</em><span>Drafts</span></button>
-
-		<button
-			type="button"
-			class="stat"
-			onclick={() => filter = 'ready'}
-		><em>{counts.ready}</em><span>Ready</span></button>
-
-		<button
-			type="button"
-			class="stat"
-			onclick={() => filter = 'live'}
-		><em>{counts.live}</em><span>Live</span></button>
-	</div>
+	<StagePipeline {counts} bind:filter />
 
 	<section class="home-recent">
 		<h3>Recent</h3>
@@ -62,8 +41,8 @@
 				<a class="recent-card" href={resolve('/posts/[slug]', { slug: item.slug })}>
 					<strong>{item.title}</strong>
 					<span class="recent-meta">
-						<DeployBadge post={item} />
-						<span>{item.date || 'undated'}</span>
+						<StatusDot status={statusOf(item)} />
+						<span>{shortDate(item.date, currentYear) ?? 'no date'}</span>
 					</span>
 					{#if item.tags?.length}<small>{item.tags.slice(0, 4).join(' · ')}</small>{/if}
 				</a>
@@ -120,42 +99,6 @@
 		background: var(--hover);
 	}
 
-	.home-stats {
-		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-		gap: 10px;
-	}
-
-	.stat {
-		background: var(--bg);
-		border: 1px solid var(--line);
-		border-radius: 12px;
-		cursor: pointer;
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		font: inherit;
-		padding: 14px 16px;
-		text-align: left;
-	}
-
-	.stat:hover {
-		background: var(--hover);
-	}
-
-	.stat em {
-		font-family: var(--font-display);
-		font-size: 26px;
-		font-style: normal;
-		font-weight: 600;
-		line-height: 1;
-	}
-
-	.stat span {
-		color: var(--ink-3);
-		font-size: 12px;
-	}
-
 	.home-recent h3 {
 		color: var(--ink-3);
 		font-size: 12px;
@@ -204,9 +147,6 @@
 	}
 
 	@media (max-width: 720px) {
-		.home-stats {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-		}
 		.recent-grid {
 			grid-template-columns: minmax(0, 1fr);
 		}

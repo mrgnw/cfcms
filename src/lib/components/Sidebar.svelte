@@ -5,6 +5,8 @@
 	import { dndzone, type DndEvent } from 'svelte-dnd-action';
 	import { swipeable, type SwipeEndEventDetail } from '@svelte-put/swipeable';
 	import { shortDate } from '#lib/short-date.js';
+	import StagePipeline from './StagePipeline.svelte';
+	import StatusDot from './StatusDot.svelte';
 	import { isEditing, isPending, statusOf, type PostCounts, type PostFilter, type PostListItem } from '#lib/types.js';
 
 	let {
@@ -26,10 +28,6 @@
 
 	const touchLayout = new MediaQuery('max-width: 720px');
 	const currentYear = new Date().getFullYear();
-
-	function toggleFilter(stage: PostFilter) {
-		filter = filter === stage ? 'all' : stage;
-	}
 
 	let visiblePosts = $derived(posts.filter((post) => !post.deleteRequested));
 
@@ -114,9 +112,8 @@
 </script>
 
 {#snippet rowBody(item: PostListItem)}
-	{@const status = statusOf(item)}
 	{@const date = shortDate(item.date, currentYear)}
-	<i class="dot {status}" title={status} aria-label={status}></i>
+	<StatusDot status={statusOf(item)} />
 	<strong>{item.title}</strong>
 	<span class="date" class:missing={!date}>{date ?? 'no date'}</span>
 {/snippet}
@@ -145,7 +142,7 @@
 		>
 			{@render rowBody(item)}
 		</a>
-		<span class="row-actions" class:swiping={swipedPath === item.path}>
+		<span class="row-actions">
 			{#if !isEditing(item)}
 				<button
 					class="add-q"
@@ -228,47 +225,7 @@
 		</a>
 	</header>
 
-	<div class="pipeline" aria-label="Filter by stage">
-		<button
-			class="stage"
-			class:active={filter === 'drafts'}
-			aria-pressed={filter === 'drafts'}
-			onclick={() => toggleFilter('drafts')}
-			type="button"
-		><b>{counts.drafts}</b>Drafts</button>
-
-		<span class="step" aria-hidden="true">›</span>
-
-		<button
-			class="stage ready"
-			class:active={filter === 'ready'}
-			aria-pressed={filter === 'ready'}
-			onclick={() => toggleFilter('ready')}
-			type="button"
-		><b>{counts.ready}</b>Ready</button>
-
-		<a class="publish" class:idle={!counts.ready} href={resolve('publish')}>
-			<svg
-				width="15"
-				height="15"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2.2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-			><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
-			Publish
-		</a>
-
-		<button
-			class="stage live"
-			class:active={filter === 'live'}
-			aria-pressed={filter === 'live'}
-			onclick={() => toggleFilter('live')}
-			type="button"
-		><b>{counts.live}</b>Live</button>
-	</div>
+	<StagePipeline {counts} bind:filter />
 
 	<input class="search" type="search" bind:value={query} placeholder="Search…" aria-label="Search posts" />
 
@@ -384,82 +341,6 @@
 		justify-content: center;
 		padding: 8px 10px;
 		text-decoration: none;
-	}
-
-	.pipeline {
-		display: flex;
-		align-items: stretch;
-		border: 1px solid var(--line);
-		border-radius: 10px;
-		background: var(--paper);
-		overflow: hidden;
-		flex: none;
-	}
-
-	.stage {
-		flex: 1;
-		min-width: 0;
-		background: transparent;
-		border: none;
-		color: var(--ink-2);
-		cursor: pointer;
-		font: inherit;
-		font-size: 11.5px;
-		line-height: 1.2;
-		padding: 6px 0 5px;
-	}
-
-	.stage b {
-		display: block;
-		color: var(--ink);
-		font-size: 16px;
-		font-weight: 600;
-		font-variant-numeric: tabular-nums;
-	}
-
-	.stage.ready b {
-		color: var(--warn);
-	}
-
-	.stage.live b {
-		color: var(--ok);
-	}
-
-	.stage:hover,
-	.stage.active {
-		background: var(--hover);
-	}
-
-	.stage.active {
-		box-shadow: inset 0 -2px 0 var(--accent);
-	}
-
-	.step {
-		display: grid;
-		place-items: center;
-		width: 12px;
-		color: var(--ink-3);
-		font-size: 12px;
-	}
-
-	.publish {
-		display: grid;
-		place-items: center;
-		align-content: center;
-		gap: 1px;
-		padding: 0 9px;
-		background: var(--accent);
-		color: var(--on-accent);
-		font-size: 10px;
-		font-weight: 700;
-		letter-spacing: 0.03em;
-		text-decoration: none;
-		text-transform: uppercase;
-	}
-
-	.publish.idle {
-		background: var(--hover);
-		color: var(--ink-3);
 	}
 
 	.search {
@@ -600,42 +481,6 @@
 	.date.missing {
 		color: var(--danger);
 		opacity: 0.7;
-	}
-
-	.dot {
-		align-self: center;
-		width: 7px;
-		height: 7px;
-		border: 1.5px solid var(--ink-3);
-		border-radius: 50%;
-	}
-
-	.dot.ready {
-		background: var(--warn);
-		border-color: var(--warn);
-	}
-
-	.dot.changed {
-		border-color: var(--warn);
-	}
-
-	.dot.live {
-		background: var(--ok);
-		border-color: var(--ok);
-	}
-
-	.dot.unpublish,
-	.dot.delete {
-		border-color: var(--danger);
-	}
-
-	.row:hover {
-		background: var(--hover);
-	}
-
-	.row.selected {
-		background: var(--hover);
-		box-shadow: inset 2px 0 0 var(--accent);
 	}
 
 	.row-actions {
