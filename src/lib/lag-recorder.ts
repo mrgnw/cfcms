@@ -115,7 +115,7 @@ export const startLagRecorder = () => {
 		if (inputs === 0 && events.length === 0) return;
 		const batch: LagBatch = {
 			device: `${localStorage.getItem('cms-writer') ?? '?'} · ${navigator.userAgent}`.slice(0, 200),
-			editor: localStorage.getItem('xccms:editor') ?? 'milkdown',
+			editor: localStorage.getItem('xccms:editor') ?? 'aragonite',
 			path: location.pathname.slice(0, 200),
 			inputs,
 			slow,

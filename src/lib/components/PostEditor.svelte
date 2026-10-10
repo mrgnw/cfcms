@@ -117,13 +117,13 @@
 	// Spike: switch the body editor between Milkdown and Aragonite to compare them.
 	type EditorKind = 'milkdown' | 'aragonite';
 	const EDITOR_KEY = 'xccms:editor';
-	let editorKind = $state<EditorKind>('milkdown');
+	let editorKind = $state<EditorKind>('aragonite');
 	const MODE_KEY = 'xccms:aragonite-mode';
 	const aragoniteModes: PresentationMode[] = ['live', 'preview-inline', 'preview-block', 'source', 'reading'];
 	let aragoniteMode = $state<PresentationMode>('live');
 	$effect(() => {
 		try {
-			if (localStorage.getItem(EDITOR_KEY) === 'aragonite') editorKind = 'aragonite';
+			if (localStorage.getItem(EDITOR_KEY) === 'milkdown') editorKind = 'milkdown';
 			const saved = localStorage.getItem(MODE_KEY) as PresentationMode | null;
 			if (saved && aragoniteModes.includes(saved)) aragoniteMode = saved;
 		} catch {}

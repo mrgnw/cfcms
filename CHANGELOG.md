@@ -4,6 +4,10 @@ User-visible changes to the CMS, newest first. Add an entry under today's date w
 
 ## 2026-10-09
 
+### Changed
+
+- Aragonite is now the default body editor. A device that picked Milkdown with the editor switch keeps it.
+
 ### Added
 
 - Every device records keystrokes that take more than 50 ms to appear, with the frames and requests around them, to `.data/lag.jsonl` on the server. It is there to catch the intermittent typing lag.
