@@ -1,8 +1,8 @@
-import { BLOG_CMS_DB, BLOG_CMS_DEPLOY_STATE_FILE } from '$app/env/private';
+import { BLOG_CMS_DEPLOY_STATE_FILE } from '$app/env/private';
 import { DatabaseSync } from 'node:sqlite';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { contentBaseDirectory } from './paths';
+import { contentBaseDirectory, databasePath } from './paths';
 import { randomPostId } from '#lib/post-id.js';
 
 // Lazy init: opening at module load would run during `vite build` with
@@ -11,8 +11,6 @@ let instance: DatabaseSync | null = null;
 
 const db = () => {
 	if (instance) return instance;
-
-	const databasePath = resolve(BLOG_CMS_DB ?? resolve(process.cwd(), '.data/cms.db'));
 
 	mkdirSync(dirname(databasePath), { recursive: true });
 	instance = new DatabaseSync(databasePath);
