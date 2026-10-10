@@ -2,6 +2,12 @@
 
 User-visible changes to the CMS, newest first. Add an entry under today's date with every PR merged to main. History before 2026-10-05 is in `git log`.
 
+## 2026-10-09
+
+### Added
+
+- Every device records keystrokes that take more than 50 ms to appear, with the frames and requests around them, to `.data/lag.jsonl` on the server. It is there to catch the intermittent typing lag.
+
 ## 2026-10-08
 
 ### Added
