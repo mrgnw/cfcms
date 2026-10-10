@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mobile home mockup · cms</title>
+<style>
+	:root {
+		color-scheme: dark;
+		--paper: #16191f;
+		--bg: #0f1115;
+		--ink: #e4e7ec;
+		--ink-2: #9aa4b2;
+		--ink-3: #6a7484;
+		--line: #262b34;
+		--hover: #1f242c;
+		--accent: #6b9bf0;
+		--accent-ink: #93b6f7;
+		--on-accent: #0f1115;
+		--ok: #5fbd80;
+		--warn: #d9b455;
+		--danger: #ef7f74;
+		--radius: 10px;
+		--font-display: 'Iowan Old Style', Palatino, Georgia, serif;
+		--font-ui: ui-sans-serif, system-ui, -apple-system, sans-serif;
+		--font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+	}
+	* { box-sizing: border-box; }
+	body {
+		margin: 0;
+		background: #08090c;
+		color: var(--ink);
+		font-family: var(--font-ui);
+		padding: 24px 16px 64px;
+	}
+	.intro { max-width: 780px; margin: 0 auto 28px; color: var(--ink-2); font-size: 14px; line-height: 1.55; }
+	.intro h1 { font-family: var(--font-display); color: var(--ink); font-size: 26px; margin: 0 0 6px; font-weight: 500; }
+	.intro ul { padding-left: 18px; margin: 8px 0 0; }
+	.board { display: flex; flex-wrap: wrap; gap: 40px; justify-content: center; align-items: flex-start; }
+	.variant { width: 375px; }
+	.variant.wide { width: 320px; }
+	.variant > h2 { font-family: var(--font-display); font-size: 20px; font-weight: 500; margin: 0 0 4px; }
+	.variant > p { color: var(--ink-2); font-size: 12.5px; margin: 0 0 14px; line-height: 1.5; min-height: 56px; }
+
+	/* phone */
+	.phone {
+		position: relative;
+		height: 780px;
+		background: var(--bg);
+		border: 1px solid var(--line);
+		border-radius: 38px;
+		overflow: hidden;
+		display: flex;
+		flex-direction: column;
+	}
+	.statusbar { height: 50px; flex: none; display: flex; align-items: end; justify-content: space-between; padding: 0 28px 6px; font-size: 15px; font-weight: 600; }
+	.screen { flex: 1; overflow: hidden; padding: 8px 14px 0; display: flex; flex-direction: column; gap: 10px; }
+	.safari {
+		position: absolute; left: 0; right: 0; bottom: 0; height: 96px;
+		background: linear-gradient(to top, var(--bg) 55%, transparent);
+		display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 18px 18px;
+		pointer-events: none;
+	}
+	.safari .pill { flex: 1; height: 46px; border-radius: 23px; background: rgba(48, 52, 60, .82); backdrop-filter: blur(12px); display: grid; place-items: center; font-size: 14px; color: var(--ink); border: 1px dashed rgba(239, 127, 116, .45); }
+	.safari .round { width: 46px; height: 46px; border-radius: 50%; background: rgba(48, 52, 60, .82); border: 1px dashed rgba(239, 127, 116, .45); }
+	.safari-label { position: absolute; bottom: 74px; right: 18px; font-size: 9.5px; color: var(--danger); letter-spacing: .04em; text-transform: uppercase; opacity: .75; }
+
+	/* shared bits */
+	.icon-btn { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 9px; background: transparent; border: 0; color: var(--ink-2); }
+	.icon-btn.filled { background: var(--hover); color: var(--ink); }
+	.head { display: flex; gap: 6px; align-items: center; }
+	.head .title { font-family: var(--font-display); font-size: 22px; flex: 1; padding-left: 4px; }
+	.new { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 9px; background: var(--hover); color: var(--ink); font-size: 14px; border: 0; }
+	.search { height: 36px; border-radius: 9px; border: 1px solid var(--line); background: transparent; padding: 0 12px; color: var(--ink-3); font-size: 14px; display: flex; align-items: center; gap: 8px; }
+	.label { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); margin: 6px 4px 0; display: flex; align-items: center; gap: 8px; }
+	.label.accent { color: var(--accent); }
+	.label::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+	.label .act { order: 3; color: var(--accent); text-transform: none; letter-spacing: 0; font-size: 12.5px; }
+
+	/* rows: one line of title, date tucked right on the same line */
+	.list { display: flex; flex-direction: column; }
+	.row {
+		display: grid;
+		grid-template-columns: 8px 1fr auto;
+		gap: 10px;
+		align-items: baseline;
+		padding: 10px 6px;
+		border-bottom: 1px solid var(--line);
+		font-size: 15px;
+	}
+	.row .t { font-weight: 560; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
+	.row .d { font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+	.row .d.old { color: var(--danger); opacity: .7; }
+	.dot { width: 7px; height: 7px; border-radius: 50%; align-self: center; background: transparent; border: 1.5px solid var(--ink-3); }
+	.dot.ready { background: var(--warn); border-color: var(--warn); }
+	.dot.live { background: var(--ok); border-color: var(--ok); }
+	.dot.changed { background: transparent; border-color: var(--warn); }
+	.row.cur { background: var(--hover); border-radius: 8px; border-color: transparent; }
+
+	/* A: segmented stages with publish attached to Ready */
+	.seg { display: grid; grid-template-columns: auto 1fr 1fr 1fr; gap: 2px; background: var(--paper); border-radius: 10px; padding: 3px; border: 1px solid var(--line); }
+	.seg button { border: 0; background: transparent; color: var(--ink-2); font-size: 13px; padding: 7px 10px; border-radius: 7px; white-space: nowrap; }
+	.seg button em { font-style: normal; color: var(--ink-3); margin-left: 3px; font-size: 12px; }
+	.seg button.on { background: var(--hover); color: var(--ink); }
+	.seg button.ready em { color: var(--warn); }
+	.publish-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px 9px 12px; border-radius: 10px; background: color-mix(in srgb, var(--warn) 10%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); font-size: 13px; color: var(--ink-2); }
+	.publish-bar b { color: var(--warn); font-weight: 600; }
+	.btn { border: 0; border-radius: 8px; height: 30px; padding: 0 12px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+	.btn.pub { background: var(--accent); color: var(--on-accent); }
+	.btn.ghost { background: transparent; color: var(--accent); padding: 0 4px; }
+
+	/* B: pipeline stepper, publish is the arrow between Ready and Live */
+	.pipe { display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); overflow: hidden; }
+	.pipe .stage { flex: 1; padding: 7px 0 6px; text-align: center; font-size: 12px; color: var(--ink-2); line-height: 1.2; }
+	.pipe .stage b { display: block; font-size: 17px; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+	.pipe .stage.on { background: var(--hover); box-shadow: inset 0 -2px 0 var(--accent); }
+	.pipe .stage.ready b { color: var(--warn); }
+	.pipe .stage.live b { color: var(--ok); }
+	.pipe .arrow { width: 14px; display: grid; place-items: center; color: var(--ink-3); font-size: 12px; }
+	.pipe .go { flex: none; display: grid; place-items: center; align-content: center; gap: 1px; padding: 0 9px; background: var(--accent); color: var(--on-accent); font-size: 10.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+	.pipe .go svg { display: block; }
+	.chip-row { display: flex; gap: 6px; align-items: center; }
+	.chip-row .search { flex: 1; }
+
+	/* C: header holds publish; stages as text tabs */
+	.tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--line); padding: 0 4px; font-size: 14px; }
+	.tabs span { padding: 8px 0 9px; color: var(--ink-2); }
+	.tabs span em { font-style: normal; color: var(--ink-3); font-size: 12px; margin-left: 3px; }
+	.tabs span.on { color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); }
+	.pub-pill { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 18px; background: var(--accent); color: var(--on-accent); font-size: 14px; font-weight: 600; border: 0; }
+	.pub-pill em { font-style: normal; background: rgba(15, 17, 21, .2); border-radius: 9px; padding: 1px 6px; font-size: 12px; }
+	.menu { position: absolute; top: 100px; left: 14px; width: 210px; background: #22262e; border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 12px 32px rgba(0, 0, 0, .5); font-size: 14px; z-index: 2; }
+	.menu div { padding: 9px 10px; border-radius: 7px; display: flex; justify-content: space-between; color: var(--ink); }
+	.menu div em { font-style: normal; color: var(--ink-3); }
+	.menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+	.scrim { position: absolute; inset: 0; background: rgba(0, 0, 0, .35); z-index: 1; }
+
+	/* desktop sidebar */
+	.sidebar { height: 780px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+	.sidebar .row { font-size: 13.5px; padding: 8px 6px; }
+	.sidebar .row .t { -webkit-line-clamp: 1; }
+	.foot { margin-top: auto; display: flex; gap: 14px; font-size: 12.5px; color: var(--ink-3); padding: 8px 4px 0; border-top: 1px solid var(--line); }
+	.notes { max-width: 780px; margin: 36px auto 0; color: var(--ink-2); font-size: 13.5px; line-height: 1.6; }
+	.notes h3 { color: var(--ink); font-family: var(--font-display); font-weight: 500; font-size: 18px; margin: 0 0 6px; }
+</style>
+</head>
+<body>
+
+<section class="intro">
+	<h1>Home list on mobile</h1>
+	Two problems in the current screen: <b>Publish</b> sits in a footer away from the stages it acts on, and that footer lands under the iOS Safari floating bar (red dashed). Rows spend a second line on the date.
+	<ul>
+		<li>Every variant keeps the bottom 96px free of controls. Nothing is fixed to the bottom.</li>
+		<li>Rows are one title line (wraps to two at most). Date is a short muted stamp on the right of the first line, so it adds no height. Status is a 7px dot: hollow = draft, amber = ready, hollow amber = changed, green = live.</li>
+		<li>Grip and × removed on touch: long-press to reorder, swipe left to remove / delete (already wired for swipe).</li>
+	</ul>
+</section>
+
+<div class="board">
+
+	<!-- A -->
+	<div class="variant">
+		<h2>A · Publish lives in Ready</h2>
+		<p>Stages stay a segmented control. Ready carries an amber count; when anything is ready, a slim bar under the stages says what will ship and holds the Publish button. Deleted / Admin move to the ☰ menu.</p>
+		<div class="phone">
+			<div class="statusbar"><span>02:00</span><span>●●● ▲ ▮</span></div>
+			<div class="screen">
+				<div class="head">
+					<button class="icon-btn"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4h10M3 8h10M3 12h10" stroke-linecap="round"/></svg></button>
+					<span class="title">Posts</span>
+					<button class="icon-btn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg></button>
+					<button class="new"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3v10M3 8h10" stroke-linecap="round"/></svg>New</button>
+				</div>
+				<div class="seg">
+					<button class="on">All</button>
+					<button>Drafts<em>98</em></button>
+					<button class="ready">Ready<em>5</em></button>
+					<button>Live<em>9</em></button>
+				</div>
+				<div class="publish-bar"><span><b>5 ready</b> · 1 changed, 4 new</span><button class="btn pub">Publish</button></div>
+				<div class="label accent">Editing</div>
+				<div class="list">
+					<div class="row"><i class="dot"></i><span class="t">Set this setting in macOS 27 to make your screenshots 10x smaller!</span><span class="d">Sep 29</span></div>
+					<div class="row"><i class="dot"></i><span class="t">ai workflow: paseo</span><span class="d">Aug 17</span></div>
+					<div class="row"><i class="dot"></i><span class="t">vibe coding job tool</span><span class="d">Aug 17</span></div>
+					<div class="row"><i class="dot"></i><span class="t">vibe-coding-cms</span><span class="d">Aug 17</span></div>
+					<div class="row"><i class="dot"></i><span class="t">What I care about</span><span class="d">Aug 17</span></div>
+					<div class="row"><i class="dot"></i><span class="t">svelte kit 3</span><span class="d old">no date</span></div>
+					<div class="row"><i class="dot"></i><span class="t">Simple… where?</span><span class="d">Aug 5</span></div>
+					<div class="row"><i class="dot live"></i><span class="t">Write less code, especially with LLMs</span><span class="d">2025</span></div>
+					<div class="row"><i class="dot ready"></i><span class="t">Skills</span><span class="d">Sep 19</span></div>
+				</div>
+				<div class="label">Recent</div>
+				<div class="list">
+					<div class="row"><i class="dot changed"></i><span class="t">Tiger style for agents</span><span class="d">Oct 2</span></div>
+				</div>
+			</div>
+			<div class="safari"><span class="round"></span><span class="pill">cms.xcc.es</span><span class="round"></span></div>
+			<span class="safari-label">Safari bar</span>
+		</div>
+	</div>
+
+	<!-- B -->
+	<div class="variant">
+		<h2>B · Pipeline stepper</h2>
+		<p>Stages read left to right as a flow: Drafts › Ready › Live. Publish is the step between Ready and Live, so its position says what it does. Tap a stage to filter; tap again for All.</p>
+		<div class="phone">
+			<div class="statusbar"><span>02:00</span><span>●●● ▲ ▮</span></div>
+			<div class="screen">
+				<div class="head">
+					<button class="icon-btn"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4h10M3 8h10M3 12h10" stroke-linecap="round"/></svg></button>
+					<span class="title">Posts <span style="font-size:13px;color:var(--ink-3);font-family:var(--font-ui)">112</span></span>
+					<button class="new"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3v10M3 8h10" stroke-linecap="round"/></svg>New</button>
+				</div>
+				<div class="pipe">
+					<div class="stage"><b>98</b>Drafts</div>
+					<div class="arrow">›</div>
+					<div class="stage ready"><b>5</b>Ready</div>
+					<div class="go"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>Publish</div>
+					<div class="stage live"><b>9</b>Live</div>
+				</div>
+				<div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>Search</div>
+				<div class="label accent">Editing</div>
+				<div class="list">
+					<div class="row"><i class="dot"></i><span class="t">Set this setting in macOS 27 to make your screenshots 10x smaller!</span><span class="d">Sep 29</span></div>
+					<div class="row"><i class="dot"></i><span class="t">ai workflow: paseo</span><span class="d">Aug 17</span></div>
+					<div class="row"><i class="dot"></i><span class="t">vibe coding job tool</span><span class="d">Aug 17</span></div>
+					<div class="row"><i class="dot"></i><span class="t">vibe-coding-cms</span><span class="d">Aug 17</span></div>
+					<div class="row"><i class="dot"></i><span class="t">What I care about</span><span class="d">Aug 17</span></div>
+					<div class="row"><i class="dot"></i><span class="t">svelte kit 3</span><span class="d old">no date</span></div>
+					<div class="row"><i class="dot"></i><span class="t">Simple… where?</span><span class="d">Aug 5</span></div>
+					<div class="row"><i class="dot live"></i><span class="t">Write less code, especially with LLMs</span><span class="d">2025</span></div>
+					<div class="row"><i class="dot ready"></i><span class="t">Skills</span><span class="d">Sep 19</span></div>
+				</div>
+				<div class="label">Recent</div>
+				<div class="list">
+					<div class="row"><i class="dot changed"></i><span class="t">Tiger style for agents</span><span class="d">Oct 2</span></div>
+				</div>
+			</div>
+			<div class="safari"><span class="round"></span><span class="pill">cms.xcc.es</span><span class="round"></span></div>
+			<span class="safari-label">Safari bar</span>
+		</div>
+	</div>
+
+	<!-- C -->
+	<div class="variant">
+		<h2>C · Publish in the header</h2>
+		<p>Publish becomes the primary header action, shown only when something is ready. New post drops to an icon. Stages are plain underline tabs. Menu shown open: Deleted, Admin move in there.</p>
+		<div class="phone">
+			<div class="statusbar"><span>02:00</span><span>●●● ▲ ▮</span></div>
+			<div class="screen">
+				<div class="head">
+					<button class="icon-btn filled"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4h10M3 8h10M3 12h10" stroke-linecap="round"/></svg></button>
+					<span class="title">Posts</span>
+					<button class="icon-btn filled"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3v10M3 8h10" stroke-linecap="round"/></svg></button>
+					<button class="pub-pill">Publish <em>5</em></button>
+				</div>
+				<div class="tabs">
+					<span class="on">All <em>112</em></span>
+					<span>Drafts <em>98</em></span>
+					<span>Ready <em style="color:var(--warn)">5</em></span>
+					<span>Live <em>9</em></span>
+				</div>
+				<div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>Search</div>
+				<div class="label accent">Editing</div>
+				<div class="list">
+					<div class="row"><i class="dot"></i><span class="t">Set this setting in macOS 27 to make your screenshots 10x smaller!</span><span class="d">Sep 29</span></div>
+					<div class="row"><i class="dot"></i><span class="t">ai workflow: paseo</span><span class="d">Aug 17</span></div>
+					<div class="row"><i class="dot"></i><span class="t">vibe coding job tool</span><span class="d">Aug 17</span></div>
+					<div class="row"><i class="dot"></i><span class="t">vibe-coding-cms</span><span class="d">Aug 17</span></div>
+					<div class="row"><i class="dot"></i><span class="t">What I care about</span><span class="d">Aug 17</span></div>
+					<div class="row"><i class="dot"></i><span class="t">svelte kit 3</span><span class="d old">no date</span></div>
+					<div class="row"><i class="dot"></i><span class="t">Simple… where?</span><span class="d">Aug 5</span></div>
+					<div class="row"><i class="dot live"></i><span class="t">Write less code, especially with LLMs</span><span class="d">2025</span></div>
+					<div class="row"><i class="dot ready"></i><span class="t">Skills</span><span class="d">Sep 19</span></div>
+				</div>
+			</div>
+			<div class="scrim"></div>
+			<div class="menu">
+				<div>Deleted <em>5</em></div>
+				<div>Admin</div>
+				<hr />
+				<div>Publish history</div>
+			</div>
+			<div class="safari"><span class="round"></span><span class="pill">cms.xcc.es</span><span class="round"></span></div>
+			<span class="safari-label">Safari bar</span>
+		</div>
+	</div>
+
+	<!-- desktop -->
+	<div class="variant wide">
+		<h2>B on desktop</h2>
+		<p>Same stepper in the 320px sidebar. The footer keeps only Deleted and Admin, which are housekeeping, not stages.</p>
+		<div class="sidebar">
+			<div class="head">
+				<button class="icon-btn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4h10M3 8h10M3 12h10" stroke-linecap="round"/></svg></button>
+				<span class="title" style="font-size:19px">Posts</span>
+				<button class="new"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3v10M3 8h10" stroke-linecap="round"/></svg>New post</button>
+			</div>
+			<div class="pipe">
+				<div class="stage on"><b>98</b>Drafts</div>
+				<div class="arrow">›</div>
+				<div class="stage ready"><b>5</b>Ready</div>
+				<div class="go"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>Publish</div>
+				<div class="stage live"><b>9</b>Live</div>
+			</div>
+			<div class="search">Search…</div>
+			<div class="label">Drafts · 98</div>
+			<div class="list">
+				<div class="row cur"><i class="dot"></i><span class="t">Set this setting in macOS 27 to make your screenshots 10x smaller!</span><span class="d">Sep 29</span></div>
+				<div class="row"><i class="dot"></i><span class="t">ai workflow: paseo</span><span class="d">Aug 17</span></div>
+				<div class="row"><i class="dot"></i><span class="t">vibe coding job tool</span><span class="d">Aug 17</span></div>
+				<div class="row"><i class="dot"></i><span class="t">vibe-coding-cms</span><span class="d">Aug 17</span></div>
+				<div class="row"><i class="dot"></i><span class="t">What I care about</span><span class="d">Aug 17</span></div>
+				<div class="row"><i class="dot"></i><span class="t">svelte kit 3</span><span class="d old">no date</span></div>
+				<div class="row"><i class="dot"></i><span class="t">Simple… where?</span><span class="d">Aug 5</span></div>
+				<div class="row"><i class="dot"></i><span class="t">Static sites in 2026</span><span class="d">Jul 30</span></div>
+				<div class="row"><i class="dot"></i><span class="t">Notes on uv workspaces</span><span class="d">Jul 12</span></div>
+			</div>
+			<div class="foot"><span>Deleted 5 ›</span><span>Admin ›</span></div>
+		</div>
+	</div>
+
+</div>
+
+<section class="notes">
+	<h3>Date stamp rules</h3>
+	This year: <code>Sep 29</code>. Older: the year alone (<code>2025</code>). Missing or the <code>1970-01-01</code> placeholder: muted red <code>no date</code>, so the bad value is flagged instead of shown. Full date stays in the editor.
+	<h3 style="margin-top:18px">Recommendation</h3>
+	B. Publish lands between Ready and Live, so the control explains itself, and it sits at the top of the screen where Safari's bar can't cover it. Drafts / Ready / Live counts replace the All tab; tapping the active stage clears the filter.
+</section>
+
+</body>
+</html>
