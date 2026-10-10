@@ -8,6 +8,7 @@ User-visible changes to the CMS, newest first. Add an entry under today's date w
 
 - The post list filters are now a Drafts › Ready → Publish → Live stepper. Publish sits between Ready and Live instead of in the footer. Tap a stage again to show all posts.
 - Post rows show a status dot, the title and a short date on one line. Tags and the full date are gone from the list.
+- The home page uses the same stepper and status dots as the post list, in place of its All/Drafts/Ready/Live count cards and status pills.
 - On phones the whole page scrolls, so nothing is hidden under the Safari bar. Long-press an editing-queue post to reorder it. Remove it from the queue in the editor.
 
 ## 2026-10-09
