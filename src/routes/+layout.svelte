@@ -11,7 +11,8 @@
 
 	let { data, children } = $props();
 
-	const ui: UiState = $state({ sidebarOpen: true, filter: 'all' });
+	// svelte-ignore state_referenced_locally
+	const ui: UiState = $state({ sidebarOpen: data.sidebarOpen, filter: 'all' });
 	setUiState(ui);
 
 	let counts = $derived(countPosts(data.posts));
