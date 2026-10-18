@@ -2,6 +2,12 @@
 
 User-visible changes to the CMS, newest first. Add an entry under today's date with every PR merged to main. History before 2026-10-05 is in `git log`.
 
+## 2026-10-17
+
+### Added
+
+- A ` ```mermaid ` block in the editor renders as a diagram, drawn by pele, the same renderer the blog uses. Colours follow the CMS light and dark theme.
+
 ## 2026-10-10
 
 ### Changed
