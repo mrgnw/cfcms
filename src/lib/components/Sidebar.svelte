@@ -297,7 +297,7 @@
 	}
 
 	@media (min-width: 721px) {
-		.sidebar.closed > :not(.sidebar-head),
+		.sidebar.closed > :global(:not(.sidebar-head)),
 		.sidebar.closed .new-post {
 			display: none;
 		}
