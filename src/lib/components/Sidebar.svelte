@@ -92,13 +92,7 @@
 		return inStage(post, 'ready') ? 'ready' : inStage(post, 'live') ? 'live' : 'drafts';
 	});
 
-	const stages: [Section, string][] = [
-		['drafts', 'Drafts'],
-		['editing', 'Editing'],
-		['recent', 'Recent'],
-		['ready', 'Ready'],
-		['live', 'Live']
-	];
+	const stages: Section[] = ['drafts', 'editing', 'recent', 'ready', 'live'];
 
 	const keyToSection: Record<string, Section> = { 1: 'drafts', 2: 'editing', 3: 'recent', 4: 'ready', 6: 'live' };
 
@@ -264,7 +258,7 @@
 	><path d={glyphs[name]}></path></svg>
 {/snippet}
 
-{#snippet railItem(section: Section, label: string)}
+{#snippet railItem(section: Section)}
 	{@const items = sectionPosts[section]}
 	<div
 		class="rail-group"
@@ -279,15 +273,15 @@
 			class:current={selectedSection === section}
 			style:anchor-name="--rail-{section}"
 			type="button"
-			title="{label} ({items.length})"
-			aria-label="{label}, {items.length}"
+			title="{section} ({items.length})"
+			aria-label="{section}, {items.length}"
 			onclick={() => jump(section)}
 		>
 			{@render glyph(section)}
 			{items.length}
 		</button>
 		<div class="rail-pop" popover="manual" style:position-anchor="--rail-{section}">
-			<h4>{label}</h4>
+			<h4>{section}</h4>
 			{#each items.slice(0, 8) as item (item.path)}
 				<a href={resolve('/posts/[slug]', { slug: item.slug })} class:selected={item.path === selectedPath}>
 					<StatusDot status={statusOf(item)} />
@@ -342,9 +336,9 @@
 		<a class="rail-item new" href={resolve('new')} title="New post" aria-label="New post">
 			{@render glyph('plus')}
 		</a>
-		{#each stages as [section, label] (section)}
+		{#each stages as section (section)}
 			{#if section !== 'editing' || queueItems.length}
-				{@render railItem(section, label)}
+				{@render railItem(section)}
 			{/if}
 			{#if section === 'ready'}
 				<a class="rail-item publish" class:idle={!counts.ready} href={resolve('publish')} title="Publish" aria-label="Publish">
