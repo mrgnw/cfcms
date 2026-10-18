@@ -7,6 +7,7 @@ User-visible changes to the CMS, newest first. Add an entry under today's date w
 ### Added
 
 - A ` ```mermaid ` block in the editor renders as a diagram, drawn by pele, the same renderer the blog uses. Colours follow the CMS light and dark theme.
+- Diagrams are laid out for the blog's 560px post column, so a wide flowchart turns top-down here just as it does on the blog.
 
 ## 2026-10-10
 
