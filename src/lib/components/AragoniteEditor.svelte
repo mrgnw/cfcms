@@ -107,5 +107,14 @@
 		--color-selection: var(--accent);
 		--color-border: var(--line);
 		--color-error: var(--danger);
+		--pele-bg: transparent;
+		--pele-fg: var(--ink);
+		--pele-muted: var(--ink-2);
+		--pele-line: var(--ink-2);
+		--pele-surface: var(--paper);
+		--pele-surface-alt: var(--bg);
+		--pele-border: var(--line);
+		--pele-accent: var(--accent);
+		--pele-font: var(--font-ui);
 	}
 </style>

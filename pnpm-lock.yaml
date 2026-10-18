@@ -110,6 +110,9 @@ importers:
       '@voithos-labs/aragonite':
         specifier: 0.10.8
         version: 0.10.8(svelte@5.57.2)
+      pele:
+        specifier: ^1.6.0
+        version: 1.6.0
       runed:
         specifier: ^0.37.1
         version: 0.37.1(@sveltejs/kit@3.0.0(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.2)(vite@8.3.4(@types/node@25.7.0)))(svelte@5.57.2)(typescript@6.0.3)(vite@8.3.4(@types/node@25.7.0)))(svelte@5.57.2)
@@ -1245,6 +1248,10 @@ packages:
 
   parse5@8.0.1:
     resolution: {integrity: sha512-z1e/HMG90obSGeidlli3hj7cbocou0/wa5HacvI3ASx34PecNjNQeaHNo5WIZpWofN9kgkqV1q5YvXe3F0FoPw==}
+
+  pele@1.6.0:
+    resolution: {integrity: sha512-VfAiVItsOGlGhvnBfphdT28VCG7mXMZxQNOwAGsCtxI2ztbUsT39MraEOYjsapLxVETkdUZscm0DdotYDQMLdw==}
+    engines: {node: '>=20'}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -3208,6 +3215,8 @@ snapshots:
   parse5@8.0.1:
     dependencies:
       entities: 8.1.0
+
+  pele@1.6.0: {}
 
   picocolors@1.1.1: {}
 
