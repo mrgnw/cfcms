@@ -8,6 +8,7 @@
 	import { shortDate } from '#lib/short-date.js';
 	import StagePipeline from './StagePipeline.svelte';
 	import StatusDot from './StatusDot.svelte';
+	import { glyphs, type Glyph } from '#lib/glyphs.js';
 	import { isEditing, isPending, statusOf, type PostCounts, type PostFilter, type PostListItem } from '#lib/types.js';
 
 	let {
@@ -91,8 +92,15 @@
 		return inStage(post, 'ready') ? 'ready' : inStage(post, 'live') ? 'live' : 'drafts';
 	});
 
-	let editingLabel = $state<HTMLElement>();
-	let recentLabel = $state<HTMLElement>();
+	const stages: [Section, string][] = [
+		['drafts', 'Drafts'],
+		['editing', 'Editing'],
+		['recent', 'Recent'],
+		['ready', 'Ready'],
+		['live', 'Live']
+	];
+
+	const keyToSection: Record<string, Section> = { 1: 'drafts', 2: 'editing', 3: 'recent', 4: 'ready', 6: 'live' };
 
 	function setOpen(value: boolean) {
 		open = value;
@@ -100,36 +108,22 @@
 		document.cookie = `sidebar=${value ? 'open' : 'closed'}; path=/; max-age=31536000; SameSite=Lax`;
 	}
 
-	function jump(stage: PostFilter) {
+	async function jump(section: Section) {
 		setOpen(true);
-		filter = stage;
-	}
-
-	async function jumpTo(section: 'editing' | 'recent') {
-		setOpen(true);
-		filter = 'all';
+		filter = section === 'editing' || section === 'recent' ? 'all' : section;
 		query = '';
 		await tick();
-		(section === 'editing' ? editingLabel : recentLabel)?.scrollIntoView({ block: 'start' });
+		document.getElementById(section)?.scrollIntoView({ block: 'start' });
 	}
-
-	const shortcuts: Record<string, () => void> = {
-		'[': () => setOpen(!open),
-		'1': () => jump('drafts'),
-		'2': () => jumpTo('editing'),
-		'3': () => jumpTo('recent'),
-		'4': () => jump('ready'),
-		'5': () => goto(resolve('publish')),
-		'6': () => jump('live')
-	};
 
 	function handleShortcut(event: KeyboardEvent) {
 		if (event.metaKey || event.ctrlKey || event.altKey) return;
 		if ((event.target as HTMLElement).closest('input, textarea, select, [contenteditable]')) return;
-		const action = shortcuts[event.key];
-		if (!action) return;
+		if (event.key === '[') setOpen(!open);
+		else if (event.key === '5') goto(resolve('publish'));
+		else if (event.key in keyToSection) jump(keyToSection[event.key]);
+		else return;
 		event.preventDefault();
-		action();
 	}
 
 	function showPop(event: PointerEvent | FocusEvent) {
@@ -257,7 +251,7 @@
 	</div>
 {/snippet}
 
-{#snippet glyph(d: string)}
+{#snippet glyph(name: Glyph)}
 	<svg
 		width="16"
 		height="16"
@@ -267,10 +261,10 @@
 		stroke-width="1.8"
 		stroke-linecap="round"
 		stroke-linejoin="round"
-	><path {d}></path></svg>
+	><path d={glyphs[name]}></path></svg>
 {/snippet}
 
-{#snippet railItem(label: string, section: Section, d: string, onclick: () => void)}
+{#snippet railItem(section: Section, label: string)}
 	{@const items = sectionPosts[section]}
 	<div
 		class="rail-group"
@@ -287,9 +281,9 @@
 			type="button"
 			title="{label} ({items.length})"
 			aria-label="{label}, {items.length}"
-			{onclick}
+			onclick={() => jump(section)}
 		>
-			{@render glyph(d)}
+			{@render glyph(section)}
 			{items.length}
 		</button>
 		<div class="rail-pop" popover="manual" style:position-anchor="--rail-{section}">
@@ -303,7 +297,7 @@
 				<p>Nothing here</p>
 			{/each}
 			{#if items.length > 8}
-				<button type="button" class="more" {onclick}>+{items.length - 8} more</button>
+				<button type="button" class="more" onclick={() => jump(section)}>+{items.length - 8} more</button>
 			{/if}
 		</div>
 	</div>
@@ -346,25 +340,25 @@
 
 	<nav class="rail" aria-label="Jump to">
 		<a class="rail-item new" href={resolve('new')} title="New post" aria-label="New post">
-			{@render glyph('M12 5v14M5 12h14')}
+			{@render glyph('plus')}
 		</a>
-		{@render railItem('Drafts', 'drafts', 'M6 3h8l4 4v14H6zM14 3v4h4', () => jump('drafts'))}
-		{#if queueItems.length}
-			{@render railItem('Editing', 'editing', 'M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3zM13.5 6.5l3 3', () => jumpTo('editing'))}
-		{/if}
-		{@render railItem('Recent', 'recent', 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2', () => jumpTo('recent'))}
-		{@render railItem('Ready', 'ready', 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9 12l2 2 4-4', () => jump('ready'))}
-		<a class="rail-item publish" class:idle={!counts.ready} href={resolve('publish')} title="Publish" aria-label="Publish">
-			{@render glyph('M5 12h14M13 6l6 6-6 6')}
-		</a>
-		{@render railItem('Live', 'live', 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18', () => jump('live'))}
+		{#each stages as [section, label] (section)}
+			{#if section !== 'editing' || queueItems.length}
+				{@render railItem(section, label)}
+			{/if}
+			{#if section === 'ready'}
+				<a class="rail-item publish" class:idle={!counts.ready} href={resolve('publish')} title="Publish" aria-label="Publish">
+					{@render glyph('publish')}
+				</a>
+			{/if}
+		{/each}
 
 		<a class="rail-item tail" href={resolve('deleted')} title="Deleted ({counts.deleted})" aria-label="Deleted, {counts.deleted}">
-			{@render glyph('M4 7h16M10 4h4M9 11v6M15 11v6M6 7l1 13h10l1-13')}
+			{@render glyph('trash')}
 			{counts.deleted}
 		</a>
 		<a class="rail-item" href={resolve('admin')} title="Admin" aria-label="Admin">
-			{@render glyph('M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z')}
+			{@render glyph('gear')}
 		</a>
 	</nav>
 
@@ -375,7 +369,7 @@
 	<nav class="post-list" aria-label="Post list">
 		{#if sectioned}
 			{#if queueItems.length}
-				<h3 class="section-label editing-label" bind:this={editingLabel}>Editing</h3>
+				<h3 class="section-label editing-label" id="editing">Editing</h3>
 				<div
 					class="queue"
 					aria-label="Editing queue, long-press or drag to reorder"
@@ -401,7 +395,7 @@
 				</div>
 			{/if}
 			{#if recentPosts.length}
-				<h3 class="section-label" bind:this={recentLabel}>Recent</h3>
+				<h3 class="section-label" id="recent">Recent</h3>
 				{#each recentPosts as item (item.path)}
 					{@render postRow(item)}
 				{/each}
