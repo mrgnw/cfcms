@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { refreshAll } from '$app/navigation';
+	import { goto, refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { MediaQuery } from 'svelte/reactivity';
 	import { dndzone, type DndEvent } from 'svelte-dnd-action';
@@ -61,33 +61,83 @@
 
 	let sectioned = $derived(filter === 'all' && !query.trim());
 
-	let filteredPosts = $derived(
-		visiblePosts.filter((post) => {
+	function inStage(post: PostListItem, stage: PostFilter) {
 		const status = statusOf(post);
-		if (filter === 'ready' && !isPending(status)) return false;
-		if (filter === 'drafts' && status !== 'draft') return false;
-		if (filter === 'live' && status !== 'live') return false;
-		return matchesQuery(post);
-		})
-	);
+		if (stage === 'ready') return isPending(status);
+		if (stage === 'drafts') return status === 'draft';
+		if (stage === 'live') return status === 'live';
+		return true;
+	}
+
+	let filteredPosts = $derived(visiblePosts.filter((post) => inStage(post, filter) && matchesQuery(post)));
 
 	let recentPosts = $derived(visiblePosts.filter((post) => !isEditing(post)).slice(0, 5));
 	let restPosts = $derived(visiblePosts.filter((post) => !isEditing(post)).slice(5));
 
+	type Section = 'drafts' | 'editing' | 'recent' | 'ready' | 'live';
+
+	let sectionPosts = $derived<Record<Section, PostListItem[]>>({
+		drafts: visiblePosts.filter((post) => inStage(post, 'drafts')),
+		editing: queueItems.map((item) => item.post),
+		recent: recentPosts,
+		ready: visiblePosts.filter((post) => inStage(post, 'ready')),
+		live: visiblePosts.filter((post) => inStage(post, 'live'))
+	});
+
+	let selectedSection = $derived.by((): Section | null => {
+		const post = visiblePosts.find((item) => item.path === selectedPath);
+		if (!post) return null;
+		if (isEditing(post)) return 'editing';
+		return inStage(post, 'ready') ? 'ready' : inStage(post, 'live') ? 'live' : 'drafts';
+	});
+
 	let editingLabel = $state<HTMLElement>();
 	let recentLabel = $state<HTMLElement>();
 
+	function setOpen(value: boolean) {
+		open = value;
+		for (const pop of document.querySelectorAll<HTMLElement>('.rail-pop:popover-open')) pop.hidePopover();
+		document.cookie = `sidebar=${value ? 'open' : 'closed'}; path=/; max-age=31536000; SameSite=Lax`;
+	}
+
 	function jump(stage: PostFilter) {
-		open = true;
+		setOpen(true);
 		filter = stage;
 	}
 
 	async function jumpTo(section: 'editing' | 'recent') {
-		open = true;
+		setOpen(true);
 		filter = 'all';
 		query = '';
 		await tick();
 		(section === 'editing' ? editingLabel : recentLabel)?.scrollIntoView({ block: 'start' });
+	}
+
+	const shortcuts: Record<string, () => void> = {
+		'[': () => setOpen(!open),
+		'1': () => jump('drafts'),
+		'2': () => jumpTo('editing'),
+		'3': () => jumpTo('recent'),
+		'4': () => jump('ready'),
+		'5': () => goto(resolve('publish')),
+		'6': () => jump('live')
+	};
+
+	function handleShortcut(event: KeyboardEvent) {
+		if (event.metaKey || event.ctrlKey || event.altKey) return;
+		if ((event.target as HTMLElement).closest('input, textarea, select, [contenteditable]')) return;
+		const action = shortcuts[event.key];
+		if (!action) return;
+		event.preventDefault();
+		action();
+	}
+
+	function showPop(event: PointerEvent | FocusEvent) {
+		(event.currentTarget as HTMLElement).querySelector<HTMLElement>('[popover]')?.showPopover();
+	}
+
+	function hidePop(event: PointerEvent | FocusEvent) {
+		(event.currentTarget as HTMLElement).querySelector<HTMLElement>('[popover]')?.hidePopover();
 	}
 
 	async function postAction(action: string, fields: Record<string, string>) {
@@ -207,30 +257,66 @@
 	</div>
 {/snippet}
 
-{#snippet railItem(label: string, count: number, cls: string, d: string, onclick: () => void)}
-	<button class="rail-item {cls}" type="button" title={label} aria-label="{label}, {count}" {onclick}>
-		<svg
-			width="16"
-			height="16"
-			viewBox="0 0 24 24"
-			fill="none"
-			stroke="currentColor"
-			stroke-width="1.8"
-			stroke-linecap="round"
-			stroke-linejoin="round"
-		><path {d}></path></svg>
-		{count}
-	</button>
+{#snippet glyph(d: string)}
+	<svg
+		width="16"
+		height="16"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		stroke-width="1.8"
+		stroke-linecap="round"
+		stroke-linejoin="round"
+	><path {d}></path></svg>
 {/snippet}
 
-<svelte:window onpointercancel={cancelSwipe}></svelte:window>
+{#snippet railItem(label: string, section: Section, d: string, onclick: () => void)}
+	{@const items = sectionPosts[section]}
+	<div
+		class="rail-group"
+		role="presentation"
+		onpointerenter={showPop}
+		onpointerleave={hidePop}
+		onfocusin={showPop}
+		onfocusout={hidePop}
+	>
+		<button
+			class="rail-item {section}"
+			class:current={selectedSection === section}
+			style:anchor-name="--rail-{section}"
+			type="button"
+			title="{label} ({items.length})"
+			aria-label="{label}, {items.length}"
+			{onclick}
+		>
+			{@render glyph(d)}
+			{items.length}
+		</button>
+		<div class="rail-pop" popover="manual" style:position-anchor="--rail-{section}">
+			<h4>{label}</h4>
+			{#each items.slice(0, 8) as item (item.path)}
+				<a href={resolve('/posts/[slug]', { slug: item.slug })} class:selected={item.path === selectedPath}>
+					<StatusDot status={statusOf(item)} />
+					<span>{item.title}</span>
+				</a>
+			{:else}
+				<p>Nothing here</p>
+			{/each}
+			{#if items.length > 8}
+				<button type="button" class="more" {onclick}>+{items.length - 8} more</button>
+			{/if}
+		</div>
+	</div>
+{/snippet}
+
+<svelte:window onpointercancel={cancelSwipe} onkeydown={handleShortcut}></svelte:window>
 
 <aside class="sidebar" class:closed={!open} aria-label="Posts">
 	<header class="sidebar-head">
 		<button
 			class="icon-btn"
 			type="button"
-			onclick={() => open = !open}
+			onclick={() => setOpen(!open)}
 			aria-label="Toggle sidebar"
 			title="Toggle sidebar"
 		>
@@ -259,25 +345,27 @@
 	</header>
 
 	<nav class="rail" aria-label="Jump to">
-		{@render railItem('Drafts', counts.drafts, 'drafts', 'M6 3h8l4 4v14H6zM14 3v4h4', () => jump('drafts'))}
-		{#if queueItems.length}
-			{@render railItem('Editing', queueItems.length, 'editing', 'M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3zM13.5 6.5l3 3', () => jumpTo('editing'))}
-		{/if}
-		{@render railItem('Recent', recentPosts.length, 'recent', 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2', () => jumpTo('recent'))}
-		{@render railItem('Ready', counts.ready, 'ready', 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9 12l2 2 4-4', () => jump('ready'))}
-		<a class="rail-item publish" class:idle={!counts.ready} href={resolve('publish')} title="Publish" aria-label="Publish">
-			<svg
-				width="16"
-				height="16"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2.2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-			><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+		<a class="rail-item new" href={resolve('new')} title="New post" aria-label="New post">
+			{@render glyph('M12 5v14M5 12h14')}
 		</a>
-		{@render railItem('Live', counts.live, 'live', 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18', () => jump('live'))}
+		{@render railItem('Drafts', 'drafts', 'M6 3h8l4 4v14H6zM14 3v4h4', () => jump('drafts'))}
+		{#if queueItems.length}
+			{@render railItem('Editing', 'editing', 'M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3zM13.5 6.5l3 3', () => jumpTo('editing'))}
+		{/if}
+		{@render railItem('Recent', 'recent', 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2', () => jumpTo('recent'))}
+		{@render railItem('Ready', 'ready', 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9 12l2 2 4-4', () => jump('ready'))}
+		<a class="rail-item publish" class:idle={!counts.ready} href={resolve('publish')} title="Publish" aria-label="Publish">
+			{@render glyph('M5 12h14M13 6l6 6-6 6')}
+		</a>
+		{@render railItem('Live', 'live', 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18', () => jump('live'))}
+
+		<a class="rail-item tail" href={resolve('deleted')} title="Deleted ({counts.deleted})" aria-label="Deleted, {counts.deleted}">
+			{@render glyph('M4 7h16M10 4h4M9 11v6M15 11v6M6 7l1 13h10l1-13')}
+			{counts.deleted}
+		</a>
+		<a class="rail-item" href={resolve('admin')} title="Admin" aria-label="Admin">
+			{@render glyph('M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z')}
+		</a>
 	</nav>
 
 	<StagePipeline {counts} bind:filter />
@@ -368,9 +456,95 @@
 
 	.rail {
 		display: none;
+		flex: 1;
 		flex-direction: column;
 		align-items: center;
 		gap: 2px;
+	}
+
+	.rail-group {
+		display: contents;
+	}
+
+	.rail-item.tail {
+		margin-top: auto;
+	}
+
+	.rail-item.new {
+		color: var(--ink);
+		border: 1px solid var(--line);
+		margin-bottom: 4px;
+		padding: 6px 0;
+	}
+
+	.rail-item.current {
+		box-shadow: inset 2px 0 0 var(--accent);
+	}
+
+	.rail-pop {
+		inset: auto;
+		top: anchor(top);
+		left: anchor(right);
+		margin: 0;
+		width: 260px;
+		padding: 6px;
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		background: var(--paper);
+		color: var(--ink);
+		box-shadow: 0 8px 24px var(--shadow);
+	}
+
+	.rail-pop h4 {
+		margin: 4px 8px 6px;
+		color: var(--ink-3);
+		font-size: 10.5px;
+		font-weight: 600;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
+	.rail-pop a,
+	.rail-pop .more,
+	.rail-pop p {
+		display: grid;
+		grid-template-columns: 7px minmax(0, 1fr);
+		gap: 9px;
+		align-items: baseline;
+		border-radius: 6px;
+		color: inherit;
+		font: inherit;
+		font-size: 13px;
+		margin: 0;
+		padding: 6px 8px;
+		text-decoration: none;
+	}
+
+	.rail-pop a:hover,
+	.rail-pop a.selected,
+	.rail-pop .more:hover {
+		background: var(--hover);
+	}
+
+	.rail-pop a span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.rail-pop .more {
+		display: block;
+		width: 100%;
+		background: transparent;
+		border: none;
+		color: var(--ink-2);
+		cursor: pointer;
+		text-align: left;
+	}
+
+	.rail-pop p {
+		display: block;
+		color: var(--ink-3);
 	}
 
 	.rail-item {
