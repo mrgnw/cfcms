@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { MediaQuery } from 'svelte/reactivity';
@@ -72,6 +73,22 @@
 
 	let recentPosts = $derived(visiblePosts.filter((post) => !isEditing(post)).slice(0, 5));
 	let restPosts = $derived(visiblePosts.filter((post) => !isEditing(post)).slice(5));
+
+	let editingLabel = $state<HTMLElement>();
+	let recentLabel = $state<HTMLElement>();
+
+	function jump(stage: PostFilter) {
+		open = true;
+		filter = stage;
+	}
+
+	async function jumpTo(section: 'editing' | 'recent') {
+		open = true;
+		filter = 'all';
+		query = '';
+		await tick();
+		(section === 'editing' ? editingLabel : recentLabel)?.scrollIntoView({ block: 'start' });
+	}
 
 	async function postAction(action: string, fields: Record<string, string>) {
 		const fd = new FormData();
@@ -190,6 +207,22 @@
 	</div>
 {/snippet}
 
+{#snippet railItem(label: string, count: number, cls: string, d: string, onclick: () => void)}
+	<button class="rail-item {cls}" type="button" title={label} aria-label="{label}, {count}" {onclick}>
+		<svg
+			width="16"
+			height="16"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="1.8"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+		><path {d}></path></svg>
+		{count}
+	</button>
+{/snippet}
+
 <svelte:window onpointercancel={cancelSwipe}></svelte:window>
 
 <aside class="sidebar" class:closed={!open} aria-label="Posts">
@@ -225,6 +258,28 @@
 		</a>
 	</header>
 
+	<nav class="rail" aria-label="Jump to">
+		{@render railItem('Drafts', counts.drafts, 'drafts', 'M6 3h8l4 4v14H6zM14 3v4h4', () => jump('drafts'))}
+		{#if queueItems.length}
+			{@render railItem('Editing', queueItems.length, 'editing', 'M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3zM13.5 6.5l3 3', () => jumpTo('editing'))}
+		{/if}
+		{@render railItem('Recent', recentPosts.length, 'recent', 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2', () => jumpTo('recent'))}
+		{@render railItem('Ready', counts.ready, 'ready', 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9 12l2 2 4-4', () => jump('ready'))}
+		<a class="rail-item publish" class:idle={!counts.ready} href={resolve('publish')} title="Publish" aria-label="Publish">
+			<svg
+				width="16"
+				height="16"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2.2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+		</a>
+		{@render railItem('Live', counts.live, 'live', 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18', () => jump('live'))}
+	</nav>
+
 	<StagePipeline {counts} bind:filter />
 
 	<input class="search" type="search" bind:value={query} placeholder="Search…" aria-label="Search posts" />
@@ -232,7 +287,7 @@
 	<nav class="post-list" aria-label="Post list">
 		{#if sectioned}
 			{#if queueItems.length}
-				<h3 class="section-label editing-label">Editing</h3>
+				<h3 class="section-label editing-label" bind:this={editingLabel}>Editing</h3>
 				<div
 					class="queue"
 					aria-label="Editing queue, long-press or drag to reorder"
@@ -258,7 +313,7 @@
 				</div>
 			{/if}
 			{#if recentPosts.length}
-				<h3 class="section-label">Recent</h3>
+				<h3 class="section-label" bind:this={recentLabel}>Recent</h3>
 				{#each recentPosts as item (item.path)}
 					{@render postRow(item)}
 				{/each}
@@ -297,7 +352,7 @@
 	}
 
 	@media (min-width: 721px) {
-		.sidebar.closed > :global(:not(.sidebar-head)),
+		.sidebar.closed > :global(:not(.sidebar-head, .rail)),
 		.sidebar.closed .new-post {
 			display: none;
 		}
@@ -305,6 +360,63 @@
 		.sidebar.closed {
 			padding: 14px 6px;
 		}
+
+		.sidebar.closed .rail {
+			display: flex;
+		}
+	}
+
+	.rail {
+		display: none;
+		flex-direction: column;
+		align-items: center;
+		gap: 2px;
+	}
+
+	.rail-item {
+		display: grid;
+		justify-items: center;
+		gap: 1px;
+		width: 32px;
+		padding: 5px 0 4px;
+		background: transparent;
+		border: none;
+		border-radius: 8px;
+		color: var(--ink-2);
+		cursor: pointer;
+		font: inherit;
+		font-size: 10px;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+		text-decoration: none;
+	}
+
+	.rail-item:hover {
+		background: var(--hover);
+		color: var(--ink);
+	}
+
+	.rail-item.editing {
+		color: var(--accent-ink);
+	}
+
+	.rail-item.ready {
+		color: var(--warn);
+	}
+
+	.rail-item.live {
+		color: var(--ok);
+	}
+
+	.rail-item.publish {
+		background: var(--accent);
+		color: var(--on-accent);
+		padding: 8px 0;
+	}
+
+	.rail-item.publish.idle {
+		background: var(--hover);
+		color: var(--ink-3);
 	}
 
 	.sidebar-head {
