@@ -12,7 +12,7 @@
 	let { data, children } = $props();
 
 	// svelte-ignore state_referenced_locally
-	const ui: UiState = $state({ sidebarOpen: data.sidebarOpen, filter: 'all' });
+	const ui: UiState = $state({ sidebarOpen: data.sidebarOpen });
 	setUiState(ui);
 
 	let counts = $derived(countPosts(data.posts));
@@ -30,13 +30,12 @@
 	}
 </script>
 
-<main class="shell" class:sidebar-closed={!ui.sidebarOpen} class:has-post={page.route.id !== '/'}>
+<main class="shell" class:sidebar-closed={!ui.sidebarOpen} class:has-post={page.route.id !== '/[[stage=stage]]'}>
 	<Sidebar
 		posts={data.posts}
 		selectedPath={page.data.post?.path ?? page.state.createdPath}
 		counts={counts}
 		bind:open={ui.sidebarOpen}
-		bind:filter={ui.filter}
 	/>
 
 	<section class="workbench" aria-label="Editor">

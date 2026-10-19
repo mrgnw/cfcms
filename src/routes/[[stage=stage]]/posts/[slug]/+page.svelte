@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto, refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import PostEditor from '#lib/components/PostEditor.svelte';
 	import { svxSlug } from '#lib/svx.js';
 
@@ -10,7 +11,7 @@
 	function onSaved(frontmatter?: string) {
 		const slug = frontmatter === undefined ? data.post.slug : svxSlug(data.post.path, frontmatter);
 		if (slug === data.post.slug) return refreshAll();
-		return goto(resolve('/posts/[slug]', { slug }), { replace: true, refreshAll: true });
+		return goto(resolve('/[[stage=stage]]/posts/[slug]', { slug }), { replace: true, refreshAll: true });
 	}
 </script>
 
@@ -18,7 +19,7 @@
 	<title>{data.post.title} · cms.xcc.es</title>
 </svelte:head>
 
-<a class="mobile-back" href={resolve('/')} aria-label="Back to post list">
+<a class="mobile-back" href={resolve('/[[stage=stage]]', { stage: page.params.stage })} aria-label="Back to post list">
 	<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7">
 		<path d="M10 3 5 8l5 5" stroke-linecap="round" stroke-linejoin="round" />
 	</svg>

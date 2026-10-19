@@ -13,6 +13,6 @@ export const load = async ({ url, parent }) => {
 	if (!path) return {};
 
 	const post = (await parent()).posts.find((item) => item.path === path);
-	if (post) throw redirect(308, resolve('/posts/[slug]', { slug: post.slug }));
+	if (post) throw redirect(308, resolve('/[[stage=stage]]/posts/[slug]', { slug: post.slug }));
 	return {};
 };

@@ -118,7 +118,7 @@ export const actions = {
 		const result = await savePost(path, revision.frontmatter, revision.body, post.contentHash, 'cms');
 		if (result.outcome === 'conflict') return fail(409, { message: 'Post changed while restoring — retry' });
 
-		throw redirect(303, resolve('/posts/[slug]', { slug: result.post.slug }));
+		throw redirect(303, resolve('/[[stage=stage]]/posts/[slug]', { slug: result.post.slug }));
 	},
 	importLlm: async () => ({ importedLlm: await importAllLlmDrafts() }),
 	importLlmDraft: async ({ request }) => {

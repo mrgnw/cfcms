@@ -33,7 +33,7 @@
 		try {
 			const data = (await post('importLlmDraft', fd)) as { imported: { path: string; created: boolean; slug: string } };
 			if (open) {
-				await goto(resolve('/posts/[slug]', { slug: data.imported.slug }), { refreshAll: true });
+				await goto(resolve('/[[stage=stage]]/posts/[slug]', { slug: data.imported.slug }), { refreshAll: true });
 				return;
 			}
 			message = data.imported.created ? `Imported ${draft.path} as ${data.imported.path}` : `${data.imported.path} already exists`;
@@ -63,7 +63,7 @@
 
 <div class="admin-view">
 	<header class="view-head">
-		<a class="back" href={resolve('/')} aria-label="Back to posts">‹</a>
+		<a class="back" href={resolve('/[[stage=stage]]', {})} aria-label="Back to posts">‹</a>
 		<h2>Admin</h2>
 	</header>
 

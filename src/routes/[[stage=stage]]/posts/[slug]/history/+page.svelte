@@ -37,7 +37,7 @@
 </svelte:head>
 
 <nav class="crumbs">
-	<a href={resolve('/posts/[slug]', { slug: data.post.slug })}>← {data.post.title}</a>
+	<a href={resolve('/[[stage=stage]]/posts/[slug]', { slug: data.post.slug })}>← {data.post.title}</a>
 	<span>/ History</span>
 </nav>
 

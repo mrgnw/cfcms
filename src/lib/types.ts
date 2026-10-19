@@ -54,7 +54,10 @@ export type PublishData = {
 	results: PublishResult[];
 };
 
-export type PostFilter = 'all' | 'ready' | 'drafts' | 'live';
+export const stages = ['drafts', 'ready', 'live'] as const;
+export type Stage = (typeof stages)[number];
+export const isStage = (value: string): value is Stage => (stages as readonly string[]).includes(value);
+export type PostFilter = 'all' | Stage;
 
 export type PendingChange = {
 	path: string;

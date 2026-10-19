@@ -117,7 +117,7 @@
 
 <div class="publish-view">
 	<header class="view-head">
-		<a class="back" href={resolve('/')} aria-label="Back to posts">‹</a>
+		<a class="back" href={resolve('/[[stage=stage]]', {})} aria-label="Back to posts">‹</a>
 		<h2>Publish</h2>
 		<span class="summary">
 			{changes.length} pending
@@ -161,7 +161,7 @@
 					title={change.blocked ? 'Edited on the site and in the CMS: resolve first' : undefined}
 					onchange={() => setStaged([change.path], !change.staged)}
 				/>
-				<a class="change-link" href={resolve('/posts/[slug]', { slug: change.slug })}>
+				<a class="change-link" href={resolve('/[[stage=stage]]/posts/[slug]', { slug: change.slug })}>
 					<span class="title">{change.title} <span class="date">{change.date}</span></span>
 					<span class="right">
 						{#if change.status === 'unpublish' || change.status === 'delete'}
@@ -212,7 +212,7 @@
 					<span class="resolve">
 						<button type="button" onclick={() => resolveSite(change.path, 'mine')}>keep draft</button>
 						<button type="button" onclick={() => resolveSite(change.path, 'theirs')}>use site text</button>
-						<a href={resolve('/posts/[slug]', { slug: change.slug })}>compare</a>
+						<a href={resolve('/[[stage=stage]]/posts/[slug]', { slug: change.slug })}>compare</a>
 					</span>
 				{/if}
 			</div>

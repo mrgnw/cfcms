@@ -1,20 +1,19 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { shortDate } from '#lib/short-date.js';
-	import { statusOf, type PostCounts, type PostFilter, type PostListItem } from '#lib/types.js';
+	import { statusOf, type PostCounts, type PostListItem } from '#lib/types.js';
 	import StagePipeline from './StagePipeline.svelte';
 	import StatusDot from './StatusDot.svelte';
 
 	let {
 		recentPosts,
 		counts,
-		llmDrafts,
-		filter = $bindable('all')
+		llmDrafts
 	}: {
 		recentPosts: PostListItem[];
 		counts: PostCounts;
 		llmDrafts: number;
-		filter?: PostFilter;
 	} = $props();
 
 	const currentYear = new Date().getFullYear();
@@ -32,13 +31,13 @@
 		<a class="home-import" href={resolve('admin')}>{llmDrafts} LLM {llmDrafts === 1 ? 'draft' : 'drafts'} to import ›</a>
 	{/if}
 
-	<StagePipeline {counts} bind:filter />
+	<StagePipeline {counts} />
 
 	<section class="home-recent">
 		<h3>Recent</h3>
 		<div class="recent-grid">
 			{#each recentPosts as item (item.path)}
-				<a class="recent-card" href={resolve('/posts/[slug]', { slug: item.slug })}>
+				<a class="recent-card" href={resolve('/[[stage=stage]]/posts/[slug]', { stage: page.params.stage, slug: item.slug })}>
 					<strong>{item.title}</strong>
 					<span class="recent-meta">
 						<StatusDot status={statusOf(item)} />

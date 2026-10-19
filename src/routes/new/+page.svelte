@@ -17,7 +17,7 @@
 		body: ''
 	});
 
-	const moveTo = (slug: string, path: string) => goto(resolve('/posts/[slug]', { slug }), { shallow: true, replace: true, state: { createdPath: path } });
+	const moveTo = (slug: string, path: string) => goto(resolve('/[[stage=stage]]/posts/[slug]', { slug }), { shallow: true, replace: true, state: { createdPath: path } });
 
 	function onCreated(created: { path: string; slug: string; id: string | null; contentHash: string }) {
 		post = { ...post, path: created.path, slug: created.slug, id: created.id ?? undefined, contentHash: created.contentHash };
@@ -42,7 +42,7 @@
 
 <a
 	class="mobile-back"
-	href={resolve('/')}
+	href={resolve('/[[stage=stage]]', {})}
 	aria-label="Back to post list"
 >Posts</a>
 

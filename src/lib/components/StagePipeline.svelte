@@ -1,22 +1,19 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import type { PostCounts, PostFilter } from '#lib/types.js';
+	import { page } from '$app/state';
+	import type { PostCounts, Stage } from '#lib/types.js';
 
-	let { counts, filter = $bindable('all') }: { counts: PostCounts; filter?: PostFilter } = $props();
-
-	function toggle(stage: PostFilter) {
-		filter = filter === stage ? 'all' : stage;
-	}
+	let { counts }: { counts: PostCounts } = $props();
 </script>
 
-{#snippet stage(name: PostFilter, label: string, count: number)}
-	<button
+{#snippet stage(name: Stage, label: string, count: number)}
+	{@const active = page.params.stage === name}
+	<a
 		class="stage {name}"
-		class:active={filter === name}
-		aria-pressed={filter === name}
-		onclick={() => toggle(name)}
-		type="button"
-	><b>{count}</b>{label}</button>
+		class:active
+		aria-current={active ? 'page' : undefined}
+		href={resolve('/[[stage=stage]]', { stage: active ? undefined : name })}
+	><b>{count}</b>{label}</a>
 {/snippet}
 
 <div class="pipeline" aria-label="Filter by stage">
@@ -61,6 +58,8 @@
 		font-size: 11.5px;
 		line-height: 1.2;
 		padding: 6px 0 5px;
+		text-align: center;
+		text-decoration: none;
 	}
 
 	.stage b {

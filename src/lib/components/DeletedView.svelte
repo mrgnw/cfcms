@@ -29,7 +29,7 @@
 
 <div class="deleted-view">
 	<header class="view-head">
-		<a class="back" href={resolve('/')} aria-label="Back to posts">‹</a>
+		<a class="back" href={resolve('/[[stage=stage]]', {})} aria-label="Back to posts">‹</a>
 		<h2>Deleted</h2>
 		<span class="summary">{posts.length} {posts.length === 1 ? 'post' : 'posts'}</span>
 	</header>
@@ -41,7 +41,7 @@
 	<div class="rows">
 		{#each posts as post (post.path)}
 			<div class="drow" class:busy={busyPath === post.path}>
-				<a href={resolve('/posts/[slug]', { slug: post.slug })}>
+				<a href={resolve('/[[stage=stage]]/posts/[slug]', { slug: post.slug })}>
 					<strong>{post.title}</strong>
 					<small>{post.date || 'undated'} · {post.path}</small>
 				</a>

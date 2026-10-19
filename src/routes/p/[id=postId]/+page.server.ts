@@ -7,5 +7,5 @@ export const load = async ({ params, parent }) => {
 	const path = getPathById(params.id);
 	const post = path ? (await parent()).posts.find((item) => item.path === path) : undefined;
 	if (!post) throw error(404, `No post with id ${params.id}`);
-	throw redirect(307, resolve('/posts/[slug]', { slug: post.slug }));
+	throw redirect(307, resolve('/[[stage=stage]]/posts/[slug]', { slug: post.slug }));
 };

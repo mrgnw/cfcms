@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { tick } from 'svelte';
-	import { goto, refreshAll } from '$app/navigation';
+	import { goto, refreshAll, replaceState } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { MediaQuery } from 'svelte/reactivity';
 	import { dndzone, type DndEvent } from 'svelte-dnd-action';
 	import { swipeable, type SwipeEndEventDetail } from '@svelte-put/swipeable';
@@ -9,23 +9,22 @@
 	import StagePipeline from './StagePipeline.svelte';
 	import StatusDot from './StatusDot.svelte';
 	import { glyphs, type Glyph } from '#lib/glyphs.js';
-	import { isEditing, isPending, statusOf, type PostCounts, type PostFilter, type PostListItem } from '#lib/types.js';
+	import { isEditing, isPending, isStage, statusOf, type PostCounts, type PostFilter, type PostListItem, type Stage } from '#lib/types.js';
 
 	let {
 		posts,
 		selectedPath,
 		counts,
-		open = $bindable(true),
-		filter = $bindable('all')
+		open = $bindable(true)
 	}: {
 		posts: PostListItem[];
 		selectedPath?: string;
 		counts: PostCounts;
 		open?: boolean;
-		filter?: PostFilter;
 	} = $props();
 
 	let query = $state('');
+	let filter = $derived<PostFilter>(page.params.stage ?? 'all');
 	let swipedPath = $state<string | null>(null);
 
 	const touchLayout = new MediaQuery('max-width: 720px');
@@ -96,18 +95,40 @@
 
 	const keyToSection: Record<string, Section> = { 1: 'drafts', 2: 'editing', 3: 'recent', 4: 'ready', 6: 'live' };
 
+	const postHref = (slug: string) => resolve('/[[stage=stage]]/posts/[slug]', { stage: page.params.stage, slug });
+
+	function stageHref(stage: Stage | undefined, hash = '') {
+		const underStage = page.route.id?.startsWith('/[[stage=stage]]');
+		const rest = underStage ? page.url.pathname.replace(/^\/(drafts|ready|live)(?=\/|$)/, '') : '';
+		const path = (stage ? `/${stage}` : '') + rest;
+		return (path || '/') + hash;
+	}
+
+	const sectionHref = (section: Section) => isStage(section) ? stageHref(section) : stageHref(undefined, `#${section}`);
+
+	function leaveRail() {
+		setOpen(true);
+		query = '';
+	}
+
+	function trackSection(sectioned: boolean) {
+		return (list: HTMLElement) => {
+			if (!sectioned) return;
+			const observer = new IntersectionObserver(
+				(entries) => {
+					for (const entry of entries) if (entry.isIntersecting) replaceState(`#${entry.target.id}`, page.state);
+				},
+				{ root: list, rootMargin: '0px 0px -90% 0px' }
+			);
+			for (const heading of list.querySelectorAll('h3[id]')) observer.observe(heading);
+			return () => observer.disconnect();
+		};
+	}
+
 	function setOpen(value: boolean) {
 		open = value;
 		for (const pop of document.querySelectorAll<HTMLElement>('.rail-pop:popover-open')) pop.hidePopover();
 		document.cookie = `sidebar=${value ? 'open' : 'closed'}; path=/; max-age=31536000; SameSite=Lax`;
-	}
-
-	async function jump(section: Section) {
-		setOpen(true);
-		filter = section === 'editing' || section === 'recent' ? 'all' : section;
-		query = '';
-		await tick();
-		document.getElementById(section)?.scrollIntoView({ block: 'start' });
 	}
 
 	function handleShortcut(event: KeyboardEvent) {
@@ -115,7 +136,10 @@
 		if ((event.target as HTMLElement).closest('input, textarea, select, [contenteditable]')) return;
 		if (event.key === '[') setOpen(!open);
 		else if (event.key === '5') goto(resolve('publish'));
-		else if (event.key in keyToSection) jump(keyToSection[event.key]);
+		else if (event.key in keyToSection) {
+			leaveRail();
+			goto(sectionHref(keyToSection[event.key]));
+		}
 		else return;
 		event.preventDefault();
 	}
@@ -189,7 +213,7 @@
 		<a
 			class="row"
 			class:selected={item.path === selectedPath}
-			href={resolve('/posts/[slug]', { slug: item.slug })}
+			href={postHref(item.slug)}
 			draggable="false"
 			onclick={(event) => {
 				if (swipedPath) event.preventDefault();
@@ -268,22 +292,21 @@
 		onfocusin={showPop}
 		onfocusout={hidePop}
 	>
-		<button
+		<a
 			class="rail-item {section}"
 			class:current={selectedSection === section}
 			style:anchor-name="--rail-{section}"
-			type="button"
 			title="{section} ({items.length})"
 			aria-label="{section}, {items.length}"
-			onclick={() => jump(section)}
+			href={sectionHref(section)}
 		>
 			{@render glyph(section)}
 			{items.length}
-		</button>
+		</a>
 		<div class="rail-pop" popover="manual" style:position-anchor="--rail-{section}">
 			<h4>{section}</h4>
 			{#each items.slice(0, 8) as item (item.path)}
-				<a href={resolve('/posts/[slug]', { slug: item.slug })} class:selected={item.path === selectedPath}>
+				<a href={postHref(item.slug)} class:selected={item.path === selectedPath}>
 					<StatusDot status={statusOf(item)} />
 					<span>{item.title}</span>
 				</a>
@@ -291,7 +314,7 @@
 				<p>Nothing here</p>
 			{/each}
 			{#if items.length > 8}
-				<button type="button" class="more" onclick={() => jump(section)}>+{items.length - 8} more</button>
+				<a class="more" href={sectionHref(section)}>+{items.length - 8} more</a>
 			{/if}
 		</div>
 	</div>
@@ -332,7 +355,8 @@
 		</a>
 	</header>
 
-	<nav class="rail" aria-label="Jump to">
+	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+	<nav class="rail" aria-label="Jump to" onclick={leaveRail}>
 		<a class="rail-item new" href={resolve('new')} title="New post" aria-label="New post">
 			{@render glyph('plus')}
 		</a>
@@ -356,11 +380,11 @@
 		</a>
 	</nav>
 
-	<StagePipeline {counts} bind:filter />
+	<StagePipeline {counts} />
 
 	<input class="search" type="search" bind:value={query} placeholder="Search…" aria-label="Search posts" />
 
-	<nav class="post-list" aria-label="Post list">
+	<nav class="post-list" aria-label="Post list" {@attach trackSection(sectioned)}>
 		{#if sectioned}
 			{#if queueItems.length}
 				<h3 class="section-label editing-label" id="editing">Editing</h3>
@@ -373,7 +397,7 @@
 				>
 					{#each queueItems as item (item.id)}
 						<div class="qrow" class:selected={item.post.path === selectedPath} aria-label={item.post.title}>
-							<a class="row" href={resolve('/posts/[slug]', { slug: item.post.slug })} draggable="false">
+							<a class="row" href={postHref(item.post.slug)} draggable="false">
 								{@render rowBody(item.post)}
 							</a>
 							<button
@@ -395,7 +419,7 @@
 				{/each}
 			{/if}
 			{#if restPosts.length}
-				<h3 class="section-label">Everything</h3>
+				<h3 class="section-label" id="everything">Everything</h3>
 				{#each restPosts as item (item.path)}
 					{@render postRow(item)}
 				{/each}

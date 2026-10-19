@@ -44,7 +44,7 @@ export const load = async ({ params, parent }) => {
 	// opening a standalone .llm.md imports it: the post is born at its own path with the draft as its llm version
 	if (matches[0].path.endsWith('.llm.md')) {
 		const { path } = await importLlmDraft(matches[0].path);
-		throw redirect(303, resolve('/posts/[slug]', { slug: (await getPost(path)).slug }));
+		throw redirect(303, resolve('/[[stage=stage]]/posts/[slug]', { slug: (await getPost(path)).slug }));
 	}
 
 	const post = await getPost(matches[0].path);
