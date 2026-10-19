@@ -99,7 +99,8 @@
 
 	function stageHref(stage: Stage | undefined, hash = '') {
 		const underStage = page.route.id?.startsWith('/[[stage=stage]]');
-		const rest = underStage ? page.url.pathname.replace(/^\/(drafts|ready|live)(?=\/|$)/, '') : '';
+		const pathname = page.route.id === '/[[stage=stage]]/posts/[slug]' ?`/posts/${page.params.slug}` : page.url.pathname;
+		const rest = underStage ? pathname.replace(/^\/(drafts|ready|live)(?=\/|$)/, '') : '';
 		const path = (stage ? `/${stage}` : '') + rest;
 		return (path || '/') + hash;
 	}

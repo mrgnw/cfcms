@@ -1,11 +1,15 @@
 <script lang="ts">
-	import { goto, refreshAll } from '$app/navigation';
+	import { goto, refreshAll, replaceState } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import PostEditor from '#lib/components/PostEditor.svelte';
 	import { svxSlug } from '#lib/svx.js';
 
 	let { data } = $props();
+
+	$effect(() => {
+		if (data.post.id) replaceState(resolve('/p/[id=postId]', { id: data.post.id }), page.state);
+	});
 
 	// editing the slug field moves the post to a new URL; follow it instead of reloading into a 404
 	function onSaved(frontmatter?: string) {
