@@ -126,9 +126,13 @@
 		};
 	}
 
+	function hidePops() {
+		for (const pop of document.querySelectorAll<HTMLElement>('.rail-pop:popover-open')) pop.hidePopover();
+	}
+
 	function setOpen(value: boolean) {
 		open = value;
-		for (const pop of document.querySelectorAll<HTMLElement>('.rail-pop:popover-open')) pop.hidePopover();
+		hidePops();
 		document.cookie = `sidebar=${value ? 'open' : 'closed'}; path=/; max-age=31536000; SameSite=Lax`;
 	}
 
@@ -300,6 +304,7 @@
 			title="{section} ({items.length})"
 			aria-label="{section}, {items.length}"
 			href={sectionHref(section)}
+			onclick={leaveRail}
 		>
 			{@render glyph(section)}
 			{items.length}
@@ -315,7 +320,7 @@
 				<p>Nothing here</p>
 			{/each}
 			{#if items.length > 8}
-				<a class="more" href={sectionHref(section)}>+{items.length - 8} more</a>
+				<a class="more" href={sectionHref(section)} onclick={leaveRail}>+{items.length - 8} more</a>
 			{/if}
 		</div>
 	</div>
@@ -357,7 +362,7 @@
 	</header>
 
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-	<nav class="rail" aria-label="Jump to" onclick={leaveRail}>
+	<nav class="rail" aria-label="Jump to" onclick={hidePops}>
 		<a class="rail-item new" href={resolve('new')} title="New post" aria-label="New post">
 			{@render glyph('plus')}
 		</a>
