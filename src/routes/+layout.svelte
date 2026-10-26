@@ -111,8 +111,9 @@
 	}
 
 	.shell {
+		--sidebar-width: 320px;
 		display: grid;
-		grid-template-columns: minmax(260px, 320px) 1fr;
+		grid-template-columns: var(--sidebar-width) 1fr;
 		height: 100vh;
 		transition: grid-template-columns 200ms ease;
 	}

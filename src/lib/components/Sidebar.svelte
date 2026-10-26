@@ -464,6 +464,10 @@
 			display: none;
 		}
 
+		.sidebar:not(.closed) {
+			width: var(--sidebar-width);
+		}
+
 		.sidebar.closed {
 			padding: 14px 6px;
 		}
@@ -475,6 +479,7 @@
 
 	.rail {
 		display: none;
+		width: 32px;
 		flex: 1;
 		flex-direction: column;
 		align-items: center;
