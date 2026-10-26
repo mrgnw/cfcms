@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto, refreshAll, replaceState } from '$app/navigation';
+	import { afterNavigate, goto, refreshAll, replaceState } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import PostEditor from '#lib/components/PostEditor.svelte';
@@ -7,7 +7,7 @@
 
 	let { data } = $props();
 
-	$effect(() => {
+	afterNavigate(() => {
 		if (data.post.id) replaceState(resolve('/p/[id=postId]', { id: data.post.id }), page.state);
 	});
 
