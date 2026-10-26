@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { afterNavigate, goto, refreshAll, replaceState } from '$app/navigation';
+	import { afterNavigate, goto, refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import PostEditor from '#lib/components/PostEditor.svelte';
@@ -7,8 +7,12 @@
 
 	let { data } = $props();
 
-	afterNavigate(() => {
-		if (data.post.id) replaceState(resolve('/p/[id=postId]', { id: data.post.id }), page.state);
+	// A shallow goto fires afterNavigate itself, so it must stop once the url is already short.
+	afterNavigate(({ to }) => {
+		if (!data.post.id) return;
+		const short = resolve('/p/[id=postId]', { id: data.post.id });
+		if (to?.url.pathname === short) return;
+		goto(short, { state: page.state, shallow: true, replace: true });
 	});
 
 	// editing the slug field moves the post to a new URL; follow it instead of reloading into a 404

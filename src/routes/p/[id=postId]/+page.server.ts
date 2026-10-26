@@ -2,7 +2,7 @@ import { error, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getPathById } from '#lib/server/db.js';
 
-// post pages replaceState to /p/<id>, so their relative ?/ actions post here
+// post pages shallow-goto /p/<id>, so their relative ?/ actions post here
 export { actions } from '#lib/server/actions.js';
 
 // 307, not 308: the id is permanent but the slug it points at can change
