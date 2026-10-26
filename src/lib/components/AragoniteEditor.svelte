@@ -27,9 +27,10 @@
 		return () => dark.removeEventListener('change', sync);
 	});
 
-	$effect(() => {
-		if (!editor) return;
+	// Editor is never swapped while this component lives, so one subscription at mount covers it.
+	onMount(() => {
 		const ed = editor;
+		if (!ed) throw new Error('Aragonite editor is not bound at mount');
 		return ed.getEvents().on('edit', () => onChange?.(ed.getSource()));
 	});
 
