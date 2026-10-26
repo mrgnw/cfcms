@@ -2,8 +2,16 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { PostCounts, Stage } from '#lib/types.js';
+	import { getUiState, rememberSidebar } from '#lib/ui-state.js';
 
 	let { counts }: { counts: PostCounts } = $props();
+
+	const ui = getUiState();
+
+	function openSidebar() {
+		ui.sidebarOpen = true;
+		rememberSidebar(true);
+	}
 </script>
 
 {#snippet stage(name: Stage, label: string, count: number)}
@@ -13,6 +21,7 @@
 		class:active
 		aria-current={active ? 'page' : undefined}
 		href={resolve('/[[stage=stage]]', { stage: active ? undefined : name })}
+		onclick={openSidebar}
 	><b>{count}</b>{label}</a>
 {/snippet}
 

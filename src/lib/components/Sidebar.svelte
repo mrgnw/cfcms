@@ -9,6 +9,7 @@
 	import StagePipeline from './StagePipeline.svelte';
 	import StatusDot from './StatusDot.svelte';
 	import { glyphs, type Glyph } from '#lib/glyphs.js';
+	import { rememberSidebar } from '#lib/ui-state.js';
 	import { isEditing, isPending, isStage, statusOf, type PostCounts, type PostFilter, type PostListItem, type Stage } from '#lib/types.js';
 
 	let {
@@ -133,7 +134,7 @@
 	function setOpen(value: boolean) {
 		open = value;
 		hidePops();
-		document.cookie = `sidebar=${value ? 'open' : 'closed'}; path=/; max-age=31536000; SameSite=Lax`;
+		rememberSidebar(value);
 	}
 
 	function handleShortcut(event: KeyboardEvent) {
