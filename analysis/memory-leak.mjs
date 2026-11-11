@@ -8,7 +8,7 @@ const sampleMs = 2_000;
 
 const browser = await chromium.launch();
 const context = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
-await context.addInitScript(() => localStorage.setItem('xccms:editor', 'aragonite'));
+await context.addInitScript(() => localStorage.setItem('cfcms:editor', 'aragonite'));
 const page = await context.newPage();
 page.on('console', (m) => m.type() === 'error' && console.log('console:', m.text().slice(0, 200)));
 const cdp = await context.newCDPSession(page);

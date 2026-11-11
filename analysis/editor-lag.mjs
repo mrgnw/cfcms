@@ -22,8 +22,8 @@ const engine = process.env.BROWSER === 'webkit' ? webkit : chromium;
 const browser = await engine.launch();
 const context = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
 await context.addInitScript((kind) => {
-	localStorage.setItem('xccms:editor', kind);
-	localStorage.setItem('xccms:aragonite-mode', 'live');
+	localStorage.setItem('cfcms:editor', kind);
+	localStorage.setItem('cfcms:aragonite-mode', 'live');
 	const keys = [];
 	const frames = [];
 	const net = [];
@@ -236,4 +236,4 @@ const summary = {
 	error: errorText
 };
 console.log(JSON.stringify(summary));
-writeFileSync(`/tmp/xccms-lag/raw-${engine.name()}-${editor}-${cpuRate}x-${latencyMs}ms-${slug}-${seconds}s${second ? '-2tab' : ''}${navFirst ? `-nav${navFirst}` : ''}${stallMs ? `-stall${stallMs}` : ''}.json`, JSON.stringify(data));
+writeFileSync(`/tmp/cfcms-lag/raw-${engine.name()}-${editor}-${cpuRate}x-${latencyMs}ms-${slug}-${seconds}s${second ? '-2tab' : ''}${navFirst ? `-nav${navFirst}` : ''}${stallMs ? `-stall${stallMs}` : ''}.json`, JSON.stringify(data));

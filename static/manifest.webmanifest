@@ -1,6 +1,6 @@
 {
-	"name": "xccms",
-	"short_name": "xccms",
+	"name": "cfcms",
+	"short_name": "cfcms",
 	"start_url": "/",
 	"display": "standalone",
 	"background_color": "#f5f4f1",

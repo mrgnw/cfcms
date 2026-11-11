@@ -1,4 +1,4 @@
-# xccms — plan
+# cfcms — plan
 
 Tiny SvelteKit CMS for the Markdown content in `~/dev/blog/content`. Runs
 as the `blog-cms` kagaya service on :5273, served at https://cms.xcc.es/.

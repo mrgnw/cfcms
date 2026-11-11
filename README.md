@@ -1,4 +1,4 @@
-# xccms
+# cfcms
 
 Tiny SvelteKit CMS for editing local Markdown blog content.
 

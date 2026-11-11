@@ -116,9 +116,9 @@
 
 	// Spike: switch the body editor between Milkdown and Aragonite to compare them.
 	type EditorKind = 'milkdown' | 'aragonite';
-	const EDITOR_KEY = 'xccms:editor';
+	const EDITOR_KEY = 'cfcms:editor';
 	let editorKind = $state<EditorKind>('aragonite');
-	const MODE_KEY = 'xccms:aragonite-mode';
+	const MODE_KEY = 'cfcms:aragonite-mode';
 	const aragoniteModes: PresentationMode[] = ['live', 'preview-inline', 'preview-block', 'source', 'reading'];
 	let aragoniteMode = $state<PresentationMode>('live');
 	$effect(() => {

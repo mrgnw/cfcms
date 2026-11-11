@@ -15,7 +15,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SANDBOX = Path('/tmp/xccms-lag')
+SANDBOX = Path('/tmp/cfcms-lag')
 LANES = 4
 BASE_PORT = 5300
 SECONDS = 30

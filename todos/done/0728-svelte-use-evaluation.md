@@ -3,7 +3,7 @@ agent: true
 branch: gullible-pony
 ---
 
-# Evaluate svelte-use for xccms
+# Evaluate svelte-use for cfcms
 
 ## Outcome (2026-07-28)
 
@@ -30,7 +30,7 @@ No `localStorage`, no manual `setInterval`, no `ResizeObserver`/`IntersectionObs
 Two things worth doing regardless of the library:
 
 1. The `.catch(() => {})` swallows failures silently. If the copy fails (permissions, insecure context, no clipboard API), the user gets no feedback at all and no way to know. Add a copied/failed state to the button either way.
-2. Revisit this if xccms grows editor features — autosave, drag-to-reorder, live preview panes, or file drop would each pull in several composables at once and change the maths.
+2. Revisit this if cfcms grows editor features — autosave, drag-to-reorder, live preview panes, or file drop would each pull in several composables at once and change the maths.
 
 ## Related
 
