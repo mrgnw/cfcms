@@ -1,8 +1,9 @@
 // Measures per-keystroke latency in both body editors against a sandbox server.
 // Usage: node analysis/editor-lag.mjs <baseUrl> <slug> <editor> <cpuRate> <seconds> <latencyMs> [--trace out.json]
 // latencyMs is applied per fetch with 0.5x-3x jitter, to mimic a phone on a tunnel.
+// Requires playwright to resolve from the repo (pnpm add -D playwright). ORIGIN overrides the Origin sent with POSTs.
 // BROWSER=webkit runs Safari's engine; it has no CPU throttling or long-animation-frame data.
-import { chromium, webkit } from '~/dev/blog/node_modules/playwright/index.mjs';
+import { chromium, webkit } from 'playwright';
 import { writeFileSync } from 'node:fs';
 
 const [baseUrl, slug, editor, cpuRateText, secondsText, latencyText, traceFlag, tracePath] = process.argv.slice(2);
@@ -76,7 +77,8 @@ await context.addInitScript((kind) => {
 	};
 }, editor);
 
-// The build pins origin to https://cms.xcc.es, so form actions need that Origin to pass the CSRF check.
+// A build started with ORIGIN set rejects form actions from any other Origin, so send the one it was built for.
+const origin = process.env.ORIGIN ?? new URL(baseUrl).origin;
 await context.route(() => true, async (route) => {
 	const request = route.request();
 	if (request.resourceType() !== 'fetch') return route.continue();
@@ -84,7 +86,7 @@ await context.route(() => true, async (route) => {
 	const now = Date.now();
 	if (now >= stallStart && now < stallStart + stallMs) await new Promise((done) => setTimeout(done, stallStart + stallMs - now));
 	if (request.method() !== 'POST') return route.continue();
-	const response = await route.fetch({ headers: { ...request.headers(), origin: 'https://cms.xcc.es' } });
+	const response = await route.fetch({ headers: { ...request.headers(), origin } });
 	return route.fulfill({ response });
 });
 

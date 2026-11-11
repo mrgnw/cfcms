@@ -1,0 +1,170 @@
+/* generated from @twinkleplop/theme-github, recoloured to classic GitHub, by scripts/gen-code-theme.mjs - do not edit */
+
+:root {
+	--twp-background: light-dark(#ffffff, #24292e);
+	--twp-boolean: light-dark(#005cc5, #79b8ff);
+	--twp-comment: #6a737d;
+	--twp-identifier: light-dark(#24292e, #e1e4e8);
+	--twp-keyword: light-dark(#d73a49, #f97583);
+	--twp-number: light-dark(#005cc5, #79b8ff);
+	--twp-operator: light-dark(#d73a49, #f97583);
+	--twp-punctuation: light-dark(#24292e, #e1e4e8);
+	--twp-regex: light-dark(#032f62, #9ecbff);
+	--twp-string: light-dark(#032f62, #9ecbff);
+	--twp-template: light-dark(#032f62, #9ecbff);
+	--twp-builtin: light-dark(#005cc5, #79b8ff);
+	--twp-class_name: light-dark(#6f42c1, #b392f0);
+	--twp-constant: light-dark(#005cc5, #79b8ff);
+	--twp-namespace: light-dark(#6f42c1, #b392f0);
+	--twp-parameter: light-dark(#24292e, #e1e4e8);
+	--twp-property: light-dark(#005cc5, #79b8ff);
+	--twp-variable: light-dark(#24292e, #e1e4e8);
+	--twp-function: light-dark(#6f42c1, #b392f0);
+	--twp-attr_name: light-dark(#005cc5, #79b8ff);
+	--twp-doctype: #6a737d;
+	--twp-entity: light-dark(#005cc5, #79b8ff);
+	--twp-tag_name: light-dark(#22863a, #85e89d);
+	--twp-changed: light-dark(#e36209, #ffab70);
+	--twp-changed_marker: light-dark(#e36209, #ffab70);
+	--twp-deleted: light-dark(#b31d28, #fdaeb7);
+	--twp-deleted_marker: light-dark(#b31d28, #fdaeb7);
+	--twp-hash: #6a737d;
+	--twp-heading: light-dark(#005cc5, #79b8ff);
+	--twp-inserted: light-dark(#22863a, #85e89d);
+	--twp-inserted_marker: light-dark(#22863a, #85e89d);
+	--twp-label: #6a737d;
+	--twp-autolink: light-dark(#032f62, #9ecbff);
+	--twp-bold: light-dark(#24292e, #e1e4e8);
+	--twp-code: light-dark(#005cc5, #79b8ff);
+	--twp-code_block: light-dark(#005cc5, #79b8ff);
+	--twp-code_language: light-dark(#005cc5, #79b8ff);
+	--twp-italic: light-dark(#24292e, #e1e4e8);
+	--twp-link_text: light-dark(#032f62, #9ecbff);
+	--twp-strike: light-dark(#24292e, #e1e4e8);
+	--twp-url: light-dark(#032f62, #9ecbff);
+	--twp-url_link: light-dark(#032f62, #9ecbff);
+	--twp-url_title: light-dark(#032f62, #9ecbff);
+	--twp-autolink_open: light-dark(#032f62, #9ecbff);
+	--twp-autolink_close: light-dark(#032f62, #9ecbff);
+	--twp-bold_open: light-dark(#24292e, #e1e4e8);
+	--twp-bold_close: light-dark(#24292e, #e1e4e8);
+	--twp-code_open: light-dark(#005cc5, #79b8ff);
+	--twp-code_close: light-dark(#005cc5, #79b8ff);
+	--twp-italic_open: light-dark(#24292e, #e1e4e8);
+	--twp-italic_close: light-dark(#24292e, #e1e4e8);
+	--twp-link_text_open: light-dark(#032f62, #9ecbff);
+	--twp-link_text_close: light-dark(#032f62, #9ecbff);
+	--twp-strike_open: light-dark(#24292e, #e1e4e8);
+	--twp-strike_close: light-dark(#24292e, #e1e4e8);
+	--twp-blockquote_marker: #6a737d;
+	--twp-code_fence: #6a737d;
+	--twp-front_matter_marker: #6a737d;
+	--twp-heading_marker: light-dark(#005cc5, #79b8ff);
+	--twp-hr: #6a737d;
+	--twp-list_marker: light-dark(#e36209, #ffab70);
+	--twp-task_marker: light-dark(#22863a, #85e89d);
+	--twp-escape: light-dark(#22863a, #85e89d);
+	--twp-hard_break: #6a737d;
+	--twp-expression: light-dark(#d73a49, #f97583);
+	--twp-svelte_block: light-dark(#d73a49, #f97583);
+	--twp-svelte_directive: light-dark(#005cc5, #79b8ff);
+	--twp-raw_code_block: light-dark(#24292e, #e1e4e8);
+	--twp-raw_front_matter: light-dark(#24292e, #e1e4e8);
+	--twp-raw_script: light-dark(#24292e, #e1e4e8);
+	--twp-raw_style: light-dark(#24292e, #e1e4e8);
+	--twp-raw_svelte_expression: light-dark(#24292e, #e1e4e8);
+	--twp-string_escape: light-dark(#22863a, #85e89d);
+	--twp-format: light-dark(#d73a49, #f97583);
+	--twp-array_table_header: light-dark(#22863a, #85e89d);
+	--twp-datetime: light-dark(#005cc5, #79b8ff);
+	--twp-plain_scalar: light-dark(#24292e, #e1e4e8);
+	--twp-null: light-dark(#005cc5, #79b8ff);
+	--twp-autolink-text-decoration: underline;
+	--twp-bold-font-weight: bold;
+	--twp-heading-font-weight: bold;
+	--twp-heading_marker-font-weight: bold;
+	--twp-hr-font-weight: bold;
+	--twp-italic-font-style: italic;
+	--twp-strike-text-decoration: line-through;
+}
+
+.twinkleplop .boolean { color: var(--twp-boolean); }
+.twinkleplop .comment { color: var(--twp-comment); }
+.twinkleplop .identifier { color: var(--twp-identifier); }
+.twinkleplop .keyword { color: var(--twp-keyword); }
+.twinkleplop .number { color: var(--twp-number); }
+.twinkleplop .operator { color: var(--twp-operator); }
+.twinkleplop .punctuation { color: var(--twp-punctuation); }
+.twinkleplop .regex { color: var(--twp-regex); }
+.twinkleplop .string { color: var(--twp-string); }
+.twinkleplop .template { color: var(--twp-template); }
+.twinkleplop .builtin { color: var(--twp-builtin); }
+.twinkleplop .class_name { color: var(--twp-class_name); }
+.twinkleplop .constant { color: var(--twp-constant); }
+.twinkleplop .namespace { color: var(--twp-namespace); }
+.twinkleplop .parameter { color: var(--twp-parameter); }
+.twinkleplop .property { color: var(--twp-property); }
+.twinkleplop .variable { color: var(--twp-variable); }
+.twinkleplop .function { color: var(--twp-function); }
+.twinkleplop .attr_name { color: var(--twp-attr_name); }
+.twinkleplop .doctype { color: var(--twp-doctype); }
+.twinkleplop .entity { color: var(--twp-entity); }
+.twinkleplop .tag_name { color: var(--twp-tag_name); }
+.twinkleplop .changed { color: var(--twp-changed); }
+.twinkleplop .changed_marker { color: var(--twp-changed_marker); }
+.twinkleplop .deleted { color: var(--twp-deleted); }
+.twinkleplop .deleted_marker { color: var(--twp-deleted_marker); }
+.twinkleplop .hash { color: var(--twp-hash); }
+.twinkleplop .heading { color: var(--twp-heading); font-weight: var(--twp-heading-font-weight); }
+.twinkleplop .inserted { color: var(--twp-inserted); }
+.twinkleplop .inserted_marker { color: var(--twp-inserted_marker); }
+.twinkleplop .label { color: var(--twp-label); }
+.twinkleplop .autolink { color: var(--twp-autolink); text-decoration: var(--twp-autolink-text-decoration); }
+.twinkleplop .bold { color: var(--twp-bold); font-weight: var(--twp-bold-font-weight); }
+.twinkleplop .code { color: var(--twp-code); }
+.twinkleplop .code_block { color: var(--twp-code_block); }
+.twinkleplop .code_language { color: var(--twp-code_language); }
+.twinkleplop .italic { color: var(--twp-italic); font-style: var(--twp-italic-font-style); }
+.twinkleplop .link_text { color: var(--twp-link_text); }
+.twinkleplop .strike { color: var(--twp-strike); text-decoration: var(--twp-strike-text-decoration); }
+.twinkleplop .url { color: var(--twp-url); }
+.twinkleplop .url_link { color: var(--twp-url_link); }
+.twinkleplop .url_title { color: var(--twp-url_title); }
+.twinkleplop .autolink_open { color: var(--twp-autolink_open); }
+.twinkleplop .autolink_close { color: var(--twp-autolink_close); }
+.twinkleplop .bold_open { color: var(--twp-bold_open); }
+.twinkleplop .bold_close { color: var(--twp-bold_close); }
+.twinkleplop .code_open { color: var(--twp-code_open); }
+.twinkleplop .code_close { color: var(--twp-code_close); }
+.twinkleplop .italic_open { color: var(--twp-italic_open); }
+.twinkleplop .italic_close { color: var(--twp-italic_close); }
+.twinkleplop .link_text_open { color: var(--twp-link_text_open); }
+.twinkleplop .link_text_close { color: var(--twp-link_text_close); }
+.twinkleplop .strike_open { color: var(--twp-strike_open); }
+.twinkleplop .strike_close { color: var(--twp-strike_close); }
+.twinkleplop .blockquote_marker { color: var(--twp-blockquote_marker); }
+.twinkleplop .code_fence { color: var(--twp-code_fence); }
+.twinkleplop .front_matter_marker { color: var(--twp-front_matter_marker); }
+.twinkleplop .heading_marker { color: var(--twp-heading_marker); font-weight: var(--twp-heading_marker-font-weight); }
+.twinkleplop .hr { color: var(--twp-hr); font-weight: var(--twp-hr-font-weight); }
+.twinkleplop .list_marker { color: var(--twp-list_marker); }
+.twinkleplop .task_marker { color: var(--twp-task_marker); }
+.twinkleplop .escape { color: var(--twp-escape); }
+.twinkleplop .hard_break { color: var(--twp-hard_break); }
+.twinkleplop .expression { color: var(--twp-expression); }
+.twinkleplop .svelte_block { color: var(--twp-svelte_block); }
+.twinkleplop .svelte_directive { color: var(--twp-svelte_directive); }
+.twinkleplop .raw_code_block { color: var(--twp-raw_code_block); }
+.twinkleplop .raw_front_matter { color: var(--twp-raw_front_matter); }
+.twinkleplop .raw_script { color: var(--twp-raw_script); }
+.twinkleplop .raw_style { color: var(--twp-raw_style); }
+.twinkleplop .raw_svelte_expression { color: var(--twp-raw_svelte_expression); }
+.twinkleplop .string_escape { color: var(--twp-string_escape); }
+.twinkleplop .format { color: var(--twp-format); }
+.twinkleplop .array_table_header { color: var(--twp-array_table_header); }
+.twinkleplop .datetime { color: var(--twp-datetime); }
+.twinkleplop .plain_scalar { color: var(--twp-plain_scalar); }
+.twinkleplop .null { color: var(--twp-null); }
+.twinkleplop .space { white-space: pre; }
+.twinkleplop .tab { white-space: pre; }
+.twinkleplop .newline { white-space: pre; }

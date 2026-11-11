@@ -1,7 +1,7 @@
-const playwrightEntry = '~/.npm/_npx/e41f203b7505f1fb/node_modules/playwright/index.mjs';
-const { chromium } = await import(playwrightEntry);
+import { pathToFileURL } from 'node:url';
+import { chromium } from 'playwright';
 
-const file = 'file://~/dev/blog-cms/mockups/theme-palettes.html';
+const file = pathToFileURL(new URL('theme-palettes.html', import.meta.url).pathname).href;
 const outDir = '/tmp/palette-shots';
 
 const browser = await chromium.launch();

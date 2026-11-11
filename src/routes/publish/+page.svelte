@@ -5,7 +5,7 @@
 </script>
 
 <svelte:head>
-	<title>Publish · cms.xcc.es</title>
+	<title>Publish · cfcms</title>
 </svelte:head>
 
 <PublishView changes={data.pendingChanges} lastPublishedAt={data.lastPublishedAt} />

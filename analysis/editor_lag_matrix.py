@@ -37,7 +37,7 @@ def start_lane(lane: int) -> subprocess.Popen:
 		**os.environ,
 		'HOST': '127.0.0.1',
 		'PORT': str(port),
-		'ORIGIN': 'https://cms.xcc.es',
+		'ORIGIN': f'http://127.0.0.1:{port}',
 		'BLOG_CONTENT_BASE_DIR': str(SANDBOX / 'blog'),
 		'BLOG_CMS_DB': str(lane_dir / 'cms.db'),
 	}

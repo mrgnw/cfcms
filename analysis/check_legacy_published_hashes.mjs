@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 const databasePath = process.argv[2] ?? resolve('.data/cms.db');
-const contentDirectory = process.argv[3] ?? '~/dev/blog/content';
+const contentDirectory = process.argv[3] ?? resolve(process.env.BLOG_CONTENT_BASE_DIR ?? '../blog', 'content');
 
 const oldPattern = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 const newPattern = /^---\r?\n([\s\S]*?)\r?\n---\r?\n(?:\r?\n)*/;

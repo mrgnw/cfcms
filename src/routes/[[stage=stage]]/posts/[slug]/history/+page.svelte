@@ -33,7 +33,7 @@
 </script>
 
 <svelte:head>
-	<title>History · {data.post.title} · cms.xcc.es</title>
+	<title>History · {data.post.title} · cfcms</title>
 </svelte:head>
 
 <nav class="crumbs">

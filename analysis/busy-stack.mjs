@@ -1,7 +1,7 @@
 // Opens a post, waits, then pauses the debugger to print what the main thread is running.
 // Use when a page pins a CPU: CDP calls that wait on the main thread hang, Debugger.pause does not.
 // Usage: node analysis/busy-stack.mjs <baseUrl> <slug> <waitMs>
-import { chromium } from '~/dev/blog/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 
 const [baseUrl, slug, waitText] = process.argv.slice(2);
 const samples = 3;

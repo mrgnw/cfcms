@@ -8,7 +8,7 @@
 </script>
 
 <svelte:head>
-	<title>Posts · cms.xcc.es</title>
+	<title>Posts · cfcms</title>
 </svelte:head>
 
 <HomePanel

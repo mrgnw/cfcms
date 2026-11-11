@@ -24,7 +24,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.post.title} · cms.xcc.es</title>
+	<title>{data.post.title} · cfcms</title>
 </svelte:head>
 
 <a class="mobile-back" href={resolve('/[[stage=stage]]', { stage: page.params.stage })} aria-label="Back to post list">

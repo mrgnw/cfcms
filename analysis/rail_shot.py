@@ -2,9 +2,11 @@
 # requires-python = ">=3.12"
 # dependencies = ["playwright"]
 # ///
+import os
+
 from playwright.sync_api import sync_playwright
 
-URL = 'http://localhost:5273/'
+URL = os.environ.get('CFCMS_URL', 'http://localhost:5273/')
 OUT = '/tmp/rail.png'
 
 with sync_playwright() as p:

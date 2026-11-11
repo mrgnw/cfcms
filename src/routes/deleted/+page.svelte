@@ -5,7 +5,7 @@
 </script>
 
 <svelte:head>
-	<title>Deleted · cms.xcc.es</title>
+	<title>Deleted · cfcms</title>
 </svelte:head>
 
 <DeletedView posts={data.posts.filter((post) => post.deleteRequested)} />

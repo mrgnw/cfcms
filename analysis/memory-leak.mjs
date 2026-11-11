@@ -1,6 +1,6 @@
 // Opens a post read-only and samples JS heap and script time, to catch an idle leak.
 // Usage: node analysis/memory-leak.mjs <baseUrl> <slug> <seconds>
-import { chromium } from '~/dev/blog/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 
 const [baseUrl, slug, secondsText] = process.argv.slice(2);
 const seconds = Number(secondsText);

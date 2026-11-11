@@ -37,7 +37,7 @@
 </script>
 
 <svelte:head>
-	<title>New post · cms.xcc.es</title>
+	<title>New post · cfcms</title>
 </svelte:head>
 
 <a

@@ -5,7 +5,7 @@
 </script>
 
 <svelte:head>
-	<title>Admin · cms.xcc.es</title>
+	<title>Admin · cfcms</title>
 </svelte:head>
 
 <AdminView llmDrafts={data.llmDrafts} />
