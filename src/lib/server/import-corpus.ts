@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { readFile, stat, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { relative, resolve } from 'node:path';
 import { canonicalBody, hashPostContent, splitRawPost } from '#lib/post-text.js';
 import { normalizeNewlines } from '#lib/save-rules.js';
@@ -115,6 +115,7 @@ const runImport = async () => {
 
 	const commit = await commitPaths(commitTargets, 'cms: import corpus - drafts move to store');
 	if (!commit.ok) throw new Error(`Import commit failed: ${commit.output}`);
+	await mkdir(resolve(process.cwd(), '.data'), { recursive: true });
 	await writeFile(resolve(process.cwd(), '.data/import-report.md'), `${report.join('\n')}\n`, 'utf8');
 	setMetaValue('importedCorpus', new Date().toISOString());
 	await runBackup().catch(() => undefined);

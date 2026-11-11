@@ -39,8 +39,11 @@ const matchStored = (slug: string, stored: StoredPost[]) => {
 const runBaseline = async () => {
 	if (getMetaValue(metaKey)) return;
 
-	const names = (await readdir(svxDirectory)).filter((name) => name.endsWith('.svx')).sort();
-	if (names.length === 0) throw new Error(`svx baseline: no .svx files in ${svxDirectory}`);
+	const names = (await readdir(svxDirectory).catch(() => [] as string[])).filter((name) => name.endsWith('.svx')).sort();
+	if (names.length === 0) {
+		setMetaValue(metaKey, new Date().toISOString());
+		return;
+	}
 
 	const stored = listStoredPosts();
 	const report: string[] = ['# svx baseline report', '', `Ran: ${new Date().toISOString()}`, ''];
