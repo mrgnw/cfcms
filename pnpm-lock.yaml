@@ -108,8 +108,20 @@ importers:
         specifier: ^0.1.7
         version: 0.1.7
       '@voithos-labs/aragonite':
-        specifier: 0.10.8
-        version: 0.10.8(svelte@5.57.2)
+        specifier: 0.11.5
+        version: 0.11.5(svelte@5.57.2)
+      '@voithos-labs/aragonite-details':
+        specifier: 0.11.5
+        version: 0.11.5(@voithos-labs/aragonite@0.11.5(svelte@5.57.2))(svelte@5.57.2)
+      '@voithos-labs/aragonite-footnotes':
+        specifier: 0.11.5
+        version: 0.11.5(@voithos-labs/aragonite@0.11.5(svelte@5.57.2))(svelte@5.57.2)
+      '@voithos-labs/aragonite-mermaid':
+        specifier: 0.11.5
+        version: 0.11.5(@voithos-labs/aragonite@0.11.5(svelte@5.57.2))(svelte@5.57.2)
+      '@voithos-labs/aragonite-slash-commands':
+        specifier: 0.11.5
+        version: 0.11.5(@voithos-labs/aragonite@0.11.5(svelte@5.57.2))(svelte@5.57.2)
       pele:
         specifier: ^1.6.0
         version: 1.6.0
@@ -752,17 +764,53 @@ packages:
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
 
-  '@voithos-labs/aragonite@0.10.8':
-    resolution: {integrity: sha512-CPcBjxSim3/DY9NACW5hqG9h1juf15g5VDFnqfZdHUKj72RDn/qqQbm0Zn0tgD3S6OvbBMEhjY225sWtwhByrQ==}
-    engines: {node: ^20.19.0 || >=22.12.0}
+  '@voithos-labs/aragonite-details@0.11.5':
+    resolution: {integrity: sha512-R3eL9qpvBNJezlp/9LAunbsPa+xY8QbgWbxci7DHLdEEwYQB+xph3ipn0GBfeCSAuNwFoAyqsaZEs87vF77GFA==}
     peerDependencies:
-      katex: ^0.17.0 || ^0.18.0 || ^0.19.0
+      '@voithos-labs/aragonite': 0.11.5
+      svelte: ^5.29.0
+    peerDependenciesMeta:
+      svelte:
+        optional: true
+
+  '@voithos-labs/aragonite-footnotes@0.11.5':
+    resolution: {integrity: sha512-OUBq29mLaESwHZoVxvMOx57y8IiOSp7n78YJELJc8A0UNZYkMKxdHEM9FamKcvCZo6/oLPC5FZsfGRkNw5cuTQ==}
+    peerDependencies:
+      '@voithos-labs/aragonite': 0.11.5
+      svelte: ^5.29.0
+    peerDependenciesMeta:
+      svelte:
+        optional: true
+
+  '@voithos-labs/aragonite-mermaid@0.11.5':
+    resolution: {integrity: sha512-4iU83UlmWasbsAc76bB3c8Yz4rFh99NxyaqGI6Zo/Op4Ub+4SGa501FiGU8l6VXRhYvPFjXJyK4H3jvmRjzB+w==}
+    peerDependencies:
+      '@voithos-labs/aragonite': 0.11.5
       mermaid: ^11.16.0 || ^12.0.0
       svelte: ^5.29.0
     peerDependenciesMeta:
-      katex:
-        optional: true
       mermaid:
+        optional: true
+      svelte:
+        optional: true
+
+  '@voithos-labs/aragonite-slash-commands@0.11.5':
+    resolution: {integrity: sha512-E8BYnMp+f+Git68P9+ee3H/89f1Z6HhGNPYezMbff7n816Kpm1llUkSP5+egKku646OdGOj8CU5k8e9QOe7okA==}
+    peerDependencies:
+      '@voithos-labs/aragonite': 0.11.5
+      svelte: ^5.29.0
+    peerDependenciesMeta:
+      svelte:
+        optional: true
+
+  '@voithos-labs/aragonite@0.11.5':
+    resolution: {integrity: sha512-lbN9qiaRWt/RaMqKE/0M65H8F0W3T24P7HhcRuE+bnNca050XVSQIE6ad/Z0GZNg6C7el6ELnQBl8SrMOAQwtg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    hasBin: true
+    peerDependencies:
+      svelte: ^5.29.0
+    peerDependenciesMeta:
+      svelte:
         optional: true
 
   '@vue/compiler-core@3.5.34':
@@ -2568,10 +2616,35 @@ snapshots:
 
   '@types/unist@3.0.3': {}
 
-  '@voithos-labs/aragonite@0.10.8(svelte@5.57.2)':
+  '@voithos-labs/aragonite-details@0.11.5(@voithos-labs/aragonite@0.11.5(svelte@5.57.2))(svelte@5.57.2)':
+    dependencies:
+      '@voithos-labs/aragonite': 0.11.5(svelte@5.57.2)
+    optionalDependencies:
+      svelte: 5.57.2
+
+  '@voithos-labs/aragonite-footnotes@0.11.5(@voithos-labs/aragonite@0.11.5(svelte@5.57.2))(svelte@5.57.2)':
+    dependencies:
+      '@voithos-labs/aragonite': 0.11.5(svelte@5.57.2)
+    optionalDependencies:
+      svelte: 5.57.2
+
+  '@voithos-labs/aragonite-mermaid@0.11.5(@voithos-labs/aragonite@0.11.5(svelte@5.57.2))(svelte@5.57.2)':
+    dependencies:
+      '@voithos-labs/aragonite': 0.11.5(svelte@5.57.2)
+    optionalDependencies:
+      svelte: 5.57.2
+
+  '@voithos-labs/aragonite-slash-commands@0.11.5(@voithos-labs/aragonite@0.11.5(svelte@5.57.2))(svelte@5.57.2)':
+    dependencies:
+      '@voithos-labs/aragonite': 0.11.5(svelte@5.57.2)
+    optionalDependencies:
+      svelte: 5.57.2
+
+  '@voithos-labs/aragonite@0.11.5(svelte@5.57.2)':
     dependencies:
       esm-env: 1.2.2
       highlight.js: 11.12.0
+    optionalDependencies:
       svelte: 5.57.2
 
   '@vue/compiler-core@3.5.34':

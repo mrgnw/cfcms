@@ -2,6 +2,12 @@
 
 User-visible changes to the CMS, newest first. Add an entry under today's date with every PR merged to main. History before 2026-10-05 is in `git log`.
 
+## 2026-11-11
+
+### Changed
+
+- Aragonite is on 0.11.5, now licensed MPL-2.0 instead of AGPL-3.0. Its details, footnotes, mermaid and slash-command plugins come from their own packages.
+
 ## 2026-10-17
 
 ### Added

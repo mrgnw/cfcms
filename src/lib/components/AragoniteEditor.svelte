@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
-	import { Editor, type EditorInstance, type PresentationMode } from '@voithos-labs/aragonite';
+	import type { EditorInstance, PresentationMode } from '@voithos-labs/aragonite';
+	import { Editor } from '@voithos-labs/aragonite/svelte';
 	import { plugins } from '#lib/aragonite/plugins.js';
 	import '@fontsource/ibm-plex-mono/400.css';
 	import '@fontsource/ibm-plex-mono/500.css';

@@ -1,7 +1,7 @@
-import { detailsPlugin } from '@voithos-labs/aragonite/plugins/details';
-import { footnotesPlugin } from '@voithos-labs/aragonite/plugins/footnotes';
-import { mermaidPlugin, type MermaidRenderer } from '@voithos-labs/aragonite/plugins/mermaid';
-import { slashCommandsPlugin } from '@voithos-labs/aragonite/plugins/slash-commands';
+import { detailsPlugin } from '@voithos-labs/aragonite-details';
+import { footnotesPlugin } from '@voithos-labs/aragonite-footnotes';
+import { mermaidPlugin, type MermaidRenderer } from '@voithos-labs/aragonite-mermaid';
+import { slashCommandsPlugin } from '@voithos-labs/aragonite-slash-commands';
 
 // The blog's desktop post column, so a diagram is laid out here as readers on desktop see it.
 const BLOG_COLUMN_WIDTH = 560;

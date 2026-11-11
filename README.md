@@ -125,4 +125,3 @@ curl -X POST http://localhost:5273/api/publish
 
 [MIT](LICENSE)
 
-This project depends on libraries with their own licenses. One to know about: [Aragonite](https://github.com/voithos-labs/aragonite) is AGPL-3.0, which matters if you distribute or host cfcms for other people.
