@@ -1,5 +1,11 @@
 {
-	"name": "xccms",
+	"name": "cfcms",
+	"description": "A SvelteKit Markdown editor for the posts of a static blog, with staged publishing and per-post version history.",
+	"license": "MIT",
+	"author": "Morgan Williams",
+	"homepage": "https://github.com/mrgnw/cfcms#readme",
+	"repository": { "type": "git", "url": "git+https://github.com/mrgnw/cfcms.git" },
+	"bugs": { "url": "https://github.com/mrgnw/cfcms/issues" },
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",
