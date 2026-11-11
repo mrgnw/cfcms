@@ -59,7 +59,7 @@ assert.deepEqual(lineDiffCounts('a\nb\nc', 'a\nx\nc\nd'), { added: 2, deleted: 1
 assert.deepEqual(lineDiffCounts('same', 'same'), { added: 0, deleted: 0 });
 assert.equal(lineDiffCounts(Array.from({ length: 4001 }, () => 'l').join('\n'), 'x'), null, 'over the line cap → null');
 
-// applySegment: the repros from todos/segment-apply-bugs.md, with base = main = Alpha., Omega.
+// applySegment: the repros from todos/done/1006-segment-apply-bugs.md, with base = main = Alpha., Omega.
 const am = 'Alpha.\n\nOmega.';
 const applyAll = (body: string, segs: Segment[]) =>
 	segs.reduce<string | null>((acc, seg) => (acc == null ? null : applySegment(acc, seg)), body);
