@@ -1,29 +1,69 @@
 # cfcms
 
-Tiny SvelteKit CMS for editing local Markdown blog content.
+A Markdown editor for the posts of a static blog. Write in the browser, keep drafts and version history in SQLite, then publish the staged posts to the blog's repository, where Cloudflare Workers Builds deploys them.
 
-## Paths
+It is built for one writer who keeps a blog as Markdown in a git checkout and wants a better editing surface than a text editor, on a laptop or a phone. It is a single-user tool: there is no auth, and it expects to run on a machine you trust.
 
-- App: `~/dev/blog-cms`
-- Content source of truth: `~/dev/blog/content`
-- Public CMS URL: `https://cms.xcc.es/`
+Built with SvelteKit 3 and Svelte 5, [Milkdown Crepe](https://milkdown.dev) for WYSIWYG editing (with [Aragonite](https://github.com/voithos-labs/aragonite) as an alternative), [twinkleplop](https://www.npmjs.com/package/@twinkleplop/core) for code highlighting, and `node:sqlite` for storage. TypeScript throughout, tested with `node --test`.
 
-The CMS reads and writes Markdown files under `~/dev/blog/content`.
-Saving or creating a post writes the filesystem first, then attempts a git commit as backup/version history.
+## Features
 
-Override the filesystem base if needed:
+- WYSIWYG Markdown editing with the blog's own code highlighting, including fence titles, captions and highlighted-line meta.
+- Autosave to a SQLite store with a bounded revision history per post; conflicting saves from two devices become versions to reconcile segment by segment.
+- Stages: drafts, ready, publish, live. Pending changes are staged per post and published together.
+- Publish renders posts to `.svx` files in the blog checkout, runs the blog build as a gate, then commits and pushes.
+- Import of `.llm.md` drafts written by an assistant, shown as a reference pane to copy from.
+
+## Run it
+
+You need Node 24 or newer and [pnpm](https://pnpm.io).
 
 ```sh
-BLOG_CONTENT_BASE_DIR=~/dev/blog
+git clone https://github.com/mrgnw/cfcms.git
+cd cfcms
+pnpm install
 ```
 
-## Development
+To try it without a blog of your own, run it against a throwaway copy of the sample posts in `content/posts`. The editor writes into the folder it points at, so do not point it at this repository:
+
+```sh
+DEMO=$(mktemp -d)
+mkdir -p "$DEMO/content"
+cp -R content/posts "$DEMO/content/"
+git -C "$DEMO" init
+BLOG_CONTENT_BASE_DIR="$DEMO" BLOG_CMS_DB="$DEMO/cms.db" pnpm dev
+```
+
+Then open http://localhost:5273.
+
+To edit a real blog, keep its checkout next to this one at `../blog` (or set `BLOG_CONTENT_BASE_DIR`). The checkout holds posts in `content/` and gets rendered `.svx` files in `src/posts/`:
 
 ```sh
 pnpm dev
 ```
 
-The dev server uses port `5273` and allows `cms.xcc.es` plus local/tailnet hosts.
+For a production build:
+
+```sh
+pnpm build
+node --env-file=.env build/index.js
+```
+
+## Configuration
+
+Copy `.env.example` to `.env` and change what you need. Everything has a default.
+
+| Variable | Default | Purpose |
+|-|-|-|
+| `BLOG_CONTENT_BASE_DIR` | `../blog` | Blog checkout: posts in `content/`, rendered output in `src/posts/`. |
+| `BLOG_CMS_DB` | `.data/cms.db` | SQLite database. |
+| `BLOG_BUILD_COMMAND` | `pnpm build` | Build gate run in the blog checkout before a publish is committed. |
+| `BLOG_CMS_DEPLOY_STATE_FILE` | `<blog>/.cms/deploy-state.json` | Legacy deploy state, read once on upgrade. |
+| `PORT` | `5273` | Dev and production port. |
+| `HOST` | `localhost` | Bind address. |
+| `ALLOWED_HOSTS` | none | Extra hostnames the dev server accepts, comma separated (a tunnel or tailnet name). |
+| `ORIGIN` | none | Public URL when served behind a proxy; needed for form posts to pass the CSRF check. |
+| `HMR_CLIENT_PORT` | none | Set to `443` when the dev server is behind an HTTPS proxy. |
 
 ## Checks
 
@@ -32,7 +72,11 @@ pnpm test
 pnpm build
 ```
 
-`pnpm test` runs every `src/**/*.check.ts` under `node --test`, then `pnpm check`. `scripts/check-hooks.ts` resolves `#lib` and `$app/env/private` so server modules load in plain node; server checks build a throwaway blog checkout and database under the system temp directory.
+`pnpm test` runs every `src/**/*.check.ts` under `node --test`, then `pnpm check`. `scripts/check-hooks.ts` resolves `#lib` and `$app/env/private` so server modules load in plain node; server checks build a throwaway blog checkout and database under the system temp directory. CI runs the same two commands.
+
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) and the [open issues](https://github.com/mrgnw/cfcms/issues). User-visible changes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Code blocks
 
@@ -55,7 +99,7 @@ The blog reads extra settings after a fence's language: ```` ```py {2} title="x.
 
 ### The `$blog` alias
 
-The `sveltekit(...)` plugin in `vite.config.ts` aliases `$blog` to `BLOG_CONTENT_BASE_DIR` (default `~/dev/blog`)`/src/lib`, so `shell-words.js` and `styles/code-theme.css` are imported straight from the blog checkout rather than copied. Colour changes made there reach the editor the next time this CMS rebuilds (a daemon restart). A missing blog checkout fails the build loudly.
+The `sveltekit(...)` plugin in `vite.config.ts` aliases `$blog` to `src/lib` of your blog checkout, so `shell-words.js` and `styles/code-theme.css` are imported straight from it rather than copied. Colour changes made there reach the editor the next time the CMS rebuilds. Without a checkout (or one with no `src/lib`), the alias falls back to the copies in `src/blog-defaults`, which is what CI and the demo below use.
 
 ## Editor spike: Aragonite
 
@@ -71,42 +115,14 @@ Publish renders the full live set to `src/posts/<slug>.svx` in the blog checkout
 
 The site text is tracked by revision: `published_hash` names the revision each `.svx` was rendered from. A `.svx` edited outside the CMS is picked up when the Publish view loads or a publish starts: if the draft did not move, the site text becomes the new head; if both moved, the post shows as blocked with a `site` version (the text as it is on the site) to resolve per segment.
 
-```sh
-BLOG_CONTENT_BASE_DIR=~/dev/blog
-BLOG_BUILD_COMMAND='pnpm build'
-```
-
-Test the endpoint locally:
+The blog build command defaults to `pnpm build` and runs in the blog checkout; set `BLOG_BUILD_COMMAND` to change it. To trigger a publish from a script:
 
 ```sh
 curl -X POST http://localhost:5273/api/publish
 ```
 
-## Pitchfork Service
+## License
 
-[Pitchfork](https://github.com/jdx/pitchfork) runs local daemons on this machine. This CMS is registered as `global/blog-cms`.
+[MIT](LICENSE)
 
-Check services:
-
-```sh
-pitchfork list
-```
-
-Restart it after config changes. The service builds before it serves, so the port
-takes a few seconds to come up:
-
-```sh
-pitchfork restart global/blog-cms
-```
-
-Start it:
-
-```sh
-pitchfork start global/blog-cms
-```
-
-Stream logs:
-
-```sh
-pitchfork logs global/blog-cms
-```
+This project depends on libraries with their own licenses. One to know about: [Aragonite](https://github.com/voithos-labs/aragonite) is AGPL-3.0, which matters if you distribute or host cfcms for other people.
