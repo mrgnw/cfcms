@@ -14,7 +14,7 @@ Work that is ready to pick up is tracked as [GitHub issues](https://github.com/m
 - Diff view in the Publish view.
 - `.llm.md` draft import, single and bulk, from `/admin`.
 
-Design notes for these live in [mockups/sync-design.html](mockups/sync-design.html). Older task write-ups are in [todos/done](todos/done).
+Design notes for these live in [mockups/sync-design.html](mockups/sync-design.html).
 
 ## Next: edit with the diff on top
 
