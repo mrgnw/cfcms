@@ -175,5 +175,5 @@ curl -X POST http://localhost:5273/api/publish
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). That covers cfcms's own code. Dependencies keep their own licenses: [Aragonite](https://github.com/voithos-labs/aragonite) and its plugin packages are MPL-2.0, Milkdown is MIT, and the bundled IBM Plex Mono font is OFL-1.1.
 
