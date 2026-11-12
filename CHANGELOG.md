@@ -2,6 +2,12 @@
 
 User-visible changes to the CMS, newest first. Add an entry under today's date with every PR merged to main. History before 2026-10-05 is in `git log`.
 
+## 2026-11-12
+
+### Changed
+
+- The README now documents where posts live (SQLite tables, published files), how to inspect and restore the database, and the daily backup. It also says Aragonite is the default editor.
+
 ## 2026-11-11
 
 ### Changed

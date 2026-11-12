@@ -4,7 +4,7 @@ A Markdown editor for the posts of a static blog. Write in the browser, keep dra
 
 It is built for one writer who keeps a blog as Markdown in a git checkout and wants a better editing surface than a text editor, on a laptop or a phone. It is a single-user tool: there is no auth, and it expects to run on a machine you trust.
 
-Built with SvelteKit 3 and Svelte 5, [Milkdown Crepe](https://milkdown.dev) for WYSIWYG editing (with [Aragonite](https://github.com/voithos-labs/aragonite) as an alternative), [twinkleplop](https://www.npmjs.com/package/@twinkleplop/core) for code highlighting, and `node:sqlite` for storage. TypeScript throughout, tested with `node --test`.
+Built with SvelteKit 3 and Svelte 5, [Aragonite](https://github.com/voithos-labs/aragonite) for editing (with [Milkdown Crepe](https://milkdown.dev) as an alternative), [twinkleplop](https://www.npmjs.com/package/@twinkleplop/core) for code highlighting, and `node:sqlite` for storage. TypeScript throughout, tested with `node --test`.
 
 ## Features
 
@@ -65,6 +65,53 @@ Copy `.env.example` to `.env` and change what you need. Everything has a default
 | `ORIGIN` | none | Public URL when served behind a proxy; needed for form posts to pass the CSRF check. |
 | `HMR_CLIENT_PORT` | none | Set to `443` when the dev server is behind an HTTPS proxy. |
 
+## Where the posts live
+
+Posts are stored in SQLite, not in the blog repository. The blog repository only receives published output.
+
+| What | Where |
+|-|-|
+| Working text of every post, with its revision history | `revisions` table in the database |
+| Text two devices saved at the same time, waiting to be reconciled | `versions` table |
+| Publish state per post (published hash, slug, commit, editing order) | `posts` table |
+| Which writer and device is active | `leases` table |
+| App flags such as the last backup time | `meta` table |
+| Published posts | `src/posts/<slug>.svx` in the blog checkout, written by Publish |
+| Staged posts | `content/*.md` in the blog checkout, written by Publish |
+| Drafts written by an assistant | `content/*.llm.md`, read from disk and imported as reference |
+
+The database is created on the first request at `BLOG_CMS_DB` (default `.data/cms.db`). On first run it imports the existing `content/*.md` files into it. `.data/` is ignored by git, so the database is never committed to this repository.
+
+Autosave appends a revision. Each post keeps its latest 200 unnamed revisions, plus named checkpoints, the revision that was published and any revision a pending version is based on. Older autosaves are pruned.
+
+To look inside, open a copy so the running CMS is never touched:
+
+```sh
+DB=.data/cms.db
+cp "$DB" /tmp/cfcms-inspect.db
+```
+
+```sh
+sqlite3 /tmp/cfcms-inspect.db "SELECT path, published_slug, published_at FROM posts ORDER BY published_at DESC LIMIT 10"
+```
+
+```sh
+sqlite3 /tmp/cfcms-inspect.db "SELECT rev, writer, saved_at, length(body) FROM revisions WHERE path = (SELECT path FROM posts LIMIT 1) ORDER BY rev DESC LIMIT 10"
+```
+
+The schema is created in `src/lib/server/db.ts`, which also adds new columns to older databases on open, so an existing database upgrades in place.
+
+### Backups
+
+About once a day the CMS writes a compacted copy of the database (`VACUUM INTO`) to `.cms/cms-backup.db` in the blog checkout, commits it with the message `cms: db backup`, and pushes. That copy holds every draft and revision, so keep the blog repository private, or ignore `.cms/` in it, if drafts must not become public.
+
+To restore, stop the CMS, copy a backup over the database file, and start it again:
+
+```sh
+BLOG=../blog
+cp "$BLOG/.cms/cms-backup.db" .data/cms.db
+```
+
 ## Checks
 
 ```sh
@@ -101,11 +148,11 @@ The blog reads extra settings after a fence's language: ```` ```py {2} title="x.
 
 The `sveltekit(...)` plugin in `vite.config.ts` aliases `$blog` to `src/lib` of your blog checkout, so `shell-words.js` and `styles/code-theme.css` are imported straight from it rather than copied. Colour changes made there reach the editor the next time the CMS rebuilds. Without a checkout (or one with no `src/lib`), the alias falls back to the copies in `src/blog-defaults`, which is what CI and the demo below use.
 
-## Editor spike: Aragonite
+## Editors
 
-The button left of the writer chip in a post's header switches the body editor between Milkdown (the default) and [Aragonite](https://github.com/voithos-labs/aragonite), a Markdown editor that saves what it loaded byte for byte. The choice is remembered per browser. Both editors read and write the same body, so switching mid-edit keeps your text.
+The button left of the writer chip in a post's header switches the body editor between [Aragonite](https://github.com/voithos-labs/aragonite) (the default, MPL-2.0) and Milkdown. The choice is remembered per browser. Both editors read and write the same body, so switching mid-edit keeps your text.
 
-The Aragonite side is a spike: `src/lib/components/AragoniteEditor.svelte`, plugins in `src/lib/aragonite/plugins.ts`. Its code blocks use Aragonite's own highlight.js colours rather than twinkleplop, so they won't match the blog. A Mode menu above it switches between Aragonite's presentation modes (`live` is closest to Milkdown). Aragonite is AGPL-3.0, which matters only if other people use the CMS.
+Aragonite saves what it loaded byte for byte. The code is in `src/lib/components/AragoniteEditor.svelte`, with plugins in `src/lib/aragonite/plugins.ts`. Its code blocks use Aragonite's own highlight.js colours rather than twinkleplop, so they won't match the blog. A Mode menu above it switches between Aragonite's presentation modes (`live` is closest to Milkdown).
 
 ## Publishing
 
