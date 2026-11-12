@@ -18,7 +18,7 @@ Design notes for these live in [mockups/sync-design.html](mockups/sync-design.ht
 
 ## Direction: published posts live in Cloudflare storage, not in the blog repo
 
-Today Publish commits `.svx` files to the blog's git repository and waits for a Workers Build, so the articles sit inside the blog's code and every edit needs a deploy. The key direction for cfcms is the opposite: the CMS holds the content, Publish writes it to Cloudflare storage that the blog's Worker reads at request time, and the blog repo holds only code. A published edit goes live without a rebuild, and the Worker can cache, paginate and optimise from the store. Git publishing stays as a second target. Not started; the design decision comes first.
+Today Publish commits `.svx` files to the blog's git repository and pushes `main`, which triggers a Workers Build (the CMS does not wait for it), so the articles sit inside the blog's code and every edit needs a deploy. The key direction for cfcms is the opposite: the CMS holds the content, Publish writes it to Cloudflare storage that the blog's Worker reads at request time, and the blog repo holds only code. A published edit goes live without a rebuild, and the Worker can cache, paginate and optimise from the store. Git publishing stays as a second target. Not started; the design decision comes first.
 
 Tracked in [#19](https://github.com/mrgnw/cfcms/issues/19):
 
