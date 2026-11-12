@@ -16,7 +16,7 @@ Built with SvelteKit 3 and Svelte 5, [Aragonite](https://github.com/voithos-labs
 
 ## Run it
 
-You need Node 24 or newer and [pnpm](https://pnpm.io).
+You need Node 24 or newer and [pnpm](https://pnpm.io) 10 (the version CI uses).
 
 ```sh
 git clone https://github.com/mrgnw/cfcms.git
@@ -35,6 +35,8 @@ BLOG_CONTENT_BASE_DIR="$DEMO" BLOG_CMS_DB="$DEMO/cms.db" pnpm dev
 ```
 
 Then open http://localhost:5273.
+
+The first request runs a one-time import that changes the folder it points at, which is why it must be a disposable copy. It moves every `content/*.md` post into the database and deletes the files of posts that were never published (here, all of them). It also commits those deletions, writes `.cms/cms-backup.db`, commits that backup and tries `git push origin main`. With no `origin`, as in the demo, the push fails and the failure is ignored. The demo has no blog build and no remote, so it shows the editor, not publishing.
 
 To edit a real blog, keep its checkout next to this one at `../blog` (or set `BLOG_CONTENT_BASE_DIR`). The checkout holds posts in `content/` and gets rendered `.svx` files in `src/posts/`:
 
