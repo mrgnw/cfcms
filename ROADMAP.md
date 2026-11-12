@@ -1,6 +1,6 @@
 # Roadmap
 
-cfcms is a one-writer editor for a static blog. The scope is the editor and its publish step; it is not a multi-user CMS.
+cfcms is a one-writer CMS for a blog hosted on Cloudflare Workers. It edits the content and publishes it; the blog is a separate project that only displays it. SvelteKit on Workers is the primary target, and the publish contract is meant to stay plain enough for other frameworks. It is not a multi-user CMS.
 
 Work that is ready to pick up is tracked as [GitHub issues](https://github.com/mrgnw/cfcms/issues). Each has acceptance criteria and is sized at a few hours.
 
@@ -15,6 +15,19 @@ Work that is ready to pick up is tracked as [GitHub issues](https://github.com/m
 - `.llm.md` draft import, single and bulk, from `/admin`.
 
 Design notes for these live in [mockups/sync-design.html](mockups/sync-design.html).
+
+## Direction: published posts live in Cloudflare storage, not in the blog repo
+
+Today Publish commits `.svx` files to the blog's git repository and waits for a Workers Build, so the articles sit inside the blog's code and every edit needs a deploy. The key direction for cfcms is the opposite: the CMS holds the content, Publish writes it to Cloudflare storage that the blog's Worker reads at request time, and the blog repo holds only code. A published edit goes live without a rebuild, and the Worker can cache, paginate and optimise from the store. Git publishing stays as a second target. Not started; the design decision comes first.
+
+Tracked in [#19](https://github.com/mrgnw/cfcms/issues/19):
+
+1. [#25](https://github.com/mrgnw/cfcms/issues/25) Design: where published posts live, and what a stored post contains.
+2. [#20](https://github.com/mrgnw/cfcms/issues/20) A publish target interface, with git as the first implementation.
+3. [#21](https://github.com/mrgnw/cfcms/issues/21) Cloudflare storage target.
+4. [#22](https://github.com/mrgnw/cfcms/issues/22) A Worker reader for SvelteKit and an example app.
+5. [#23](https://github.com/mrgnw/cfcms/issues/23) A published edit is live without a deploy.
+6. [#24](https://github.com/mrgnw/cfcms/issues/24) One-time import of git-published posts into the store.
 
 ## Next: edit with the diff on top
 
@@ -63,5 +76,5 @@ Later, only if a second post needs it: an `after:` frontmatter dependency, and b
 
 ## Non-goals
 
-- Multi-user editing, auth, or remote content. It edits one blog checkout for one writer.
+- Multi-user editing or auth. It is for one writer on a machine they trust.
 - A plugin system, a theme system, or config for values that never change.

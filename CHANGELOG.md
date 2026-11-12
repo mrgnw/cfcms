@@ -6,6 +6,7 @@ User-visible changes to the CMS, newest first. Add an entry under today's date w
 
 ### Changed
 
+- The roadmap names the main direction: publish to Cloudflare storage that the blog's Worker reads, instead of storing published posts in the blog repository.
 - The README now documents where posts live (SQLite tables, published files), how to inspect and restore the database, and the daily backup. It also says Aragonite is the default editor.
 
 ## 2026-11-11

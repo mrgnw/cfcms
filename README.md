@@ -1,6 +1,6 @@
 # cfcms
 
-A Markdown editor for the posts of a static blog. Write in the browser, keep drafts and version history in SQLite, then publish the staged posts to the blog's repository, where Cloudflare Workers Builds deploys them.
+A Markdown editor for the posts of a static blog. Write in the browser, keep drafts and version history in SQLite, then publish the staged posts to the blog's repository, where Cloudflare Workers Builds deploys them. The planned direction is to publish to Cloudflare storage that the blog's Worker reads directly, so the articles are not stored in the blog repository and an edit goes live without a rebuild; see the [roadmap](ROADMAP.md).
 
 It is built for one writer who keeps a blog as Markdown in a git checkout and wants a better editing surface than a text editor, on a laptop or a phone. It is a single-user tool: there is no auth, and it expects to run on a machine you trust.
 
