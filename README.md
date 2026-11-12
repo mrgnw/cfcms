@@ -86,11 +86,13 @@ The database is created on the first request at `BLOG_CMS_DB` (default `.data/cm
 
 Autosave appends a revision. Each post keeps its latest 200 unnamed revisions, plus named checkpoints, the revision that was published and any revision a pending version is based on. Older autosaves are pruned.
 
-To look inside, open a copy so the running CMS is never touched:
+To look inside, take a snapshot so the running CMS is never touched. The database runs in WAL mode, so a plain `cp` of an active database can miss recent writes; `VACUUM INTO` makes a consistent copy:
 
 ```sh
 DB=.data/cms.db
-cp "$DB" /tmp/cfcms-inspect.db
+SNAPSHOT=/tmp/cfcms-inspect.db
+rm -f "$SNAPSHOT"
+sqlite3 "$DB" "VACUUM INTO '$SNAPSHOT'"
 ```
 
 ```sh
@@ -107,10 +109,11 @@ The schema is created in `src/lib/server/db.ts`, which also adds new columns to 
 
 About once a day the CMS writes a compacted copy of the database (`VACUUM INTO`) to `.cms/cms-backup.db` in the blog checkout, commits it with the message `cms: db backup`, and pushes. That copy holds every draft and revision, so keep the blog repository private, or ignore `.cms/` in it, if drafts must not become public.
 
-To restore, stop the CMS, copy a backup over the database file, and start it again:
+To restore, stop the CMS, copy a backup over the database file, and start it again. Remove the old `-wal` and `-shm` files first, or SQLite may replay them into the restored database:
 
 ```sh
 BLOG=../blog
+rm -f .data/cms.db-wal .data/cms.db-shm
 cp "$BLOG/.cms/cms-backup.db" .data/cms.db
 ```
 
