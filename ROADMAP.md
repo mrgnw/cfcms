@@ -20,14 +20,14 @@ Design notes for these live in [mockups/sync-design.html](mockups/sync-design.ht
 
 Today Publish commits `.svx` files to the blog's git repository and pushes `main`, which triggers a Workers Build (the CMS does not wait for it), so the articles sit inside the blog's code and every edit needs a deploy. The key direction for cfcms is the opposite: the CMS holds the content, Publish writes it to Cloudflare storage that the blog's Worker reads at request time, and the blog repo holds only code. A published edit goes live without a rebuild, and the Worker can cache, paginate and optimise from the store. Git publishing stays as a second target. Not started; the design decision comes first.
 
-Tracked in [#19](https://github.com/mrgnw/cfcms/issues/19):
+Tracked in [#16](https://github.com/mrgnw/cfcms/issues/16):
 
-1. [#25](https://github.com/mrgnw/cfcms/issues/25) Design: where published posts live, and what a stored post contains.
-2. [#20](https://github.com/mrgnw/cfcms/issues/20) A publish target interface, with git as the first implementation.
-3. [#21](https://github.com/mrgnw/cfcms/issues/21) Cloudflare storage target.
-4. [#22](https://github.com/mrgnw/cfcms/issues/22) A Worker reader for SvelteKit and an example app.
-5. [#23](https://github.com/mrgnw/cfcms/issues/23) A published edit is live without a deploy.
-6. [#24](https://github.com/mrgnw/cfcms/issues/24) One-time import of git-published posts into the store.
+1. [#22](https://github.com/mrgnw/cfcms/issues/22) Design: where published posts live, and what a stored post contains.
+2. [#17](https://github.com/mrgnw/cfcms/issues/17) A publish target interface, with git as the first implementation.
+3. [#18](https://github.com/mrgnw/cfcms/issues/18) Cloudflare storage target.
+4. [#19](https://github.com/mrgnw/cfcms/issues/19) A Worker reader for SvelteKit and an example app.
+5. [#20](https://github.com/mrgnw/cfcms/issues/20) A published edit is live without a deploy.
+6. [#21](https://github.com/mrgnw/cfcms/issues/21) One-time import of git-published posts into the store.
 
 ## Next: edit with the diff on top
 
