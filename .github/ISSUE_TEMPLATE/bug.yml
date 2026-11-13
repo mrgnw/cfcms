@@ -1,0 +1,31 @@
+name: Bug report
+description: Report a reproducible problem with the editor or publishing workflow.
+labels: [bug]
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Use the README's disposable demo where possible. Do not include private posts or credentials.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include any error message, sanitized logs, or screenshots.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, browser version, Node version, and cfcms commit.
+    validations:
+      required: true
