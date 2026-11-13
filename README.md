@@ -1,27 +1,74 @@
 # cfcms
 
-A Markdown editor for the posts of a static blog. Write in the browser, keep drafts and version history in SQLite, then publish the staged posts to the blog's repository, where Cloudflare Workers Builds deploys them. The planned direction is to publish to Cloudflare storage that the blog's Worker reads directly, so the articles are not stored in the blog repository and an edit goes live without a rebuild; see the [roadmap](ROADMAP.md).
+Write Markdown in the browser, keep drafts and revisions in SQLite, and publish staged posts to your blog.
 
-It is built for one writer who keeps a blog as Markdown in a git checkout and wants a better editing surface than a text editor, on a laptop or a phone. It is a single-user tool: there is no auth, and it expects to run on a machine you trust.
+[![CI](https://img.shields.io/github/actions/workflow/status/mrgnw/cfcms/ci.yml?branch=main&style=flat&label=CI)](https://github.com/mrgnw/cfcms/actions/workflows/ci.yml)
+[![MIT license](https://img.shields.io/github/license/mrgnw/cfcms?style=flat)](LICENSE)
+[![Last commit](https://img.shields.io/github/last-commit/mrgnw/cfcms?style=flat)](https://github.com/mrgnw/cfcms/commits/main/)
+[![Open issues](https://img.shields.io/github/issues/mrgnw/cfcms?style=flat)](https://github.com/mrgnw/cfcms/issues)
+[![SvelteKit 3](https://img.shields.io/badge/SvelteKit-3-ff3e00?style=flat&logo=svelte)](https://svelte.dev/docs/kit)
+[![Svelte 5](https://img.shields.io/badge/Svelte-5-ff3e00?style=flat&logo=svelte)](https://svelte.dev/docs/svelte)
 
-Built with SvelteKit 3 and Svelte 5, [Aragonite](https://github.com/voithos-labs/aragonite) for editing (with [Milkdown Crepe](https://milkdown.dev) as an alternative), [twinkleplop](https://www.npmjs.com/package/@twinkleplop/core) for code highlighting, and `node:sqlite` for storage. TypeScript throughout, tested with `node --test`.
+![Editing a sample post, comparing reference changes, reviewing revisions, and staging it in Publish](docs/media/edit-publish.gif)
+
+Edit → compare versions → review history → stage for Publish. Captured with the bundled sample posts; the demo stops at review because it has no blog build or remote.
+
+> [!NOTE]
+> Developed with substantial AI assistance. Review and test changes before relying on them; AI assistance does not replace contributor review.
+
+[Quick start](#quick-start) · [How it works](#how-it-works) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md)
+
+## Who it is for
+
+One writer with a Markdown blog in a Git checkout, editing from a laptop or phone. cfcms runs as a Node app on a trusted machine; the separate blog can deploy to Cloudflare Workers. There is no authentication, so keep the editor on a trusted network or behind your own access control.
 
 ## Features
 
-- WYSIWYG Markdown editing with the blog's own code highlighting, including fence titles, captions and highlighted-line meta.
-- Autosave to a SQLite store with a bounded revision history per post; conflicting saves from two devices become versions to reconcile segment by segment.
-- Stages: drafts, ready, publish, live. Pending changes are staged per post and published together.
-- Publish renders posts to `.svx` files in the blog checkout, runs the blog build as a gate, then commits and pushes.
-- Import of `.llm.md` drafts written by an assistant, shown as a reference pane to copy from.
+- **Write in Markdown:** Aragonite by default, with Milkdown Crepe available from the editor switch. Both edit the same post body.
+- **Keep your drafts:** SQLite autosave, the latest 200 autosaves per post, retained named checkpoints, and revision restore.
+- **Compare changes:** concurrent saves become versions to reconcile segment by segment; assistant-written `.llm.md` drafts appear in the reference pane.
+- **Choose what ships:** drafts, ready and live stages, with per-post staging in the Publish view.
+- **Build before publishing:** render the live set to `.svx`, run the blog's build gate, then commit and push its `main` branch.
+- **Preserve code blocks:** fence metadata survives editing; Milkdown uses the blog's twinkleplop highlighting. Aragonite uses its own highlight.js colors.
 
-## Run it
+### A closer look
+
+| Write | Compare |
+|-|-|
+| ![Sample post in the Markdown editor](docs/media/editor.png) | ![Reference version with changes to accept or keep](docs/media/versions.png) |
+| **Revisions** | **Publish review** |
+| ![Saved revisions and changes since the previous revision](docs/media/history.png) | ![Pending sample posts with one post staged for publishing](docs/media/publish.png) |
+
+## How it works
+
+```text
+Browser editor <--> cfcms (SvelteKit / Node) <--> SQLite
+                          |
+                    staged posts
+                          v
+                 Git publish target
+                 render .svx -> build gate
+                 -> commit -> push main
+                          |
+                          v
+               Cloudflare Workers Builds
+                          |
+                          v
+                    Separate blog
+```
+
+SQLite holds drafts, revisions and pending versions. The Git target writes published output into the blog checkout. Workers Builds deploys that push when configured on the blog; cfcms does not run Wrangler or wait for the Cloudflare build result.
+
+Built with SvelteKit 3, Svelte 5, TypeScript and Node's built-in SQLite. The planned Cloudflare storage target is described in the [direction](#direction) below.
+
+## Quick start
 
 You need Node 24 or newer and [pnpm](https://pnpm.io) 10 (the version CI uses).
 
 ```sh
 git clone https://github.com/mrgnw/cfcms.git
 cd cfcms
-pnpm install
+pnpm install --frozen-lockfile
 ```
 
 To try it without a blog of your own, run it against a throwaway copy of the sample posts in `content/posts`. The editor writes into the folder it points at, so do not point it at this repository:
@@ -30,13 +77,20 @@ To try it without a blog of your own, run it against a throwaway copy of the sam
 DEMO=$(mktemp -d)
 mkdir -p "$DEMO/content"
 cp -R content/posts "$DEMO/content/"
-git -C "$DEMO" init
-BLOG_CONTENT_BASE_DIR="$DEMO" BLOG_CMS_DB="$DEMO/cms.db" pnpm dev
+git -C "$DEMO" init -b main
 ```
 
-Then open http://localhost:5273.
+```sh
+BLOG_CONTENT_BASE_DIR="$DEMO" BLOG_CMS_DB="$DEMO/cms.db" HOST=127.0.0.1 PORT=5287 pnpm dev
+```
 
-The first request runs a one-time import that changes the folder it points at, which is why it must be a disposable copy. It moves every `content/*.md` post into the database and deletes the files of posts that were never published (here, all of them). It also commits those deletions, writes `.cms/cms-backup.db`, commits that backup and tries `git push origin main`. With no `origin`, as in the demo, the push fails and the failure is ignored. The demo has no blog build and no remote, so it shows the editor, not publishing.
+Then open http://127.0.0.1:5287. Try **Reference demo**, accept a reference change, and open **history**. Enable the post's **Publish** checkmark in the editor, then select it in the **Publish** view to review staging.
+
+The first request runs a one-time import that changes the folder it points at, which is why it must be a disposable copy. It imports Markdown posts recursively from `content/` into SQLite and deletes unpublished originals (all sample posts have no recorded publication). It commits deletions of tracked files, writes `.cms/cms-backup.db`, commits that backup and attempts to push `main`. The demo has no `origin`; that backup push failure is ignored. Git needs a configured author to make the backup commit. The demo supports editing, reference diffs, revisions and Publish review; a successful publish needs a real blog build and remote.
+
+Stop the demo with Ctrl-C. Keep the temporary folder if you want to resume your edits.
+
+### Connect a blog
 
 To edit a real blog, keep its checkout next to this one at `../blog` (or set `BLOG_CONTENT_BASE_DIR`). The checkout holds posts in `content/` and gets rendered `.svx` files in `src/posts/`:
 
@@ -44,7 +98,7 @@ To edit a real blog, keep its checkout next to this one at `../blog` (or set `BL
 pnpm dev
 ```
 
-For a production build:
+For a production build, set the same blog and database paths at build time and runtime. Set `ORIGIN` to the editor's public URL before building: SvelteKit 3 embeds this in the server, and setting it only at runtime will not configure form posts. The build also selects the blog's highlighting assets. Run these from your cfcms checkout, after configuring `.env` from `.env.example`:
 
 ```sh
 pnpm build
@@ -61,11 +115,13 @@ Copy `.env.example` to `.env` and change what you need. Everything has a default
 | `BLOG_CMS_DB` | `.data/cms.db` | SQLite database. |
 | `BLOG_BUILD_COMMAND` | `pnpm build` | Build gate run in the blog checkout before a publish is committed. |
 | `BLOG_CMS_DEPLOY_STATE_FILE` | `<blog>/.cms/deploy-state.json` | Legacy deploy state, read once on upgrade. |
-| `PORT` | `5273` | Dev and production port. |
-| `HOST` | `localhost` | Bind address. |
+| `PORT` | `5273` in dev; `3000` in the built server | Listening port. `.env.example` sets `5273` for both. |
+| `HOST` | `localhost` in dev; `0.0.0.0` in the built server | Bind address. `.env.example` sets `localhost` for both. |
 | `ALLOWED_HOSTS` | none | Extra hostnames the dev server accepts, comma separated (a tunnel or tailnet name). |
-| `ORIGIN` | none | Public URL when served behind a proxy; needed for form posts to pass the CSRF check. |
+| `ORIGIN` | none | Editor's public URL, read at build time for the built server. Needed for form posts to pass the cross-site request forgery check. |
 | `HMR_CLIENT_PORT` | none | Set to `443` when the dev server is behind an HTTPS proxy. |
+
+The quick start overrides the host and port for an isolated local demo. For development over a tailnet, bind to a reachable interface and include the tailnet hostname in `ALLOWED_HOSTS`.
 
 ## Where the posts live
 
@@ -84,7 +140,7 @@ Posts are stored in SQLite, not in the blog repository. The blog repository only
 
 The database is created on the first request at `BLOG_CMS_DB` (default `.data/cms.db`). On first run it imports the existing `content/*.md` files into it. `.data/` is ignored by git, so the database is never committed to this repository.
 
-Autosave appends a revision. Each post keeps its latest 200 unnamed revisions, plus named checkpoints, the revision that was published and any revision a pending version is based on. Older autosaves are pruned.
+Autosave appends a revision. Each post keeps its latest 200 revisions, plus older named checkpoints, the revision that was published and any revision a pending version is based on. Other older autosaves are pruned.
 
 To look inside, take a snapshot so the running CMS is never touched. The database runs in WAL mode, so a plain `cp` of an active database can miss recent writes; `VACUUM INTO` makes a consistent copy:
 
@@ -126,15 +182,21 @@ pnpm build
 
 `pnpm test` runs every `src/**/*.check.ts` under `node --test`, then `pnpm check`. `scripts/check-hooks.ts` resolves `#lib` and `$app/env/private` so server modules load in plain node; server checks build a throwaway blog checkout and database under the system temp directory. CI runs the same two commands.
 
-## Roadmap
+## Direction
 
-See [ROADMAP.md](ROADMAP.md) and the [open issues](https://github.com/mrgnw/cfcms/issues). User-visible changes are in [CHANGELOG.md](CHANGELOG.md).
+**Planned:** publish to Cloudflare storage that the blog's Worker reads directly, so an article edit can go live without rebuilding the blog. Git publishing remains a supported target. The storage contract has not been designed or implemented yet.
+
+See [ROADMAP.md](ROADMAP.md) and [epic #16](https://github.com/mrgnw/cfcms/issues/16) for the design decision and implementation tasks. User-visible changes are in [CHANGELOG.md](CHANGELOG.md).
+
+## Contributing
+
+Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the [good first issues](https://github.com/mrgnw/cfcms/labels/good%20first%20issue). Bug fixes, tests, documentation and focused improvements to the one-writer workflow are welcome. Use the [bug and feature forms](https://github.com/mrgnw/cfcms/issues/new/choose) to describe reproducible problems or proposals.
 
 ## Code blocks
 
-Code blocks in the editor are coloured by twinkleplop, the same highlighter the blog uses, so a block looks the same here as on the site.
+In Milkdown, code blocks are colored by twinkleplop, the same highlighter the blog uses. Aragonite uses highlight.js instead.
 
-Why: Crepe's code blocks are CodeMirror, which ships its own highlighter (lezer) and a One Dark theme. Lezer names tokens differently from twinkleplop, so its colours could only ever approximate the blog's. Instead, `src/lib/code/twinkleplop.ts` runs twinkleplop on the block's text and marks each token with its twinkleplop name (`keyword`, `string`, ...). The blog's stylesheet then colours those names directly. Tokenizing a 500-line block takes about 1 ms, so it reruns on every edit.
+Crepe's code blocks are CodeMirror, which ships its own highlighter (lezer) and a One Dark theme. Lezer names tokens differently from twinkleplop, so its colors could only approximate the blog's. Instead, `src/lib/code/twinkleplop.ts` runs twinkleplop on the block's text and marks each token with its twinkleplop name (`keyword`, `string`, ...). The blog's stylesheet then colors those names directly.
 
 Two Crepe details in `MilkdownEditor.svelte`:
 
@@ -157,7 +219,7 @@ The `sveltekit(...)` plugin in `vite.config.ts` aliases `$blog` to `src/lib` of 
 
 The button left of the writer chip in a post's header switches the body editor between [Aragonite](https://github.com/voithos-labs/aragonite) (the default, MPL-2.0) and Milkdown. The choice is remembered per browser. Both editors read and write the same body, so switching mid-edit keeps your text.
 
-Aragonite saves what it loaded byte for byte. The code is in `src/lib/components/AragoniteEditor.svelte`, with plugins in `src/lib/aragonite/plugins.ts`. Its code blocks use Aragonite's own highlight.js colours rather than twinkleplop, so they won't match the blog. A Mode menu above it switches between Aragonite's presentation modes (`live` is closest to Milkdown).
+The Aragonite integration is in `src/lib/components/AragoniteEditor.svelte`, with plugins in `src/lib/aragonite/plugins.ts`. Its code blocks use Aragonite's own highlight.js colors rather than twinkleplop, so they won't match the blog. A Mode menu above it switches between Aragonite's presentation modes (`live` is closest to Milkdown).
 
 ## Publishing
 
