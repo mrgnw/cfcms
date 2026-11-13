@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest an improvement to the single-writer Markdown workflow.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem do you need to solve?
+      description: Describe a concrete editing or publishing task.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Include how you would tell whether the change works.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and related issues
+      description: Check ROADMAP.md and existing issues before proposing a new feature.
