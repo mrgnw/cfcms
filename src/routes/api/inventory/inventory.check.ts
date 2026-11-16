@@ -44,9 +44,10 @@ type Post = {
 	title: string;
 	slug: string;
 	deployStatus: string;
-	human: { rev: number; contentHash: string; writer: string; savedAt: string; body?: string };
+	head: { rev: number; contentHash: string; writer: string; savedAt: string; body?: string };
 	versions: Version[];
-	hasAssistantDraft: boolean;
+	hasVersions: boolean;
+	oversized: { frontmatter: boolean; versions: boolean; metadata: boolean };
 	staged: boolean;
 	editingOrder: number | null;
 };
@@ -110,6 +111,11 @@ try {
 		frontmatter: 'title: Assistant Proposal', body: 'Assistant text' });
 	store.upsertVersion({ path: 'assistant-only.md', writer: 'llm', sessionId: 'second-assistant', baseHash: 'human-empty',
 		frontmatter: 'title: Alternate', body: 'Another proposal' });
+	for (const writer of ['claude', 'codex', 'phone']) {
+		store.upsertVersion({ path: 'draft.md', writer, sessionId: `${writer}-session`, baseHash: 'base',
+			frontmatter: 'title: Proposal', body: `${writer} text` });
+	}
+	fixture.prepare('UPDATE revisions SET writer = ? WHERE path = ?').run('codex', 'draft.md');
 	store.setStaged('assistant-only.md', true);
 	store.addToEditing('assistant-only.md');
 	fixture.prepare('UPDATE posts SET llm_hash = ? WHERE path = ?').run('stale-import-hash', 'assistant-only.md');
@@ -139,7 +145,11 @@ try {
 	assert.equal(new Set(seen.map((item) => item.id)).size, 8, 'no duplicates or missing stored posts');
 	assert.deepEqual(seen.slice(0, 7).map((item) => ({ id: item.id, status: item.deployStatus })), expected);
 	assert.equal(seen[0].slug, 'custom-draft');
-	assert.ok(seen.every((item) => !('body' in item.human)), 'list excludes human bodies');
+	assert.equal(seen[0].head.writer, 'codex', 'head writer is reported without claiming human authorship');
+	assert.equal(seen[0].hasVersions, true, 'pending versions are available for every writer label');
+	assert.deepEqual(seen[0].versions.map((version) => version.writer), ['claude', 'codex', 'phone']);
+	assert.ok(!('human' in seen[0]) && !('hasAssistantDraft' in seen[0]), 'no inferred author roles');
+	assert.ok(seen.every((item) => !('body' in item.head)), 'list excludes human bodies');
 	assert.deepEqual(await page('?after=zzzzzz'), { posts: [], nextCursor: null });
 	assert.equal((await page()).posts.length, 8);
 	assert.equal((await page('?limit=8')).nextCursor, null, 'exact page boundary has no cursor');
@@ -147,12 +157,12 @@ try {
 	await rejects(post('cccccc'), 404);
 
 	const assistant = await data('bbbbbb');
-	assert.equal(assistant.human.body, '', 'assistant-only draft keeps an empty human version');
-	assert.equal(assistant.human.rev, 1);
-	assert.equal(assistant.human.writer, 'cms');
-	assert.equal(assistant.human.contentHash, 'human-empty');
-	assert.ok(assistant.human.savedAt);
-	assert.equal(assistant.hasAssistantDraft, true);
+	assert.equal(assistant.head.body, '', 'assistant-only draft keeps an empty human version');
+	assert.equal(assistant.head.rev, 1);
+	assert.equal(assistant.head.writer, 'cms');
+	assert.equal(assistant.head.contentHash, 'human-empty');
+	assert.ok(assistant.head.savedAt);
+	assert.equal(assistant.hasVersions, true);
 	assert.equal(assistant.staged, true);
 	assert.equal(assistant.editingOrder, 0);
 	assert.deepEqual(assistant.versions.map((version) => [version.writer, version.sessionId, version.body]),
@@ -162,7 +172,7 @@ try {
 		assert.ok(version.updatedAt);
 		assert.equal(version.contentHash, hashPostContent(version.frontmatter!, version.body!));
 	}
-	assert.equal(seen.at(-1)!.hasAssistantDraft, true, 'empty human body does not exclude the draft');
+	assert.equal(seen.at(-1)!.hasVersions, true, 'empty human body does not exclude the draft');
 	assert.deepEqual(snapshotFiles(), filesBefore, 'reads leave database, WAL, content, and directory entries intact');
 	assert.deepEqual(dump(), rowsBefore, 'reads leave every store table intact');
 
@@ -202,13 +212,30 @@ try {
 	fixture.prepare('UPDATE revisions SET body = ? WHERE path = ?').run('x'.repeat(1024 * 1024 + 1), 'draft.md');
 	await rejects(post('aaaaaa'), 413);
 	fixture.prepare('UPDATE revisions SET frontmatter = ? WHERE path = ?').run('x'.repeat(65537), 'draft.md');
-	await rejects(get('?limit=1'), 413);
+	const oversizedFrontmatter = await page('?limit=1');
+	assert.equal(oversizedFrontmatter.posts[0].oversized.frontmatter, true);
+	assert.equal(oversizedFrontmatter.posts[0].title, null);
+	assert.equal(oversizedFrontmatter.posts[0].deployStatus, null, 'oversized flags are unknown, not guessed');
+	assert.equal(oversizedFrontmatter.posts[0].head.writer, 'codex');
+	assert.equal(oversizedFrontmatter.nextCursor, 'aaaaaa');
+	assert.equal((await page(`?limit=1&after=${oversizedFrontmatter.nextCursor}`)).posts[0].id, 'aaaaab');
+	await rejects(post('aaaaaa'), 413);
 	fixture.prepare('UPDATE revisions SET frontmatter = ? WHERE path = ?').run('title: Draft', 'draft.md');
+	fixture.prepare('UPDATE posts SET published_title = ? WHERE path = ?').run('x'.repeat(4097), 'live.md');
+	const oversizedMetadata = await page('?limit=1&after=aaaaab');
+	assert.equal(oversizedMetadata.posts[0].oversized.metadata, true);
+	assert.equal(oversizedMetadata.nextCursor, 'aaaaac');
+	assert.equal((await page(`?limit=1&after=${oversizedMetadata.nextCursor}`)).posts[0].id, 'aaaaad');
+	fixture.prepare('UPDATE posts SET published_title = ? WHERE path = ?').run('Live', 'live.md');
 	const insert = fixture.prepare(`INSERT INTO versions
 		(path, writer, session_id, base_hash, frontmatter, body, updated_at) VALUES (?, ?, '', '', '', '', '')`);
 	for (let index = 0; index < 9; index += 1) insert.run('assistant-only.md', `writer-${index}`);
 	await rejects(post('bbbbbb'), 413);
-	await rejects(get('?after=aaaaag&limit=1'), 413);
+	const oversizedVersions = await page('?after=aaaaag&limit=1');
+	assert.equal(oversizedVersions.posts[0].oversized.versions, true);
+	assert.equal(oversizedVersions.posts[0].hasVersions, true);
+	assert.equal(oversizedVersions.posts[0].versions.length, 10);
+	assert.equal(oversizedVersions.posts[0].id, 'bbbbbb');
 	fixture.prepare('DELETE FROM versions WHERE path = ? AND writer LIKE ?').run('assistant-only.md', 'writer-%');
 	for (let index = 0; index < 103; index += 1) {
 		allowStoreSetup = true;
@@ -217,6 +244,19 @@ try {
 	}
 	assert.equal((await page()).posts.length, 50, 'default page is bounded');
 	assert.equal((await page('?limit=100')).posts.length, 100, 'maximum page is bounded');
+	const overflowVersion = fixture.prepare(`INSERT INTO versions
+		(path, writer, session_id, base_hash, frontmatter, body, updated_at) VALUES (?, ?, '', '', '', '', '')`);
+	for (let index = 0; index < 9; index += 1) overflowVersion.run('assistant-only.md', `writer-${index}`);
+	const all: string[] = [];
+	let next: string | null = null;
+	for (let request = 0; request < 120; request += 1) {
+		const result = await page(next === null ? '?limit=1' : `?limit=1&after=${next}`);
+		all.push(...result.posts.map((item) => item.id));
+		next = result.nextCursor;
+		if (next === null) break;
+	}
+	assert.equal(all.length, 111, 'oversized posts do not prevent reaching every later record');
+	assert.equal(new Set(all).size, 111);
 } finally {
 	hooks.deregister();
 	fixture?.close();
