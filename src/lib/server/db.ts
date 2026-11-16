@@ -770,7 +770,7 @@ export const getSchedule = (id: number): PublishSchedule | null => {
 
 export const getLatestSchedule = (): PublishSchedule | null => {
 	const row = db().prepare(
-		"SELECT * FROM publish_schedules WHERE state != 'cancelled' ORDER BY id DESC LIMIT 1"
+		'SELECT * FROM publish_schedules ORDER BY id DESC LIMIT 1'
 	).get() as ScheduleRow | undefined;
 	return row ? scheduleFromRow(row) : null;
 };
@@ -795,13 +795,26 @@ export const cancelPending = (id: number) =>
 	db().prepare("UPDATE publish_schedules SET state = 'cancelled', finished_at = ? WHERE id = ? AND state = 'pending'")
 		.run(new Date().toISOString(), id).changes === 1;
 
-export const claimPending = (id: number, startedAt: string) =>
-	db().prepare("UPDATE publish_schedules SET state = 'running', started_at = ? WHERE id = ? AND state = 'pending'")
-		.run(startedAt, id).changes === 1;
+// dueAt is the time the caller read; a reschedule since then makes the claim fail.
+export const claimPending = (id: number, dueAt: string, startedAt: string) =>
+	db().prepare(`
+		UPDATE publish_schedules SET state = 'running', started_at = ?
+		WHERE id = ? AND state = 'pending' AND due_at = ? AND due_at <= ?
+	`).run(startedAt, id, dueAt, startedAt).changes === 1;
+
+export const failMissedPending = (id: number, dueAt: string, error: string) =>
+	db().prepare(`
+		UPDATE publish_schedules SET state = 'failed', finished_at = ?, error = ?
+		WHERE id = ? AND state = 'pending' AND due_at = ?
+	`).run(new Date().toISOString(), error, id, dueAt).changes === 1;
+
+export const cancelAllPending = () =>
+	db().prepare("UPDATE publish_schedules SET state = 'cancelled', finished_at = ? WHERE state = 'pending'")
+		.run(new Date().toISOString()).changes;
 
 export const finishSchedule = (
 	id: number,
-	from: 'pending' | 'running',
+	from: 'running',
 	outcome: { state: 'published' | 'failed'; commit?: string | null; pushed?: boolean | null; error?: string | null; output?: string | null }
 ) => db().prepare(`
 	UPDATE publish_schedules SET state = ?, finished_at = ?, commit_sha = ?, pushed = ?, error = ?, output = ?

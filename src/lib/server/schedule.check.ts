@@ -29,7 +29,10 @@ process.chdir(root);
 
 const schedule = await import('../../routes/api/publish/schedule/+server.ts');
 const { createPost, getPost, savePost } = await import('./content.ts');
-const { claimPending, getLatestSchedule, getSchedule, insertSchedule, listActiveSchedules, setStaged } = await import('./db.ts');
+const {
+	claimPending, failMissedPending, getLatestSchedule, getSchedule, insertSchedule, listActiveSchedules, setStaged
+} = await import('./db.ts');
+const { POST: publishNow } = await import('../../routes/api/publish/+server.ts');
 const { describeScheduleDrift, missedGraceMs, runDueSchedule } = await import('./schedule.ts');
 const { listPosts } = await import('./content.ts');
 
@@ -102,7 +105,14 @@ try {
 	assert.equal((await getPost(pinned.path)).contentHash, edited.post.contentHash, 'newer edit preserved');
 
 	const third = (await call('POST', { dueAt: new Date(Date.now() + minute).toISOString(), timeZone })).data.schedule;
+	const staleRead = getSchedule(third.id)!;
+	await call('PATCH', { id: third.id, dueAt: new Date(Date.now() + 10 * minute).toISOString(), timeZone });
+	const lateTick = new Date(Date.now() + 2 * minute).toISOString();
+	assert.equal(claimPending(third.id, staleRead.dueAt, lateTick), false, 'a tick that read the old time cannot claim after a reschedule');
+	assert.equal(failMissedPending(third.id, staleRead.dueAt, 'stale'), false, 'nor mark it missed');
+	assert.equal(getSchedule(third.id)?.state, 'pending');
 	assert.equal((await call('DELETE', { id: third.id })).data.schedule.state, 'cancelled');
+	assert.equal(getLatestSchedule()?.state, 'cancelled', 'a cancel hides older outcomes');
 	assert.equal(await runDueSchedule(new Date(Date.now() + 2 * minute)), null, 'cancelled schedule does not run');
 	assert.equal((await call('DELETE', { id: third.id })).status, 409);
 	assert.equal((await call('PATCH', { id: third.id, dueAt: new Date(Date.now() + minute).toISOString(), timeZone })).status, 409);
@@ -124,7 +134,7 @@ try {
 
 	const crashedId = insertSchedule(new Date(Date.now() - minute).toISOString(), timeZone, [{ path: pinned.path, hash: edited.post.contentHash, title: 'Pinned' }]);
 	assert.ok(crashedId);
-	assert.ok(claimPending(crashedId, new Date().toISOString()));
+	assert.ok(claimPending(crashedId, getSchedule(crashedId)!.dueAt, new Date().toISOString()));
 	await runDueSchedule(now());
 	assert.equal(getSchedule(crashedId)?.state, 'failed');
 	assert.match(getSchedule(crashedId)?.error ?? '', /^Interrupted/);
@@ -134,6 +144,14 @@ try {
 	const finished = await runDueSchedule(new Date(Date.parse(recovered.dueAt) + 1_000));
 	assert.equal(finished?.state, 'published', JSON.stringify(finished));
 	assert.equal(publishCommits(), 2);
+
+	const direct = await createPost(fm('Direct'), 'Published by a direct API call.', 'cms');
+	setStaged(direct.path, true);
+	const superseded = (await call('POST', { dueAt: new Date(Date.now() + minute).toISOString(), timeZone })).data.schedule;
+	assert.equal((await publishNow()).status, 200, 'a manual publish without the UI');
+	assert.equal(getSchedule(superseded.id)?.state, 'cancelled', 'the server cancels the schedule it superseded');
+	assert.equal(await runDueSchedule(new Date(Date.parse(superseded.dueAt) + 1_000)), null);
+	assert.equal(publishCommits(), 3);
 } finally {
 	rmSync(root, { recursive: true, force: true });
 }
