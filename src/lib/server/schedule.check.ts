@@ -112,7 +112,7 @@ try {
 	const failed = await runDueSchedule(new Date(Date.parse(failing.dueAt) + 1_000));
 	delete process.env.CMS_CHECK_BUILD_MODE;
 	assert.equal(failed?.state, 'failed');
-	assert.match(failed?.error ?? '', /build failed; nothing was published/);
+	assert.match(failed?.error ?? '', /^Build failed; nothing was published/);
 	assert.equal(getLatestSchedule()?.id, failing.id, 'failed schedule stays visible');
 	assert.equal(publishCommits(), 1);
 
