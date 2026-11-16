@@ -2,7 +2,11 @@ import { once } from 'node:events';
 import { CheckoutBusyError, withCheckoutLock, withCheckoutReadLock } from '../checkout-lock.ts';
 
 const mode = process.argv[2];
-if (mode === 'purge' || mode === 'baseline' || mode === 'import') {
+if (mode === 'publish') {
+	const { POST } = await import('../../../routes/api/publish/+server.ts');
+	const response = await POST();
+	process.send?.({ ok: response.ok, status: response.status, data: await response.json() });
+} else if (mode === 'purge' || mode === 'baseline' || mode === 'import') {
 	try {
 		if (mode === 'purge') {
 			const { purgePost } = await import('../content.ts');

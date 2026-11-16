@@ -12,7 +12,7 @@ import { withCheckoutLock } from './checkout-lock';
 import { getPostFilePath, getPostGitPath, initializeContentLocked, listPostsLocked, type Post } from './content';
 import {
 	clearStaged, getLastPublishedAt, getPublishedPosts, getRevisionByHash,
-	getStagedRevisions, setExportedState
+	getStagedRevisions, listStoredPosts, setExportedState
 } from './db';
 import { recordPublishedState } from './deploy-state';
 import { commitPaths, getCurrentBranch, getHeadCommit, pushContent } from './git';
@@ -186,6 +186,27 @@ export const runPublish = () => withCheckoutLock(async () => {
 	const branchError = mainBranchError(await getCurrentBranch());
 	if (branchError) throw new Error(branchError);
 
+	if (getPendingPublishPush()) {
+		const approvals = getStagedRevisions();
+		const editedAfterStaging = listStoredPosts()
+			.filter((post) => approvals.has(post.path) && approvals.get(post.path) !== post.hash)
+			.map((post) => post.path);
+		const alreadyPushed = await reconcilePublishedPush();
+		const push = alreadyPushed
+			? { ok: true, status: 0, output: 'The pending publish is already on origin/main; no commits were pushed.' }
+			: await pushPublishedCommit();
+		return {
+			ok: push.ok,
+			stagedCount: 0,
+			liveCount: Object.keys(getPublishedPosts()).length,
+			lastPublishedAt: getLastPublishedAt(),
+			runAt: new Date().toISOString(),
+			editedAfterStaging,
+			push,
+			results: []
+		};
+	}
+
 	await initializeContentLocked();
 	await syncSiteTextLocked();
 	const posts = await listPostsLocked();
@@ -197,28 +218,10 @@ export const runPublish = () => withCheckoutLock(async () => {
 		.map((post) => post.path);
 	const going = posts.filter((post) => isPending(statusOf(post)) && staged.has(post.path));
 	if (going.length === 0) {
-		const pendingPush = getPendingPublishPush();
-		if (!pendingPush) {
-			if (editedAfterStaging.length) throw new PublishConflictError(editedAfterStaging);
-			throw new Error('Nothing staged for publish');
-		}
-		const alreadyPushed = await reconcilePublishedPush();
-		const push = alreadyPushed
-			? { ok: true, status: 0, output: 'The pending publish is already on origin/main; no commits were pushed.' }
-			: await pushPublishedCommit();
-		return {
-			ok: push.ok,
-			stagedCount: 0,
-			liveCount: Object.keys(published).length,
-			lastPublishedAt: getLastPublishedAt(),
-			runAt: new Date().toISOString(),
-			editedAfterStaging,
-			push,
-			results: []
-		};
+		if (editedAfterStaging.length) throw new PublishConflictError(editedAfterStaging);
+		throw new Error('Nothing staged for publish');
 	}
 
-	await assertPendingPublishTip();
 	const liveSet = buildLiveSet(posts, published, staged);
 	const paths = [svxGitDirectory, iconGitDirectory, ...going.map((post) => getPostGitPath(post.path))];
 	const snapshot = await snapshotPublishTree(paths);

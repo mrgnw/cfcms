@@ -31,7 +31,7 @@ process.chdir(root);
 const { POST } = await import('../../routes/api/publish/+server.ts');
 const { createPost, getPost, listPosts, purgePost, savePost } = await import('./content.ts');
 const {
-	getMetaValue, getPublishedPosts, getStagedPaths, setStaged, getStagedRevisions, listVersions, setTriageField
+	getMetaValue, getPublishedPosts, getStagedPaths, setStaged, getStagedRevisions, listVersions, setTriageField, setMetaValue
 } = await import('./db.ts');
 const { runBackup } = await import('./backup.ts');
 const { CheckoutBusyError, withCheckoutReadLock } = await import('./checkout-lock.ts');
@@ -286,7 +286,19 @@ try {
 	const recoveryCommit = git('rev-parse', 'HEAD');
 	rmSync(join(remote, 'hooks/pre-receive'));
 	await assert.rejects(runBackup(), /publish push is pending/);
-	assert.equal((await publish()).status, 200);
+	const deferred = await createPost(fm('Deferred'), 'These staged edits wait for the pending push.', 'cms');
+	setStaged(deferred.path, true);
+	const baselineBeforeRetry = getMetaValue('importedSvxBaseline')!;
+	setMetaValue('importedSvxBaseline', '');
+	const retryBeforeInitialization = await runContender('publish', join(root, 'cms.db'));
+	assert.equal(retryBeforeInitialization.status, 200, JSON.stringify(retryBeforeInitialization));
+	assert.deepEqual(retryBeforeInitialization.data.results, []);
+	assert.equal(retryBeforeInitialization.data.stagedCount, 0);
+	assert.equal(getMetaValue('importedSvxBaseline'), '', 'retry runs before checkout initialization');
+	setMetaValue('importedSvxBaseline', baselineBeforeRetry);
+	assert.ok(getStagedPaths().has(deferred.path), 'new staging survives the push-only retry');
+	assert.ok(!getPublishedPosts()[deferred.path]);
+	setStaged(deferred.path, false);
 	assert.equal(hasPendingPublishPush(), false, 'the pending publish is retried before backups resume');
 	assert.equal(git('rev-parse', 'HEAD'), git('rev-parse', 'origin/main'));
 	const alreadyPushedTip = git('rev-parse', 'HEAD');

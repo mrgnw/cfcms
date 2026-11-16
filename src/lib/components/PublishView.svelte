@@ -227,9 +227,9 @@
 	<button class="publish-btn" type="button" onclick={runPublish} disabled={publishing || (!staged.length && !canRetryPush)}>
 		{publishing
 			? 'Publishing…'
-			: staged.length
-				? `Publish ${staged.length} staged ${staged.length === 1 ? 'change' : 'changes'}`
-				: canRetryPush ? 'Retry publish push' : 'Nothing staged'}
+			: canRetryPush
+				? 'Retry publish push'
+				: staged.length ? `Publish ${staged.length} staged ${staged.length === 1 ? 'change' : 'changes'}` : 'Nothing staged'}
 	</button>
 
 	{#if lastPublishedAt}
