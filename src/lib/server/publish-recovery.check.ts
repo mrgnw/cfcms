@@ -79,6 +79,23 @@ try {
 	assert.equal(getPendingPublishPush(), second);
 	assert.deepEqual(getStoredPost('post.md'), stored);
 	await assert.rejects(reconcilePublication(pending), /Pending publication changed/);
+	writeFileSync(join(blog, 'earlier-queued.txt'), 'Earlier queued content must be exported.\n');
+	git(blog, 'add', 'earlier-queued.txt');
+	git(blog, 'commit', '-qm', 'earlier queued content');
+	writeFileSync(join(blog, 'final-queued.txt'), 'Final queued content must be exported.\n');
+	git(blog, 'add', 'final-queued.txt');
+	git(blog, 'commit', '-qm', 'final queued content');
+	setPendingPublishPush(git(blog, 'rev-parse', 'HEAD'));
+	const completePatch = await readPendingPublicationPatch(getPendingPublishPush()!);
+	assert.match(completePatch, /\+Earlier queued content/);
+	assert.match(completePatch, /\+Final queued content/);
+	const missing = 'a'.repeat(40);
+	setPendingPublishPush(missing);
+	const unavailable = await reconcilePublication(missing);
+	assert.equal(unavailable.ok, false);
+	assert.match(unavailable.message, /restore it from a clone or backup/);
+	assert.equal(getPendingPublishPush(), missing);
+	await assert.rejects(readPendingPublicationPatch(missing), /Restore any missing Git objects/);
 	console.log('publish-recovery.check: ok');
 } finally {
 	rmSync(root, { recursive: true, force: true });

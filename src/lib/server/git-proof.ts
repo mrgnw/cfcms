@@ -29,21 +29,20 @@ export const verifyRewrittenCommit = async (pending: string, remote: string) => 
 		if (!initialized.ok) throw new Error(`Cannot initialize isolated recovery: ${initialized.output}`);
 		await mkdir(join(directory, 'info'), { recursive: true });
 		await writeFile(join(directory, 'info/attributes'), '* merge=text -filter -text -working-tree-encoding\n');
-		const parents = await git(['rev-list', '--parents', '--max-count=1', pending]);
-		const parent = parents.output.trim().split(' ');
-		if (!parents.ok || parent.length !== 2 || !parent.every((value) => commitPattern.test(value))) {
-			throw new Error('The captured commit is unavailable or is not a single-parent publication; export and inspect its patch before recovery');
+		const base = await git(['merge-base', '--all', pending, remote]);
+		if (!base.ok || !commitPattern.test(base.output.trim())) {
+			throw new Error('The captured history is unavailable or has no unique common remote ancestor; restore and inspect its Git history before recovery');
 		}
 		const empty = await git(['mktree']);
 		const remoteTree = await git(['rev-parse', `${remote}^{tree}`]);
 		if (!empty.ok || !remoteTree.ok) throw new Error('Cannot read the remote publication tree');
 		const merged = await git([
 			`--attr-source=${empty.output.trim()}`, 'merge-tree', '--write-tree', '--no-messages',
-			`--merge-base=${parent[1]}`, '-Xno-renames', remote, pending
+			`--merge-base=${base.output.trim()}`, '-Xno-renames', remote, pending
 		]);
 		const tree = merged.output.split('\n', 1)[0].trim();
 		if (![0, 1].includes(merged.status ?? -1) || !commitPattern.test(tree)) {
-			throw new Error(`Cannot verify rewritten delivery with isolated Git merge-tree: ${merged.output}`);
+			throw new Error(`Cannot verify rewritten delivery with isolated Git merge-tree. Server Git must support merge-tree --merge-base and --attr-source; upgrade Git if either option is unavailable, then verify again: ${merged.output}`);
 		}
 		const differences = await git(['diff-tree', '--no-commit-id', '--name-only', '-r', '-z', remote, tree]);
 		if (!differences.ok) throw new Error('Cannot list unresolved publication paths');
