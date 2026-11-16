@@ -36,7 +36,6 @@ const readJson = async (request: Request, url: URL): Promise<unknown> => {
 			if (done) break;
 			size += value.byteLength;
 			if (size > assistantRequestMaxBytes) {
-				await reader.cancel();
 				throw error(413, 'Request exceeds 256 KiB');
 			}
 			chunks.push(value);

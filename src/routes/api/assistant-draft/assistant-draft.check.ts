@@ -112,6 +112,15 @@ try {
 	await expectStatus(() => write('PUT', replacement, url, { 'sec-fetch-site': 'cross-site' }), 403);
 	await expectStatus(() => write('PUT', replacement, url, { 'content-length': String(assistantRequestMaxBytes + 1) }), 413);
 	await expectStatus(() => write('PUT', { ...replacement, body: 'x'.repeat(assistantRequestMaxBytes) }), 413);
+	let cancelled = false;
+	const oversizedStream = new ReadableStream<Uint8Array>({
+		start(controller) { controller.enqueue(new Uint8Array(assistantRequestMaxBytes + 1)); },
+		cancel() { cancelled = true; }
+	});
+	await expectStatus(() => PUT(event(new Request(url, {
+		method: 'PUT', headers: { 'content-type': 'application/json' }, body: oversizedStream, duplex: 'half'
+	} as RequestInit))), 413);
+	assert.equal(cancelled, false, 'leave the transport open so the adapter can send the 413 response');
 	await expectStatus(() => write('PUT', { ...replacement, body: 'é'.repeat(assistantDraftMaxBytes) }), 413);
 	await expectStatus(() => write('PATCH', { revision: beforeBadRequests.revision,
 		edits: [edit('Full', 'x'.repeat(assistantDraftMaxBytes))] }), 413);
