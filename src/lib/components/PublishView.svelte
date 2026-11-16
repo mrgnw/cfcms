@@ -4,11 +4,11 @@
 	import { slide } from 'svelte/transition';
 	import SegmentCard from './SegmentCard.svelte';
 	import RecoveryPanel from './RecoveryPanel.svelte';
-	import type { PendingChange, PublishData } from '#lib/types.js';
+	import type { PendingChange, PublicationRecoveryPreview, PublishData } from '#lib/types.js';
 
 	let { changes, lastPublishedAt, pendingPush = false, publicationRecovery, backupStatus }: {
 		changes: PendingChange[]; lastPublishedAt: string | null; pendingPush?: boolean;
-		publicationRecovery?: { pendingCommit: string | null; message: string | null };
+		publicationRecovery?: PublicationRecoveryPreview;
 		backupStatus?: { pendingCommit: string | null; error: string | null; message: string | null; remoteCommit: string | null };
 	} = $props();
 
@@ -223,7 +223,7 @@
 				{/if}
 			</div>
 		{:else}
-			<p class="empty">{pendingPush ? 'The captured publication is waiting for remote delivery.' : 'Nothing pending — everything live matches the content files.'}</p>
+			<p class="empty">{pendingPush ? 'The captured publication is waiting for remote delivery.' : 'No content changes queued in the CMS.'}</p>
 		{/each}
 	</div>
 
@@ -236,7 +236,7 @@
 	</button>
 
 	{#if lastPublishedAt}
-		<p class="note">last published {new Date(lastPublishedAt).toLocaleString()}</p>
+		<p class="note">last publication committed {new Date(lastPublishedAt).toLocaleString()}</p>
 	{/if}
 	{#if publicationRecovery && backupStatus}
 		<RecoveryPanel publication={publicationRecovery} backup={backupStatus} disabled={publishing}

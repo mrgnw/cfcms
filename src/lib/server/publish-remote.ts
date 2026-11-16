@@ -22,7 +22,7 @@ export const parsePublicationRemoteState = (value: string | null): PublicationRe
 const readTreeChanges = async (before: string, after: string) => {
 	const result = await runGit([
 		'--no-replace-objects', 'diff', '--raw', '--no-abbrev', '--no-renames', '--no-ext-diff', '--no-textconv',
-		'--no-color', '-z', before, after, '--'
+		'--no-color', '--no-relative', '--ignore-submodules=none', '-z', before, after, '--'
 	], 10_000, { stdoutOnly: true, outputLimit: 4 * 1024 * 1024 });
 	if (!result.ok || result.truncated) throw new Error('Cannot show the complete current remote path comparison; Git failed or its output exceeded 4 MiB.');
 	const tokens = result.output.split('\0');

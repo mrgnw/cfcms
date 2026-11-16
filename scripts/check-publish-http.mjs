@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -128,8 +128,7 @@ try {
 	git('gc', '--prune=now');
 	git('cat-file', '-e', `${captured}^{commit}`);
 	peerGit('pull', '--ff-only', '-q');
-	writeFileSync(join(peer, 'content/later.md'), readFileSync(join(peer, 'content/later.md'), 'utf8').replace('later body.', 'A later remote edit.'));
-	peerGit('commit', '-qam', 'edit after rewritten delivery');
+	peerGit('revert', '--no-edit', rewritten);
 	peerGit('push', '-q', 'origin', 'main');
 	const editedRemote = peerGit('rev-parse', 'HEAD');
 	writeFileSync(join(blog, 'local-only.txt'), 'Do not push this local work.\n');
@@ -137,28 +136,45 @@ try {
 	git('commit', '-qm', 'local work after manual push');
 	const localOnly = git('rev-parse', 'HEAD');
 	const preservedIndex = readFileSync(join(blog, '.git/index'));
-	assert.equal((await request(`/api/publish/reconcile?commit=${captured}`, {})).status, 409);
-	assert.match(await (await request('/publish')).text(), /Delivered before a later remote edit/);
+	const revertedPreview = await request(`/api/publish/reconcile?commit=${captured}`, {});
+	assert.equal(revertedPreview.status, 409);
+	const preview = await revertedPreview.json();
+	assert.deepEqual(preview.currentRemote.differences, [
+		{ path: 'content/later.md', kind: 'deleted', matchesBefore: true },
+		{ path: 'src/posts/later.svx', kind: 'deleted', matchesBefore: true }
+	]);
+	const confirmationPage = await (await request('/publish')).text();
+	assert.match(confirmationPage, /Confirm historical Git delivery/);
+	assert.match(confirmationPage, /Absent from remote/);
+	assert.match(confirmationPage, /Historical Git delivery does not establish current live content/);
+	assert.ok(confirmationPage.indexOf('Absent from remote') < confirmationPage.indexOf('value="reviewed-history-and-current-remote"'));
 	const preservedPosts = database.prepare('SELECT * FROM posts ORDER BY path').all();
 	assert.equal((await request(`/api/publish/reconcile?commit=${captured}&delivered=${rewritten}&remote=${editedRemote}`, {})).status, 400,
 		'historical delivery cannot be inferred without explicit author confirmation');
+	assert.equal((await request(`/api/publish/reconcile?commit=${captured}&delivered=${rewritten}&remote=${editedRemote}&confirm=reviewed-delivery`, {})).status, 400,
+		'legacy acknowledgement cannot skip review of the current remote snapshot');
 	const verified = await request('/api/publish/reconcile', {
-		commit: captured, delivered: rewritten, remote: editedRemote, confirm: 'reviewed-delivery'
+		commit: captured, delivered: rewritten, remote: editedRemote, confirm: 'reviewed-history-and-current-remote'
 	});
 	assert.equal(verified.status, 200, await verified.clone().text());
 	const deliveryReport = await verified.json();
 	assert.equal(deliveryReport.remoteCommit, editedRemote);
 	assert.equal(deliveryReport.deliveryCommit, rewritten);
 	assert.equal(deliveryReport.authorConfirmed, true);
+	assert.deepEqual(deliveryReport.currentRemote, preview.currentRemote);
+	assert.match(deliveryReport.message, /Historical Git delivery/);
+	assert.match(deliveryReport.message, /does not verify current deployment or live content/);
 	assert.equal(git('rev-parse', 'HEAD'), localOnly);
 	assert.equal(git('rev-parse', 'origin/main'), editedRemote);
-	assert.match(peerGit('show', 'main:content/later.md'), /A later remote edit/);
+	assert.equal(existsSync(join(peer, 'content/later.md')), false);
+	assert.equal(existsSync(join(peer, 'src/posts/later.svx')), false);
 	assert.deepEqual(readFileSync(join(blog, '.git/index')), preservedIndex);
 	assert.deepEqual(database.prepare('SELECT * FROM posts ORDER BY path').all(), preservedPosts);
 	assert.equal(database.prepare('SELECT value FROM meta WHERE key = ?').get('pendingPublishPush').value, '');
 	const receipt = await (await request('/api/publish/reconcile')).json();
 	assert.equal(receipt.lastDelivery.commit, rewritten);
 	assert.equal(receipt.lastDelivery.capturedCommit, captured);
+	assert.deepEqual(receipt.lastDelivery.currentRemote, preview.currentRemote);
 	assert.equal((await request(`/api/publish/reconcile?commit=${captured}`, {})).status, 409);
 	const missing = 'a'.repeat(40);
 	database.prepare('INSERT INTO meta(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value')

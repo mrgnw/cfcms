@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { refreshAll } from '$app/navigation';
+	import type { PublicationRecoveryPreview, PublicationRemoteState } from '#lib/types.js';
 
 	let { publication, backup, disabled = false, onPublicationVerified }: {
-		publication: { pendingCommit: string | null; message: string | null; remoteCommit?: string | null };
+		publication: PublicationRecoveryPreview;
 		backup: { pendingCommit: string | null; error: string | null; message: string | null; remoteCommit: string | null };
 		disabled?: boolean;
 		onPublicationVerified?: () => void;
@@ -16,6 +17,7 @@
 	let replacementApproved = $state(false);
 	let historicalCommit = $state('');
 	let historicalApproved = $state(false);
+	let confirmedRemote = $state<PublicationRemoteState | null>(null);
 
 	$effect(() => {
 		backup.pendingCommit;
@@ -36,6 +38,7 @@
 		replacementApproved = false;
 		historicalApproved = false;
 		message = '';
+		confirmedRemote = null;
 		unresolved = [];
 		try {
 			const query = new URLSearchParams({ commit });
@@ -44,13 +47,14 @@
 			if (selected) {
 				query.set('delivered', selected.commit);
 				query.set('remote', selected.remote);
-				query.set('confirm', 'reviewed-delivery');
+				query.set('confirm', 'reviewed-history-and-current-remote');
 			}
 			const response = await fetch(`/api/${kind}/reconcile?${query}`, { method: 'POST' });
 			const report = await response.json();
 			failed = !response.ok;
 			message = report.message ?? 'Recovery verification failed';
 			if (Array.isArray(report.paths)) unresolved = report.paths;
+			if (kind === 'publish') confirmedRemote = report.currentRemote ?? null;
 			if (response.ok && kind === 'publish') onPublicationVerified?.();
 			await refreshAll();
 		} catch (caught) {
@@ -62,6 +66,27 @@
 	}
 </script>
 
+{#snippet remoteSnapshot(state: PublicationRemoteState)}
+	<div class="remote-snapshot">
+		<h4>Git remote snapshot at verification</h4>
+		<p><code>{state.remoteCommit}</code></p>
+		{#if state.differences.length}
+			<p>These captured paths differ from the publication snapshot:</p>
+			<ul>
+				{#each state.differences as difference (difference.path)}
+					<li><code>{difference.path}</code> · {difference.kind === 'deleted' ? 'Absent from remote'
+						: difference.kind === 'restored' ? 'Present remotely; absent from captured snapshot'
+							: difference.kind === 'type-changed' ? 'File type changed remotely' : 'Changed from captured snapshot'}
+						{#if difference.matchesBefore} · matches pre-publication snapshot{/if}</li>
+				{/each}
+			</ul>
+		{:else}
+			<p>No captured paths differ at this verified Git remote tip.</p>
+		{/if}
+		<p>Historical Git delivery does not establish current live content. Confirmation preserves the remote state above, including deletions or reverts. It does not restore content or verify deployment.</p>
+	</div>
+{/snippet}
+
 {#if publication.pendingCommit}
 	<section>
 		<h3>Publication push pending</h3>
@@ -72,9 +97,10 @@
 			<button type="button" disabled={busy || disabled} onclick={() => recover('publish', publication.pendingCommit!)}>Verify remote delivery</button>
 			<a href={`/api/publish/reconcile?patch=${publication.pendingCommit}`} download>Download captured patch</a>
 		</div>
-		{#if publication.remoteCommit}
+		{#if publication.remoteCommit && publication.currentRemote}
+			{@render remoteSnapshot(publication.currentRemote)}
 			<details>
-				<summary>Delivered before a later remote edit?</summary>
+				<summary>Confirm historical Git delivery</summary>
 				<p id={`${replacementId}-history-help`}>Enter the full commit hash from your successful manual push. Confirm only a commit you reviewed as delivering this publication. Matching content alone does not establish delivery. Verification preserves all later remote edits.</p>
 				<form method="POST" action="/api/publish/reconcile" onsubmit={(event) => {
 					event.preventDefault();
@@ -83,19 +109,21 @@
 				}}>
 					<input type="hidden" name="commit" value={publication.pendingCommit} />
 					<input type="hidden" name="remote" value={publication.remoteCommit} />
-					<label class="field-label" for={`${replacementId}-delivered`}>Rewritten publication commit (required)</label>
+					<label class="field-label" for={`${replacementId}-delivered`}>Historical delivery commit (required)</label>
 					<input id={`${replacementId}-delivered`} name="delivered" type="text" bind:value={historicalCommit}
 						oninput={() => historicalApproved = false} required minlength="40" maxlength="64" pattern={'[0-9a-f]{40}([0-9a-f]{24})?'}
 						autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
 						aria-describedby={`${replacementId}-history-help`} disabled={busy || disabled} />
 					<label for={`${replacementId}-history-confirm`}>
-						<input id={`${replacementId}-history-confirm`} name="confirm" type="checkbox" value="reviewed-delivery"
+						<input id={`${replacementId}-history-confirm`} name="confirm" type="checkbox" value="reviewed-history-and-current-remote"
 							bind:checked={historicalApproved} required disabled={busy || disabled} />
-						I reviewed this commit as the delivered publication. Keep later remote edits.
+						I reviewed this historical commit and the remote differences above. Confirm past Git delivery only.
 					</label>
-					<button type="submit" disabled={busy || disabled}>Verify selected delivery commit</button>
+					<button type="submit" disabled={busy || disabled}>Verify historical Git delivery</button>
 				</form>
 			</details>
+		{:else if publication.remoteCommit}
+			<p class="failure">{publication.currentRemoteError || 'The complete current remote comparison is unavailable.'} Verify again before confirming historical delivery.</p>
 		{/if}
 	</section>
 {/if}
@@ -127,6 +155,7 @@
 <div role="status" aria-atomic="true">
 	{#if message}
 		<p class:failure={failed}>{message}</p>
+		{#if !publication.pendingCommit && confirmedRemote}{@render remoteSnapshot(confirmedRemote)}{/if}
 		{#if unresolved.length}<p>Unverified paths: {unresolved.join(', ')}</p>{/if}
 	{/if}
 </div>
@@ -140,6 +169,25 @@
 	h3 {
 		margin: 0 0 8px;
 		font-size: 14px;
+	}
+
+	h4 {
+		font-size: 13px;
+		margin: 12px 0 4px;
+	}
+
+	.remote-snapshot {
+		font-size: 13px;
+		line-height: 1.5;
+		overflow-wrap: anywhere;
+	}
+
+	.remote-snapshot ul {
+		padding-left: 18px;
+	}
+
+	.remote-snapshot code {
+		white-space: pre-wrap;
 	}
 
 	p, label {
