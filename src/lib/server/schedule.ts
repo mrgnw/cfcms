@@ -1,6 +1,6 @@
 import { isPending, statusOf, type PublishSchedule, type SchedulePin } from '#lib/types.js';
 import { CheckoutBusyError, withCheckoutLock } from './checkout-lock';
-import { listPosts, type Post } from './content';
+import { initializeContentLocked, listPostsLocked, type Post } from './content';
 import {
 	cancelPending, claimPending, failMissedPending, finishSchedule, getSchedule, getStagedRevisions, insertSchedule,
 	listActiveSchedules, reschedulePending
@@ -46,10 +46,12 @@ export const parseScheduleTime = (dueAt: unknown, timeZone: unknown, now: Date) 
 	return { dueAt: due.toISOString(), timeZone };
 };
 
-export const createSchedule = async (dueAt: unknown, timeZone: unknown, now = new Date()) => {
+// Pins are read and stored under the checkout write lock, so no publish can run between the read and the insert.
+export const createSchedule = (dueAt: unknown, timeZone: unknown, now = new Date()) => withCheckoutLock(async () => {
 	const time = parseScheduleTime(dueAt, timeZone, now);
 	if (getPendingPublishPush()) throw new ScheduleRequestError('Retry the pending publish push before scheduling');
-	const posts = await listPosts();
+	await initializeContentLocked();
+	const posts = await listPostsLocked();
 	const approvals = getStagedRevisions();
 	const edited = editedAfterStaging(posts, approvals);
 	if (edited.length) {
@@ -60,7 +62,7 @@ export const createSchedule = async (dueAt: unknown, timeZone: unknown, now = ne
 	const id = insertSchedule(time.dueAt, time.timeZone, pins);
 	if (id === null) throw new ScheduleRequestError('A publish is already scheduled; reschedule or cancel it');
 	return getSchedule(id);
-};
+});
 
 export const rescheduleSchedule = (id: number, dueAt: unknown, timeZone: unknown, now = new Date()) => {
 	const time = parseScheduleTime(dueAt, timeZone, now);

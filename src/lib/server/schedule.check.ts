@@ -145,13 +145,32 @@ try {
 	assert.equal(finished?.state, 'published', JSON.stringify(finished));
 	assert.equal(publishCommits(), 2);
 
+	const contested = await createPost(fm('Contested'), 'Staged while another instance publishes.', 'cms');
+	setStaged(contested.path, true);
+	const holder = fork(new URL('./fixtures/checkout-worker.ts', import.meta.url), ['write'], {
+		env: process.env,
+		execArgv: ['--disable-warning=ExperimentalWarning', '--import', new URL('../../../scripts/check-hooks.ts', import.meta.url).href],
+		stdio: ['ignore', 'pipe', 'pipe', 'ipc']
+	});
+	const holderExited = once(holder, 'exit');
+	assert.equal((await once(holder, 'message', { signal: AbortSignal.timeout(10_000) }))[0], 'locked');
+	const blocked = await call('POST', { dueAt: new Date(Date.now() + minute).toISOString(), timeZone });
+	holder.send('release');
+	await holderExited;
+	assert.equal(blocked.status, 409, 'scheduling refuses while another instance holds the checkout');
+	assert.match(blocked.data.message, /busy/);
+	assert.equal(listActiveSchedules().length, 0, 'no schedule row from a contested read');
+	assert.equal((await publishNow()).status, 200);
+	assert.equal((await call('POST', { dueAt: new Date(Date.now() + minute).toISOString(), timeZone })).status, 409, 'nothing left to pin');
+	assert.equal(publishCommits(), 3);
+
 	const direct = await createPost(fm('Direct'), 'Published by a direct API call.', 'cms');
 	setStaged(direct.path, true);
 	const superseded = (await call('POST', { dueAt: new Date(Date.now() + minute).toISOString(), timeZone })).data.schedule;
 	assert.equal((await publishNow()).status, 200, 'a manual publish without the UI');
 	assert.equal(getSchedule(superseded.id)?.state, 'cancelled', 'the server cancels the schedule it superseded');
 	assert.equal(await runDueSchedule(new Date(Date.parse(superseded.dueAt) + 1_000)), null);
-	assert.equal(publishCommits(), 3);
+	assert.equal(publishCommits(), 4);
 } finally {
 	rmSync(root, { recursive: true, force: true });
 }

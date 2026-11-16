@@ -1,11 +1,12 @@
 import { cancelSchedule, createSchedule, rescheduleSchedule, ScheduleRequestError } from '#lib/server/schedule.js';
 import { getLatestSchedule } from '#lib/server/db.js';
+import { CheckoutBusyError } from '#lib/server/checkout-lock.js';
 
 const respond = async (operation: () => unknown) => {
 	try {
 		return Response.json({ ok: true, schedule: await operation() });
 	} catch (caught) {
-		if (!(caught instanceof ScheduleRequestError)) throw caught;
+		if (!(caught instanceof ScheduleRequestError || caught instanceof CheckoutBusyError)) throw caught;
 		return Response.json({ ok: false, message: caught.message }, { status: 409 });
 	}
 };
