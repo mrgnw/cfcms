@@ -31,6 +31,14 @@
 		historicalApproved = false;
 	});
 
+	$effect(() => {
+		if (disabled) {
+			message = '';
+			unresolved = [];
+			confirmedRemote = null;
+		}
+	});
+
 	async function recover(kind: 'publish' | 'backup', commit: string, replace?: string, retry = false,
 		selected?: { commit: string; remote: string }) {
 		if (busy || disabled) return;
@@ -83,9 +91,24 @@
 		{:else}
 			<p>No captured paths differ at this verified Git remote tip.</p>
 		{/if}
-		<p>Historical Git delivery does not establish current live content. Confirmation preserves the remote state above, including deletions or reverts. It does not restore content or verify deployment.</p>
+		<p>Historical Git delivery does not establish current live content. This confirmation changes no post content and does not verify deployment. Later publishing is blocked if it would overwrite these reported paths; reconcile them explicitly first.</p>
 	</div>
 {/snippet}
+
+{#if publication.reconciliation}
+	<section class="protection">
+		<h3>Remote reconciliation required before publishing</h3>
+		{#if publication.reconciliation.error}
+			<p>{publication.reconciliation.error}</p>
+		{:else}
+			<p>Historical confirmation left the CMS publication records unchanged. Publishing still renders those posts, so a candidate that would overwrite the reported remote changes will be rejected before commit.</p>
+			<ul>
+				{#each publication.reconciliation.paths as path (path)}<li><code>{path}</code></li>{/each}
+			</ul>
+			<p>To keep a remote removal, explicitly unpublish/delete the affected post and stage that decision. For other edits, reconcile the CMS output with the remote, or make a separate reviewed change on the remote. Then retry publishing. Nothing is unpublished automatically.</p>
+		{/if}
+	</section>
+{/if}
 
 {#if publication.pendingCommit}
 	<section>
@@ -101,7 +124,7 @@
 			{@render remoteSnapshot(publication.currentRemote)}
 			<details>
 				<summary>Confirm historical Git delivery</summary>
-				<p id={`${replacementId}-history-help`}>Enter the full commit hash from your successful manual push. Confirm only a commit you reviewed as delivering this publication. Matching content alone does not establish delivery. Verification preserves all later remote edits.</p>
+				<p id={`${replacementId}-history-help`}>Enter the full commit hash from your successful manual push. Confirm only a commit you reviewed as delivering this publication. Matching content alone does not establish delivery. Confirmation leaves CMS publication records unchanged; reconcile the reported differences before publishing again.</p>
 				<form method="POST" action="/api/publish/reconcile" onsubmit={(event) => {
 					event.preventDefault();
 					void recover('publish', publication.pendingCommit!, undefined, false,
@@ -117,7 +140,7 @@
 					<label for={`${replacementId}-history-confirm`}>
 						<input id={`${replacementId}-history-confirm`} name="confirm" type="checkbox" value="reviewed-history-and-current-remote"
 							bind:checked={historicalApproved} required disabled={busy || disabled} />
-						I reviewed this historical commit and the remote differences above. Confirm past Git delivery only.
+						I reviewed this historical commit and the remote differences above. Confirm past Git delivery only; these differences still require reconciliation before publishing again.
 					</label>
 					<button type="submit" disabled={busy || disabled}>Verify historical Git delivery</button>
 				</form>
@@ -187,6 +210,22 @@
 	}
 
 	.remote-snapshot code {
+		white-space: pre-wrap;
+	}
+
+	.protection {
+		border-left: 2px solid var(--warn);
+		padding-left: 10px;
+		font-size: 13px;
+		line-height: 1.5;
+		overflow-wrap: anywhere;
+	}
+
+	.protection ul {
+		padding-left: 18px;
+	}
+
+	.protection code {
 		white-space: pre-wrap;
 	}
 

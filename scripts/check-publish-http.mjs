@@ -175,6 +175,8 @@ try {
 	assert.equal(receipt.lastDelivery.commit, rewritten);
 	assert.equal(receipt.lastDelivery.capturedCommit, captured);
 	assert.deepEqual(receipt.lastDelivery.currentRemote, preview.currentRemote);
+	assert.deepEqual(receipt.reconciliation.paths, ['content/later.md', 'src/posts/later.svx']);
+	assert.match(await (await request('/publish')).text(), /Remote reconciliation required before publishing/);
 	assert.equal((await request(`/api/publish/reconcile?commit=${captured}`, {})).status, 409);
 	git('reset', '--hard', 'origin/main');
 	const other = await (await request('/api/post?path=pending.md')).json();
