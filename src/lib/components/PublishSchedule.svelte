@@ -99,7 +99,7 @@
 		</p>
 		<p>
 			Publishes exactly the {active.pins.length === 1 ? 'revision' : `${active.pins.length} revisions`} staged when scheduled:
-			{active.pins.map((pin) => pin.title).join(', ')}. Later edits stay unpublished.
+			{active.pins.map((pin) => pin.title).join(', ')}. Editing or restaging one of them blocks the run; the edit is kept.
 		</p>
 		{#if drift}
 			<p class="warn">
@@ -145,7 +145,7 @@
 		<form onsubmit={submit}>
 			<label>
 				<span>{active ? 'New time' : 'Or publish later at'}</span>
-				<input type="datetime-local" required bind:value={when} min={inputValue(new Date(now + 60_000))} />
+				<input type="datetime-local" required bind:value={when} min={inputValue(new Date(now + 60_000))} onfocus={() => (now = Date.now())} />
 			</label>
 			<span class="meta">{localZone ?? ''}</span>
 			<button type="submit" disabled={busy || !chosen || !localZone || (!active && (!stagedCount || Boolean(blockedReason)))}>

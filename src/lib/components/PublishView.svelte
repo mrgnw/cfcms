@@ -109,14 +109,6 @@
 		error = null;
 		result = null;
 		try {
-			if (pendingSchedule && !canRetryPush) {
-				const cancelled = await fetch('/api/publish/schedule', {
-					method: 'DELETE',
-					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ id: pendingSchedule.id })
-				});
-				if (!cancelled.ok) throw new Error((await cancelled.json()).message ?? 'Could not cancel the scheduled publish');
-			}
 			const res = await fetch('/api/publish', { method: 'POST' });
 			const data = await res.json();
 			await refreshAll();
