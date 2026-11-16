@@ -7,6 +7,9 @@ export const isEffort = (value: unknown): value is Effort => (efforts as readonl
 export const effortLabels: Record<Effort, string> = { quick: 'Quick', deep: 'Deeper' };
 export type Triage = { nextStep: string | null; effort: Effort | null };
 export const nextStepLimit = 140;
+export const triageFields = ['nextStep', 'effort'] as const;
+export type TriageField = (typeof triageFields)[number];
+export const isTriageField = (value: unknown): value is TriageField => (triageFields as readonly unknown[]).includes(value);
 
 export type DeployStatus = 'draft' | 'ready' | 'live' | 'changed' | 'unpublish' | 'delete' | 'deleted';
 

@@ -52,17 +52,37 @@ try {
 		for (const [key, value] of Object.entries(fields)) body.set(key, value);
 		return actions.triage({ request: new Request('http://cms.test/?/triage', { method: 'POST', body }) } as never);
 	};
-	assert.deepEqual(await triage({ path: 'agent-draft.md', nextStep: '  Tighten   the ending ', effort: 'quick' }), {
-		triaged: 'agent-draft.md'
+	const path = 'agent-draft.md';
+	assert.deepEqual(await triage({ path, field: 'nextStep', value: '  Tighten   the ending ', base: '' }), {
+		triaged: path,
+		field: 'nextStep',
+		value: 'Tighten the ending'
 	});
-	const triaged = (await listPosts()).find((item) => item.path === 'agent-draft.md');
+	assert.deepEqual(await triage({ path, field: 'effort', value: 'quick', base: '' }), {
+		triaged: path,
+		field: 'effort',
+		value: 'quick'
+	});
+	const triaged = (await listPosts()).find((item) => item.path === path);
 	assert.equal(triaged?.nextStep, 'Tighten the ending', 'next step is trimmed and collapsed');
-	assert.equal(triaged?.effort, 'quick');
+	assert.equal(triaged?.effort, 'quick', 'saving the size kept the next step and vice versa');
+
+	// a session still holding the empty value it loaded must not replace another session's step
+	const stale = (await triage({ path, field: 'nextStep', value: 'Something else', base: '' })) as {
+		status: number;
+		data: { current: string };
+	};
+	assert.equal(stale.status, 409);
+	assert.equal(stale.data.current, 'Tighten the ending', 'the refusal carries the value to show');
+	assert.ok('triaged' in (await triage({ path, field: 'nextStep', value: 'Something else', base: stale.data.current })));
+
 	const invalids: Record<string, string>[] = [
-		{ path: 'agent-draft.md', effort: 'someday' },
-		{ path: 'agent-draft.md', nextStep: 'x'.repeat(141) },
-		{ path: 'missing.md', effort: 'deep' },
-		{ effort: 'deep' }
+		{ path, field: 'effort', value: 'someday', base: '' },
+		{ path, field: 'nextStep', value: 'x'.repeat(141), base: '' },
+		{ path, field: 'title', value: 'x', base: '' },
+		{ path, field: 'effort', value: 'deep' },
+		{ path: 'missing.md', field: 'effort', value: 'deep', base: '' },
+		{ field: 'effort', value: 'deep', base: '' }
 	];
 	for (const invalid of invalids) {
 		assert.equal(((await triage(invalid)) as { status?: number }).status, 400, JSON.stringify(invalid).slice(0, 60));

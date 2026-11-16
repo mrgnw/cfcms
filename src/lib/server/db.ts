@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { contentBaseDirectory, databasePath } from './paths';
 import { randomPostId } from '#lib/post-id.js';
-import { isEffort, nextStepLimit, type Triage } from '#lib/types.js';
+import { isEffort, nextStepLimit, type Triage, type TriageField } from '#lib/types.js';
 
 // Lazy init: opening at module load would run during `vite build` with
 // build-time cwd/env and poison the db with a wrong-path legacy import.
@@ -265,18 +265,20 @@ export const removeFromEditing = (path: string) => {
 
 export const reorderEditing = (paths: string[]) => {
 	if (paths.length > 500) throw new Error('Editing queue reorder exceeds sane bounds');
+	if (new Set(paths).size !== paths.length) throw new Error('Editing queue reorder repeats an entry');
 
 	const current = getEditingOrder();
-	const update = db().prepare('UPDATE posts SET editing_order = ? WHERE path = ?');
+	const unknown = paths.find((path) => !current.has(path));
+	if (unknown) throw new Error(`Cannot reorder unknown queue entry: ${unknown}`);
 
+	// a partial list (a filtered or trimmed queue) reorders only the slots it already holds
+	const order = [...current.keys()];
+	const slots = paths.map((path) => current.get(path) ?? 0).sort((first, second) => first - second);
+	for (const [index, slot] of slots.entries()) order[slot] = paths[index];
+
+	const update = db().prepare('UPDATE posts SET editing_order = ? WHERE path = ?');
 	db().exec('BEGIN');
-	for (const [index, path] of paths.entries()) {
-		if (!current.has(path)) {
-			db().exec('ROLLBACK');
-			throw new Error(`Cannot reorder unknown queue entry: ${path}`);
-		}
-		update.run(index, path);
-	}
+	for (const [index, path] of order.entries()) update.run(index, path);
 	db().exec('COMMIT');
 };
 
@@ -290,13 +292,34 @@ export const getTriage = (): Map<string, Triage> => {
 	);
 };
 
-export const setTriage = (path: string, triage: Triage) => {
-	if (triage.nextStep !== null && triage.nextStep.length > nextStepLimit) throw new Error('Next step is too long');
+const triageColumns: Record<TriageField, string> = { nextStep: 'next_step', effort: 'effort' };
 
+// Compare-and-set on one field: a session saves only over the value it last saw, so a
+// stale session can neither overwrite another session's choice nor clobber the other field.
+export const setTriageField = (
+	path: string,
+	field: TriageField,
+	value: string | null,
+	base: string | null
+): { saved: boolean; current: string | null } => {
+	if (field === 'nextStep' && value !== null && value.length > nextStepLimit) throw new Error('Next step is too long');
+	if (field === 'effort' && value !== null && !isEffort(value)) throw new Error(`Unknown effort: ${value}`);
+
+	const column = triageColumns[field];
+	db().exec('BEGIN IMMEDIATE');
+	const row = db().prepare(`SELECT ${column} AS value FROM posts WHERE path = ?`).get(path) as
+		| { value: string | null }
+		| undefined;
+	const current = row?.value ?? null;
+	if (current !== base && current !== value) {
+		db().exec('ROLLBACK');
+		return { saved: false, current };
+	}
 	db().prepare(
-		`INSERT INTO posts (path, next_step, effort) VALUES (?, ?, ?)
-		 ON CONFLICT(path) DO UPDATE SET next_step = excluded.next_step, effort = excluded.effort`
-	).run(path, triage.nextStep, triage.effort);
+		`INSERT INTO posts (path, ${column}) VALUES (?, ?) ON CONFLICT(path) DO UPDATE SET ${column} = excluded.${column}`
+	).run(path, value);
+	db().exec('COMMIT');
+	return { saved: true, current: value };
 };
 
 export const seedEditingQueue = (paths: string[]) => {
