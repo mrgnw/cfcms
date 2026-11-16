@@ -10,6 +10,7 @@ const reportKey = 'publishRecoveryMessage';
 export const getPublicationRecovery = () => {
 	const pending = getPendingPublishPush();
 	return {
+		minimumGitVersion: '2.43.0',
 		pendingCommit: pending,
 		message: pending === getMetaValue('publishRecoveryPending') ? getMetaValue(reportKey) : null,
 		remoteCommit: pending && pending === getMetaValue('publishRecoveryPending') ? getMetaValue('publishRecoveryRemote') : null,

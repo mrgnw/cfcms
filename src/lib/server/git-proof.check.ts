@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -29,10 +29,16 @@ const rewrittenDelivered = git('rev-parse', 'HEAD');
 process.env.BLOG_CONTENT_BASE_DIR = root;
 process.env.BLOG_CMS_DB = join(root, 'cms.db');
 const { withCheckoutLock } = await import('./checkout-lock.ts');
-const { verifyRewrittenCommit } = await import('./git-proof.ts');
+const { assertRecoveryGitVersion, verifyRewrittenCommit } = await import('./git-proof.ts');
 const verify = (captured: string, remote: string) => withCheckoutLock(() => verifyRewrittenCommit(captured, remote));
 
 try {
+	for (const version of ['git version 2.43.0', 'git version 2.54.0 (Apple Git-157)', 'git version 3.0.0']) {
+		assert.doesNotThrow(() => assertRecoveryGitVersion(version));
+	}
+	for (const version of ['git version 2.42.9', 'git version 2.40.0', 'git version 1.99.0', 'unrecognized']) {
+		assert.throws(() => assertRecoveryGitVersion(version), /requires server Git 2.43.0 or newer/);
+	}
 	const index = readFileSync(join(root, '.git/index'));
 	const body = readFileSync(join(root, 'post.txt'));
 	assert.deepEqual(await verify(pending, rewrittenDelivered), { equivalent: true, paths: [] });
@@ -79,6 +85,19 @@ try {
 	await assert.rejects(verify(leftMerge, rightMerge), /no unique common remote ancestor/);
 	const unrelated = git('commit-tree', tree, '-m', 'unrelated root');
 	await assert.rejects(verify(queuedTip, unrelated), /no unique common remote ancestor/);
+	const actualGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim();
+	const quotedGit = `'${actualGit.replaceAll("'", "'\\''")}'`;
+	const oldGitBin = join(root, 'old-git-bin');
+	mkdirSync(oldGitBin);
+	writeFileSync(join(oldGitBin, 'git'), `#!/bin/sh\nif [ "$1" = "--version" ]; then\n\tprintf '%s\\n' 'git version 2.42.0'\nelse\n\texec ${quotedGit} "$@"\nfi\n`, { mode: 0o755 });
+	const previousPath = process.env.PATH;
+	process.env.PATH = `${oldGitBin}:${previousPath}`;
+	try {
+		await assert.rejects(verify(pending, rewrittenDelivered), /requires server Git 2.43.0 or newer/);
+	} finally {
+		if (previousPath === undefined) delete process.env.PATH;
+		else process.env.PATH = previousPath;
+	}
 	console.log('git-proof.check: ok');
 } finally {
 	rmSync(root, { recursive: true, force: true });
