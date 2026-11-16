@@ -35,6 +35,8 @@ type CommandResult = {
 const outputLimit = 20_000;
 const pendingPushKey = 'pendingPublishPush';
 
+export const hasPendingPublishPush = () => Boolean(getMetaValue(pendingPushKey));
+
 export class PublishConflictError extends Error {
 	readonly editedAfterStaging: string[];
 

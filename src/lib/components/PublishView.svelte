@@ -5,7 +5,9 @@
 	import SegmentCard from './SegmentCard.svelte';
 	import type { PendingChange, PublishData } from '#lib/types.js';
 
-	let { changes, lastPublishedAt }: { changes: PendingChange[]; lastPublishedAt: string | null } = $props();
+	let { changes, lastPublishedAt, pendingPush = false }: {
+		changes: PendingChange[]; lastPublishedAt: string | null; pendingPush?: boolean;
+	} = $props();
 
 	let publishing = $state(false);
 	let result = $state<PublishData | null>(null);
@@ -32,6 +34,7 @@
 
 	let staged = $derived(changes.filter((change) => change.staged));
 	let stageable = $derived(changes.filter((change) => !change.blocked));
+	let canRetryPush = $derived(pendingPush || Boolean(result?.push.output.startsWith('Committed but not pushed')));
 
 	let totals = $derived({
 		added: changes.reduce((sum, change) => sum + (change.added ?? 0), 0),
@@ -155,7 +158,7 @@
 			>
 				<input
 					type="checkbox"
-					aria-label="Stage {change.title} for next publish"
+					aria-label="{change.editedAfterStaging ? 'Restage' : 'Stage'} {change.title} for next publish"
 					checked={change.staged}
 					disabled={change.blocked}
 					title={change.blocked ? 'Edited on the site and in the CMS: resolve first' : undefined}
@@ -187,7 +190,7 @@
 						{:else}
 							no baseline to diff
 						{/if}
-						· {change.blocked ? 'edited on the site too' : change.staged ? 'next' : 'ready'}
+						· {change.blocked ? 'edited on the site too' : change.editedAfterStaging ? 'edited after staging · restage' : change.staged ? 'next' : 'ready'}
 					</span>
 				</a>
 				{#if change.segments?.length}
@@ -221,12 +224,12 @@
 		{/each}
 	</div>
 
-	<button class="publish-btn" type="button" onclick={runPublish} disabled={publishing || !staged.length}>
+	<button class="publish-btn" type="button" onclick={runPublish} disabled={publishing || (!staged.length && !canRetryPush)}>
 		{publishing
 			? 'Publishing…'
 			: staged.length
 				? `Publish ${staged.length} staged ${staged.length === 1 ? 'change' : 'changes'}`
-				: 'Nothing staged'}
+				: canRetryPush ? 'Retry publish push' : 'Nothing staged'}
 	</button>
 
 	{#if lastPublishedAt}
@@ -234,8 +237,11 @@
 	{/if}
 
 	{#if result}
-		<section class="result" class:ok={result.ok}>
+		<section class="result" class:ok={result.ok} role="status">
 			<h3>{result.ok ? 'Published' : 'Publish errored'}</h3>
+			{#if !result.push.ok && result.lastPublishedAt}
+				<p>Committed but not pushed. Retry the publish push when the remote is available.</p>
+			{/if}
 			{#each result.results as target (target.name)}
 				<details open={!target.ok}>
 					<summary>
@@ -256,7 +262,7 @@
 			{/each}
 		</section>
 	{:else if error}
-		<p class="error">{error}</p>
+		<p class="error" role="alert">{error}</p>
 	{/if}
 </div>
 
