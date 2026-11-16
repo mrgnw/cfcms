@@ -7,7 +7,8 @@ import { isPending, statusOf } from '#lib/types.js';
 import { spawn } from 'node:child_process';
 import { mkdir, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { runBackup } from './backup';
+import { backupLockedCheckout } from './backup';
+import { withCheckoutLock } from './checkout-lock';
 import { getPostFilePath, getPostGitPath, listPosts, type Post } from './content';
 import { clearStaged, getPublishedPosts, getRevisionByHash, getStagedRevisions, setExportedState } from './db';
 import { recordPublishedState } from './deploy-state';
@@ -157,7 +158,7 @@ const restoreWorkingTree = async (gitPaths: string[]) => {
 	await runGit(['clean', '-fd', '--', svxGitDirectory]);
 };
 
-export const runPublish = async () => {
+export const runPublish = () => withCheckoutLock(async () => {
 	const branchError = mainBranchError(await getCurrentBranch());
 	if (branchError) throw new Error(branchError);
 
@@ -199,7 +200,7 @@ export const runPublish = async () => {
 	clearStaged(going);
 
 	const push = await pushContent();
-	if (push.ok) runBackup().catch(() => undefined);
+	if (push.ok) await backupLockedCheckout().catch(() => undefined);
 
 	return {
 		ok: push.ok,
@@ -210,4 +211,4 @@ export const runPublish = async () => {
 		push: push.ok ? push : { ...push, output: `Committed but not pushed; publish again to retry the push.\n${push.output}` },
 		results: [build]
 	};
-};
+});
