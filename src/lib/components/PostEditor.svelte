@@ -104,15 +104,18 @@
 		fd.set('base', base);
 		const res = await fetch('?/triage', { method: 'POST', body: fd, headers: { 'x-sveltekit-action': 'true' } });
 		const result = deserialize(await res.text());
-		if (result.type === 'success') return { kind: 'saved', value: String(result.data?.value ?? '') };
+		const rev = Number(result.type === 'success' || result.type === 'failure' ? result.data?.rev : NaN);
+		if (!Number.isInteger(rev)) return { kind: 'failed' };
+		if (result.type === 'success') return { kind: 'saved', value: String(result.data?.value ?? ''), rev };
 		if (result.type === 'failure' && result.status === 409) {
-			return { kind: 'conflict', current: String(result.data?.current ?? '') };
+			return { kind: 'conflict', current: String(result.data?.current ?? ''), rev };
 		}
 		return { kind: 'failed' };
 	}
 
 	const triageSync = new TriageSync(
 		untrack(() => triageOf(post)),
+		untrack(() => post.triageRev ?? 0),
 		sendTriage,
 		(view) => (triage = view),
 		() => onSaved?.()
@@ -121,7 +124,8 @@
 
 	$effect(() => {
 		const incoming = triageOf(post);
-		untrack(() => triageSync.receive(incoming));
+		const rev = post.triageRev ?? 0;
+		untrack(() => triageSync.receive(incoming, rev));
 	});
 
 	const shownValue = (field: TriageField, value: string) =>

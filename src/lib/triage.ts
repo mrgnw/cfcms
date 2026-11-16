@@ -7,7 +7,10 @@ export const triageOf = (post: Pick<PostListItem, 'nextStep' | 'effort'>): Triag
 	effort: post.effort ?? ''
 });
 
-export type TriageReply = { kind: 'saved'; value: string } | { kind: 'conflict'; current: string } | { kind: 'failed' };
+export type TriageReply =
+	| { kind: 'saved'; value: string; rev: number }
+	| { kind: 'conflict'; current: string; rev: number }
+	| { kind: 'failed' };
 
 export type TriageProblem = { kind: 'conflict'; theirs: string } | { kind: 'failed' };
 
@@ -22,23 +25,28 @@ type Send = (field: TriageField, value: string, base: string) => Promise<TriageR
 
 // Client side of the per-field compare-and-set. Saves run one at a time in order, a conflict
 // holds that field until the writer picks Keep mine or Use theirs, a failed or malformed reply
-// never stops later saves, and values polled during a save are applied once the queue drains.
+// never stops later saves, and a poll older than the newest rev heard is ignored.
 export class TriageSync {
 	#shown: TriageValues;
 	#saved: TriageValues;
 	#problems: Partial<Record<TriageField, TriageProblem>> = {};
 	#pending = 0;
 	#queue: Promise<void> = Promise.resolve();
-	#seq = 0;
-	#confirmedSeq: Record<TriageField, number> = { nextStep: 0, effort: 0 };
-	#incoming: { values: TriageValues; seq: number } | null = null;
+	#rev: number;
 	#send: Send;
 	#onChange: (view: TriageView) => void;
 	#onSaved: () => void;
 
-	constructor(initial: TriageValues, send: Send, onChange: (view: TriageView) => void, onSaved: () => void = () => {}) {
+	constructor(
+		initial: TriageValues,
+		rev: number,
+		send: Send,
+		onChange: (view: TriageView) => void,
+		onSaved: () => void = () => {}
+	) {
 		this.#shown = { ...initial };
 		this.#saved = { ...initial };
+		this.#rev = rev;
 		this.#send = send;
 		this.#onChange = onChange;
 		this.#onSaved = onSaved;
@@ -74,10 +82,16 @@ export class TriageSync {
 		this.#notify();
 	}
 
-	receive(values: TriageValues) {
-		this.#seq += 1;
-		this.#incoming = { values: { ...values }, seq: this.#seq };
-		if (this.#pending === 0) this.#applyIncoming();
+	// A poll replaces only fields with no unsaved edit and no open problem, and only when it is
+	// at least as new as everything this session has heard, so an older poll cannot undo a save.
+	receive(values: TriageValues, rev: number) {
+		if (rev < this.#rev) return;
+		this.#rev = rev;
+		for (const field of triageFields) {
+			if (this.#problems[field] || this.#shown[field] !== this.#saved[field]) continue;
+			this.#saved[field] = values[field];
+			this.#shown[field] = values[field];
+		}
 		this.#notify();
 	}
 
@@ -95,7 +109,6 @@ export class TriageSync {
 			this.#problems[field] = { kind: 'failed' };
 		}
 		this.#pending -= 1;
-		if (this.#pending === 0) this.#applyIncoming();
 		this.#notify();
 	}
 
@@ -112,28 +125,15 @@ export class TriageSync {
 		if (reply.kind === 'saved') {
 			this.#saved[field] = reply.value;
 			if (this.#shown[field] === value) this.#shown[field] = reply.value;
-			this.#confirmedSeq[field] = this.#seq;
+			this.#rev = Math.max(this.#rev, reply.rev);
 			delete this.#problems[field];
 			queueMicrotask(this.#onSaved);
 		} else if (reply.kind === 'conflict') {
 			this.#saved[field] = reply.current;
+			this.#rev = Math.max(this.#rev, reply.rev);
 			this.#problems[field] = { kind: 'conflict', theirs: reply.current };
 		} else {
 			this.#problems[field] = { kind: 'failed' };
-		}
-	}
-
-	// Polled values replace only fields with no unsaved edit and no open problem, and never
-	// a field whose own save was confirmed after that poll arrived.
-	#applyIncoming() {
-		const incoming = this.#incoming;
-		if (!incoming) return;
-		this.#incoming = null;
-		for (const field of triageFields) {
-			if (incoming.seq <= this.#confirmedSeq[field]) continue;
-			if (this.#problems[field] || this.#shown[field] !== this.#saved[field]) continue;
-			this.#saved[field] = incoming.values[field];
-			this.#shown[field] = incoming.values[field];
 		}
 	}
 
