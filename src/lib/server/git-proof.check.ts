@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+const root = mkdtempSync(join(tmpdir(), 'cms-git-proof-'));
+const git = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8', stdio: 'pipe' }).trim();
+execFileSync('git', ['init', '-q', '-b', 'main', root]);
+git('config', 'user.name', 'CMS Test');
+git('config', 'user.email', 'cms-test@example.test');
+git('config', 'commit.gpgsign', 'false');
+const original = Array.from({ length: 30 }, (_, index) => `Paragraph ${index}`).join('\n') + '\n';
+writeFileSync(join(root, 'post.txt'), original);
+writeFileSync(join(root, '.gitattributes'), 'post.txt merge=union\n');
+git('add', '.');
+git('commit', '-qm', 'base content');
+const base = git('rev-parse', 'HEAD');
+git('checkout', '-qb', 'pending');
+writeFileSync(join(root, 'post.txt'), original.replace('Paragraph 0\n', 'Approved opening\n'));
+git('commit', '-qam', 'pending publication');
+const pending = git('rev-parse', 'HEAD');
+git('checkout', '-q', 'main');
+writeFileSync(join(root, 'post.txt'), original.replace('Paragraph 29\n', 'A separate remote edit\n'));
+git('commit', '-qam', 'remote advanced');
+const remoteBeforeDelivery = git('rev-parse', 'HEAD');
+git('cherry-pick', pending);
+const rewrittenDelivered = git('rev-parse', 'HEAD');
+process.env.BLOG_CONTENT_BASE_DIR = root;
+process.env.BLOG_CMS_DB = join(root, 'cms.db');
+const { withCheckoutLock } = await import('./checkout-lock.ts');
+const { verifyRewrittenCommit } = await import('./git-proof.ts');
+const verify = (captured: string, remote: string) => withCheckoutLock(() => verifyRewrittenCommit(captured, remote));
+
+try {
+	const index = readFileSync(join(root, '.git/index'));
+	const body = readFileSync(join(root, 'post.txt'));
+	assert.deepEqual(await verify(pending, rewrittenDelivered), { equivalent: true, paths: [] });
+	assert.deepEqual(await verify(pending, remoteBeforeDelivery), { equivalent: false, paths: ['post.txt'] });
+	assert.deepEqual(readFileSync(join(root, '.git/index')), index);
+	assert.deepEqual(readFileSync(join(root, 'post.txt')), body);
+	assert.equal(git('rev-parse', 'HEAD'), rewrittenDelivered);
+	git('checkout', '-qb', 'divergent', base);
+	writeFileSync(join(root, 'post.txt'), original.replace('Paragraph 0\n', 'A conflicting remote opening\n'));
+	git('commit', '-qam', 'divergent remote');
+	const divergent = git('rev-parse', 'HEAD');
+	writeFileSync(join(root, '.git/info/attributes'), 'post.txt merge=accept-remote\n');
+	git('config', 'merge.accept-remote.driver', 'touch driver-executed; true');
+	assert.equal((await verify(pending, divergent)).equivalent, false);
+	assert.ok(!existsSync(join(root, 'driver-executed')), 'recovery does not execute repository merge drivers');
+	git('checkout', '-qb', 'deletion', base);
+	writeFileSync(join(root, 'post.txt'), original.replace('Paragraph 0\n', ''));
+	git('commit', '-qam', 'pending deletion');
+	const deletion = git('rev-parse', 'HEAD');
+	assert.equal((await verify(deletion, divergent)).equivalent, false,
+		'a union merge attribute cannot accept a remote edit that conflicts with the queued deletion');
+	assert.ok(!existsSync(join(root, 'driver-executed')));
+	console.log('git-proof.check: ok');
+} finally {
+	rmSync(root, { recursive: true, force: true });
+}
