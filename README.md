@@ -2,7 +2,6 @@
 
 Write Markdown in the browser, keep drafts and revisions in SQLite, and publish staged posts to your blog.
 
-[![CI](https://img.shields.io/github/actions/workflow/status/mrgnw/cfcms/ci.yml?branch=main&style=flat&label=CI)](https://github.com/mrgnw/cfcms/actions/workflows/ci.yml)
 [![MIT license](https://img.shields.io/github/license/mrgnw/cfcms?style=flat)](LICENSE)
 [![Last commit](https://img.shields.io/github/last-commit/mrgnw/cfcms?style=flat)](https://github.com/mrgnw/cfcms/commits/main/)
 [![Open issues](https://img.shields.io/github/issues/mrgnw/cfcms?style=flat)](https://github.com/mrgnw/cfcms/issues)
@@ -63,7 +62,7 @@ Built with SvelteKit 3, Svelte 5, TypeScript and Node's built-in SQLite. The pla
 
 ## Quick start
 
-You need Node 24 or newer and [pnpm](https://pnpm.io) 10 (the version CI uses).
+You need Node 24 or newer and [pnpm](https://pnpm.io) 10.
 
 ```sh
 git clone https://github.com/mrgnw/cfcms.git
@@ -192,7 +191,7 @@ pnpm test
 pnpm build
 ```
 
-`pnpm test` runs every `src/**/*.check.ts` under `node --test`, then `pnpm check`. `scripts/check-hooks.ts` resolves `#lib` and `$app/env/private` so server modules load in plain node; server checks build a throwaway blog checkout and database under the system temp directory. CI also checks inventory HTTP behavior against the production build:
+`pnpm test` runs every `src/**/*.check.ts` under `node --test`, then `pnpm check`. `scripts/check-hooks.ts` resolves `#lib` and `$app/env/private` so server modules load in plain node; server checks build a throwaway blog checkout and database under the system temp directory. To check inventory HTTP behavior against the production build, run `pnpm build` first, then:
 
 ```sh
 pnpm test:inventory-http
@@ -229,7 +228,7 @@ The blog reads extra settings after a fence's language: ```` ```py {2} title="x.
 
 ### The `$blog` alias
 
-The `sveltekit(...)` plugin in `vite.config.ts` aliases `$blog` to `src/lib` of your blog checkout, so `shell-words.js` and `styles/code-theme.css` are imported straight from it rather than copied. Colour changes made there reach the editor the next time the CMS rebuilds. Without a checkout (or one with no `src/lib`), the alias falls back to the copies in `src/blog-defaults`, which is what CI and the demo above use. The choice is all or nothing: if the checkout has a `src/lib` at all, both files must exist there, otherwise the build fails to resolve them.
+The `sveltekit(...)` plugin in `vite.config.ts` aliases `$blog` to `src/lib` of your blog checkout, so `shell-words.js` and `styles/code-theme.css` are imported straight from it rather than copied. Colour changes made there reach the editor the next time the CMS rebuilds. Without a checkout (or one with no `src/lib`), the alias falls back to the copies in `src/blog-defaults`, which the demo above uses. The choice is all or nothing: if the checkout has a `src/lib` at all, both files must exist there, otherwise the build fails to resolve them.
 
 ## Editors
 
