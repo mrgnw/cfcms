@@ -11,7 +11,6 @@ import {
 	deletePostRows,
 	getEditingOrder,
 	getTriage,
-	getAssistantDraft,
 	getMetaValue,
 	getStoredPost,
 	ingestAssistantFile,
@@ -219,16 +218,14 @@ const ingestUserFile = async (postPath: string, filePath: string, stored: Stored
 
 const ingestLlmFile = async (llmPath: string, filePath: string, stored: StoredPost | null) => {
 	if (!stored) return;
-	const expectedRevision = getAssistantDraft(stored.path)?.revision ?? null;
 	const meta = await stat(filePath);
-	if (stored.llmMtimeMs === meta.mtimeMs) return;
 
 	const raw = normalizeNewlines(await readFile(filePath, 'utf8'));
 	const { frontmatter, body } = splitRawPost(raw);
 	const hash = hashPostContent(frontmatter, body);
 
-	ingestAssistantFile(stored, expectedRevision, {
-		baseHash: stored.hash, frontmatter: frontmatter.trim(), body: canonicalBody(body), hash, mtimeMs: meta.mtimeMs
+	ingestAssistantFile(stored, {
+		frontmatter: frontmatter.trim(), body: canonicalBody(body), hash, mtimeMs: meta.mtimeMs
 	});
 };
 

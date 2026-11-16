@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { hashPostContent } from '../post-text.ts';
 
 const root = mkdtempSync(join(tmpdir(), 'cms-db-check-'));
 const databasePath = join(root, 'cms.db');
@@ -29,6 +30,13 @@ legacy.exec(`
 	);
 	INSERT INTO versions VALUES ('old-post.md', 'llm', 'file', 'abc', 'title: Old Post', 'Old suggestion', '2026-01-01');
 `);
+legacy.exec('ALTER TABLE posts ADD COLUMN llm_hash TEXT');
+const importedHash = hashPostContent('title: Old Post', 'Old suggestion');
+legacy.prepare('UPDATE posts SET llm_hash = ? WHERE path = ?').run(importedHash, 'old-post.md');
+legacy.prepare('INSERT INTO posts (path, llm_hash) VALUES (?, ?)').run('api-edited.md', importedHash);
+legacy.prepare('INSERT INTO versions VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+	'api-edited.md', 'llm', 'file', 'abc', 'title: Old Post', 'New API suggestion', '2026-01-01'
+);
 legacy.close();
 
 process.env.BLOG_CMS_DB = databasePath;
@@ -45,8 +53,15 @@ try {
 	const columns = (migrated.prepare(`SELECT name FROM pragma_table_info('posts')`).all() as { name: string }[]).map(
 		(row) => row.name
 	);
+	assert.equal((migrated.prepare('SELECT llm_version_revision FROM posts WHERE path = ?').get('old-post.md') as {
+		llm_version_revision: string;
+	}).llm_version_revision, suggestion.revision, 'migration anchors a reference matching its imported file');
+	assert.equal((migrated.prepare('SELECT llm_version_revision FROM posts WHERE path = ?').get('api-edited.md') as {
+		llm_version_revision: string | null;
+	}).llm_version_revision, null, 'migration does not treat an API edit as the last imported file');
 	migrated.close();
-	for (const column of ['head_rev', 'exported_hash', 'llm_hash', 'staged', 'next_step', 'effort', 'triage_rev']) assert.ok(columns.includes(column), column);
+	for (const column of ['head_rev', 'exported_hash', 'llm_hash', 'llm_version_revision', 'staged',
+		'next_step', 'effort', 'triage_rev']) assert.ok(columns.includes(column), column);
 
 	const { appendRevision, labelRevision, listRevisions } = await import('./db.ts');
 	appendRevision('busy.md', '', 'v1', 'h1', 'mac');
