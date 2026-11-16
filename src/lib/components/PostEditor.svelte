@@ -12,7 +12,8 @@
 	import ReferencePane from './ReferencePane.svelte';
 	import { isBlankDraft, parseFrontmatter, serializeFrontmatter } from '#lib/frontmatter.js';
 	import { applySegment as applySegmentTo } from '#lib/segment-diff.js';
-	import { effortLabels, efforts, nextStepLimit, type FieldSegment, type Post, type Segment, type WriterVersion } from '#lib/types.js';
+	import { adoptIncoming, triageOf } from '#lib/triage.js';
+	import { effortLabels, efforts, isEffort, nextStepLimit, triageFields, type FieldSegment, type TriageField, type Post, type Segment, type WriterVersion } from '#lib/types.js';
 
 	type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error';
 
@@ -93,20 +94,65 @@
 	let activeSource = $derived(sources.find((s) => s.id === selectedSourceId) ?? sources[0] ?? null);
 	const sourceKey = (source: PaneSource) => `${source.id}:${source.updatedAt ?? ''}`;
 
-	let nextStepField = $state(untrack(() => post.nextStep ?? ''));
-	let effortField = $state(untrack(() => post.effort ?? ''));
+	let savedTriage = $state(untrack(() => triageOf(post)));
+	let triage = $state(untrack(() => triageOf(post)));
+	let triageErrors = $state<Partial<Record<TriageField, { message: string; theirs?: string }>>>({});
+	let triageSaving = 0;
+	let triageQueue = Promise.resolve();
+	const triageLabels: Record<TriageField, string> = { nextStep: 'Next step', effort: 'Size' };
 
-	async function saveTriage() {
-		const fd = new FormData();
-		fd.set('path', post.path);
-		fd.set('nextStep', nextStepField);
-		fd.set('effort', effortField);
-		const res = await fetch('?/triage', { method: 'POST', body: fd }).catch(() => null);
-		if (!res?.ok) {
-			lastError = 'Could not save the next step';
+	$effect(() => {
+		const incoming = triageOf(post);
+		untrack(() => {
+			if (triageSaving > 0) return;
+			({ saved: savedTriage, shown: triage } = adoptIncoming(savedTriage, triage, incoming));
+		});
+	});
+
+	// one save at a time, so a later choice always lands after an earlier one
+	function saveTriage(field: TriageField) {
+		triageSaving += 1;
+		triageQueue = triageQueue.then(() => sendTriage(field)).finally(() => (triageSaving -= 1));
+	}
+
+	function useTheirs(field: TriageField) {
+		triage[field] = savedTriage[field];
+		delete triageErrors[field];
+	}
+
+	const shownValue = (field: TriageField, value: string) =>
+		field === 'effort' && isEffort(value) ? effortLabels[value] : value;
+
+	async function sendTriage(field: TriageField) {
+		const value = triage[field];
+		if (value === savedTriage[field]) {
+			delete triageErrors[field];
 			return;
 		}
-		onSaved?.();
+		const fd = new FormData();
+		fd.set('path', post.path);
+		fd.set('field', field);
+		fd.set('value', value);
+		fd.set('base', savedTriage[field]);
+		const res = await fetch('?/triage', { method: 'POST', body: fd, headers: { 'x-sveltekit-action': 'true' } }).catch(
+			() => null
+		);
+		const result = res ? deserialize(await res.text()) : null;
+
+		if (result?.type === 'success') {
+			const confirmed = String(result.data?.value ?? '');
+			if (triage[field] === value) triage[field] = confirmed;
+			savedTriage[field] = confirmed;
+			delete triageErrors[field];
+			onSaved?.();
+		} else if (result?.type === 'failure' && result.status === 409) {
+			const theirs = String(result.data?.current ?? '');
+			savedTriage[field] = theirs;
+			const now = theirs ? `changed in another session to “${shownValue(field, theirs)}”` : 'was cleared in another session';
+			triageErrors[field] = { message: `${triageLabels[field]} ${now}.`, theirs };
+		} else {
+			triageErrors[field] = { message: `${triageLabels[field]} not saved.` };
+		}
 	}
 
 	async function dismissSource(id: string) {
@@ -749,7 +795,7 @@
 
 			{#if post.path}
 				<div class="next-line">
-					<select aria-label="Size" bind:value={effortField} onchange={saveTriage}>
+					<select aria-label="Size" bind:value={triage.effort} onchange={() => saveTriage('effort')}>
 						<option value="">Size</option>
 						{#each efforts as effort (effort)}
 							<option value={effort}>{effortLabels[effort]}</option>
@@ -757,12 +803,26 @@
 					</select>
 					<input
 						aria-label="Next step"
-						bind:value={nextStepField}
-						onchange={saveTriage}
+						bind:value={triage.nextStep}
+						onchange={() => saveTriage('nextStep')}
 						placeholder="Next step, e.g. tighten the ending"
 						maxlength={nextStepLimit}
 					/>
 				</div>
+				{#each triageFields as field (field)}
+					{@const problem = triageErrors[field]}
+					{#if problem}
+						<p class="triage-error" role="alert">
+							{problem.message}
+							<button type="button" onclick={() => saveTriage(field)}>
+								{problem.theirs === undefined ? 'Retry' : 'Keep mine'}
+							</button>
+							{#if problem.theirs !== undefined}
+								<button type="button" onclick={() => useTheirs(field)}>Use theirs</button>
+							{/if}
+						</p>
+					{/if}
+				{/each}
 			{/if}
 
 			<div class="tags-line">
@@ -1196,7 +1256,38 @@
 	.next-line input:focus,
 	.next-line select:hover {
 		background: var(--bg);
-		outline: none;
+	}
+
+	.next-line select:focus-visible,
+	.next-line input:focus-visible,
+	.triage-error button:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 1px;
+	}
+
+	.triage-error {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		align-items: center;
+		color: var(--danger);
+		font-size: 12.5px;
+		margin: 0;
+		padding: 0 6px;
+	}
+
+	.triage-error button {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 999px;
+		color: var(--ink);
+		cursor: pointer;
+		font: inherit;
+		padding: 2px 10px;
+	}
+
+	.triage-error button:hover {
+		background: var(--hover);
 	}
 
 	.tags-line,
