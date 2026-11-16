@@ -1,0 +1,85 @@
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+const root = mkdtempSync(join(tmpdir(), 'cms-publication-recovery-'));
+const blog = join(root, 'blog');
+const remote = join(root, 'remote.git');
+const peer = join(root, 'peer');
+const git = (directory: string, ...args: string[]) => execFileSync('git', ['-C', directory, ...args], { encoding: 'utf8', stdio: 'pipe' }).trim();
+execFileSync('git', ['init', '-q', '-b', 'main', blog]);
+execFileSync('git', ['init', '-q', '--bare', remote]);
+for (const directory of [blog]) {
+	git(directory, 'config', 'user.name', 'CMS Test');
+	git(directory, 'config', 'user.email', 'cms-test@example.test');
+	git(directory, 'config', 'commit.gpgsign', 'false');
+}
+const original = Array.from({ length: 30 }, (_, index) => `Paragraph ${index}`).join('\n') + '\n';
+writeFileSync(join(blog, 'post.md'), original);
+git(blog, 'add', 'post.md');
+git(blog, 'commit', '-qm', 'base content');
+git(blog, 'remote', 'add', 'origin', remote);
+git(blog, 'push', '-qu', 'origin', 'main');
+execFileSync('git', ['clone', '-q', '-b', 'main', remote, peer]);
+git(peer, 'config', 'user.name', 'CMS Peer');
+git(peer, 'config', 'user.email', 'cms-peer@example.test');
+git(peer, 'config', 'commit.gpgsign', 'false');
+process.env.BLOG_CONTENT_BASE_DIR = blog;
+process.env.BLOG_CMS_DB = join(root, 'cms.db');
+const { appendRevision, getStoredPost, setStaged, getStagedPaths } = await import('./db.ts');
+const { setPendingPublishPush, getPendingPublishPush } = await import('./publish-push.ts');
+const { reconcilePublication, readPendingPublicationPatch } = await import('./publish-recovery.ts');
+
+try {
+	appendRevision('post.md', 'title: Post', 'Approved text in the store.', 'approved-hash', 'cms');
+	setStaged('post.md', true);
+	const stored = getStoredPost('post.md');
+	writeFileSync(join(blog, 'post.md'), original.replace('Paragraph 0\n', 'Approved opening\n'));
+	git(blog, 'commit', '-qam', 'pending publication');
+	const pending = git(blog, 'rev-parse', 'HEAD');
+	setPendingPublishPush(pending);
+	writeFileSync(join(peer, 'post.md'), original.replace('Paragraph 29\n', 'Independent remote edit\n'));
+	git(peer, 'commit', '-qam', 'remote advanced');
+	git(peer, 'push', '-q', 'origin', 'main');
+	const notDelivered = await reconcilePublication(pending);
+	assert.equal(notDelivered.ok, false);
+	assert.deepEqual(notDelivered.paths, ['post.md']);
+	assert.match(notDelivered.message, /Download the captured patch/);
+	assert.equal(getPendingPublishPush(), pending);
+	assert.match(await readPendingPublicationPatch(pending), /\+Approved opening/);
+	git(blog, 'fetch', '-q', 'origin');
+	git(blog, 'rebase', 'origin/main');
+	git(blog, 'push', '-q', 'origin', 'main');
+	const rewritten = git(blog, 'rev-parse', 'HEAD');
+	assert.notEqual(rewritten, pending);
+	const index = readFileSync(join(blog, '.git/index'));
+	const content = readFileSync(join(blog, 'post.md'));
+	const delivered = await reconcilePublication(pending);
+	assert.equal(delivered.ok, true);
+	assert.equal(delivered.remoteCommit, rewritten);
+	assert.equal(getPendingPublishPush(), '');
+	assert.deepEqual(readFileSync(join(blog, '.git/index')), index);
+	assert.deepEqual(readFileSync(join(blog, 'post.md')), content);
+	assert.equal(git(blog, 'rev-parse', 'HEAD'), rewritten);
+	assert.deepEqual(getStoredPost('post.md'), stored);
+	assert.ok(getStagedPaths().has('post.md'));
+	writeFileSync(join(blog, 'post.md'), content.toString().replace('Approved opening', 'Another queued opening'));
+	git(blog, 'commit', '-qam', 'second pending publication');
+	const second = git(blog, 'rev-parse', 'HEAD');
+	setPendingPublishPush(second);
+	git(peer, 'pull', '--ff-only', '-q');
+	writeFileSync(join(peer, 'post.md'), content.toString().replace('Approved opening', 'Conflicting remote choice'));
+	git(peer, 'commit', '-qam', 'divergent remote');
+	git(peer, 'push', '-q', 'origin', 'main');
+	const divergent = await reconcilePublication(second);
+	assert.equal(divergent.ok, false);
+	assert.deepEqual(divergent.paths, ['post.md']);
+	assert.equal(getPendingPublishPush(), second);
+	assert.deepEqual(getStoredPost('post.md'), stored);
+	await assert.rejects(reconcilePublication(pending), /Pending publication changed/);
+	console.log('publish-recovery.check: ok');
+} finally {
+	rmSync(root, { recursive: true, force: true });
+}
