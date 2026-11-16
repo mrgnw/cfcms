@@ -5,6 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { contentBaseDirectory, databasePath } from './paths';
 import { randomPostId } from '#lib/post-id.js';
 import { isEffort, nextStepLimit, type Triage, type TriageField } from '#lib/types.js';
+import { hashPostContent } from '#lib/post-text.js';
 import { randomUUID } from 'node:crypto';
 
 // Lazy init: opening at module load would run during `vite build` with
@@ -75,6 +76,7 @@ const db = () => {
 		['exported_mtime_ms', 'INTEGER'],
 		['llm_hash', 'TEXT'],
 		['llm_mtime_ms', 'INTEGER'],
+		['llm_version_revision', 'TEXT'],
 		['staged', 'INTEGER'],
 		['id', 'TEXT'],
 		['next_step', 'TEXT'],
@@ -93,6 +95,16 @@ const db = () => {
 		instance.exec('ALTER TABLE versions ADD COLUMN revision TEXT');
 	}
 	instance.exec('UPDATE versions SET revision = lower(hex(randomblob(16))) WHERE revision IS NULL');
+	if (!postColumns.has('llm_version_revision')) {
+		const files = instance.prepare(`
+			SELECT versions.path, frontmatter, body, revision, llm_hash FROM versions
+			JOIN posts ON posts.path = versions.path WHERE writer = 'llm' AND llm_hash IS NOT NULL
+		`).all() as { path: string; frontmatter: string; body: string; revision: string; llm_hash: string }[];
+		const anchor = instance.prepare('UPDATE posts SET llm_version_revision = ? WHERE path = ?');
+		for (const file of files) {
+			if (hashPostContent(file.frontmatter, file.body) === file.llm_hash) anchor.run(file.revision, file.path);
+		}
+	}
 	const revisionColumns = instance.prepare(`SELECT name FROM pragma_table_info('revisions')`).all() as { name: string }[];
 	if (!revisionColumns.some((row) => row.name === 'label')) instance.exec('ALTER TABLE revisions ADD COLUMN label TEXT');
 	backfillPostIds();
@@ -452,25 +464,31 @@ export const changeAssistantDraft = (
 
 export const ingestAssistantFile = (
 	stored: StoredPost,
-	expectedRevision: string | null,
-	file: AssistantDraftText & { hash: string; mtimeMs: number }
+	file: Pick<AssistantDraftText, 'frontmatter' | 'body'> & { hash: string; mtimeMs: number }
 ) => {
 	const connection = db();
 	connection.exec('BEGIN IMMEDIATE');
 	try {
 		const post = getStoredPost(stored.path);
-		if (!post || post.llmHash !== stored.llmHash || post.llmMtimeMs !== stored.llmMtimeMs) {
+		if (!post || post.llmHash !== stored.llmHash || post.llmMtimeMs !== stored.llmMtimeMs ||
+			post.llmVersionRevision !== stored.llmVersionRevision) {
 			connection.exec('ROLLBACK');
 			return;
 		}
 		const draft = getAssistantDraft(stored.path);
-		if (file.hash !== post.llmHash && (draft?.revision ?? null) === expectedRevision) {
+		let fileRevision = post.llmVersionRevision;
+		if (file.hash !== post.llmHash) {
+			const writer = !draft || draft.revision === fileRevision ? 'llm' : 'llm-file';
 			upsertVersion({
-				path: stored.path, writer: 'llm', sessionId: draft?.sessionId ?? 'file',
-				baseHash: file.baseHash, frontmatter: file.frontmatter, body: file.body
+				path: stored.path, writer, sessionId: writer === 'llm' ? draft?.sessionId ?? 'file' : 'file',
+				baseHash: post.hash, frontmatter: file.frontmatter, body: file.body
 			});
+			if (writer === 'llm') {
+				fileRevision = getAssistantDraft(stored.path)!.revision;
+				deleteVersion(stored.path, 'llm-file');
+			}
 		}
-		setLlmState(stored.path, file.hash, file.mtimeMs);
+		setLlmState(stored.path, file.hash, file.mtimeMs, fileRevision);
 		connection.exec('COMMIT');
 	} catch (caught) {
 		connection.exec('ROLLBACK');
@@ -516,6 +534,7 @@ export type StoredPost = {
 	exportedMtimeMs: number | null;
 	llmHash: string | null;
 	llmMtimeMs: number | null;
+	llmVersionRevision: string | null;
 	id: string;
 };
 
@@ -563,7 +582,7 @@ export const appendRevision = (path: string, frontmatter: string, body: string, 
 const storedPostQuery = `
 	SELECT posts.path, revisions.rev, revisions.hash, revisions.frontmatter, revisions.body,
 		revisions.writer, revisions.saved_at, posts.published_hash, posts.exported_hash,
-		posts.exported_mtime_ms, posts.llm_hash, posts.llm_mtime_ms, posts.id
+		posts.exported_mtime_ms, posts.llm_hash, posts.llm_mtime_ms, posts.llm_version_revision, posts.id
 	FROM posts JOIN revisions ON revisions.path = posts.path AND revisions.rev = posts.head_rev
 	WHERE posts.head_rev IS NOT NULL`;
 
@@ -580,6 +599,7 @@ type StoredPostRow = {
 	exported_mtime_ms: number | null;
 	llm_hash: string | null;
 	llm_mtime_ms: number | null;
+	llm_version_revision: string | null;
 	id: string;
 };
 
@@ -596,6 +616,7 @@ const toStoredPost = (row: StoredPostRow): StoredPost => ({
 	exportedMtimeMs: row.exported_mtime_ms,
 	llmHash: row.llm_hash,
 	llmMtimeMs: row.llm_mtime_ms,
+	llmVersionRevision: row.llm_version_revision,
 	id: row.id
 });
 
@@ -618,8 +639,9 @@ export const setExportedState = (path: string, hash: string | null, mtimeMs: num
 	db().prepare('UPDATE posts SET exported_hash = ?, exported_mtime_ms = ? WHERE path = ?').run(hash, mtimeMs, path);
 };
 
-export const setLlmState = (path: string, hash: string, mtimeMs: number) => {
-	db().prepare('UPDATE posts SET llm_hash = ?, llm_mtime_ms = ? WHERE path = ?').run(hash, mtimeMs, path);
+const setLlmState = (path: string, hash: string, mtimeMs: number, versionRevision: string | null) => {
+	db().prepare('UPDATE posts SET llm_hash = ?, llm_mtime_ms = ?, llm_version_revision = ? WHERE path = ?')
+		.run(hash, mtimeMs, versionRevision, path);
 };
 
 export const setStaged = (path: string, staged: boolean) => {

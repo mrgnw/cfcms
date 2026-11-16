@@ -148,14 +148,16 @@ try {
 		syncBuiltinESMExports();
 	}
 	assert.equal(getAssistantDraft(racePost.path)!.body, 'New API suggestion.', 'a delayed file scan cannot overwrite an API update');
+	assert.equal(listVersions(racePost.path).find((version) => version.writer === 'llm-file')?.body, 'Delayed file suggestion.');
 	await listPosts();
 	assert.equal(getAssistantDraft(racePost.path)!.body, 'New API suggestion.', 'the next scan cannot replay the delayed file');
 	writeFileSync(llmFile, '---\ntitle: Race case\n---\n\nA later file edit.\n');
 	utimesSync(llmFile, 2_000_000_003, 2_000_000_003);
 	const beforeFileEdit = getAssistantDraft(racePost.path)!;
 	await listPosts();
-	assert.equal(getAssistantDraft(racePost.path)!.body, 'A later file edit.');
-	assert.notEqual(getAssistantDraft(racePost.path)!.revision, beforeFileEdit.revision);
+	assert.equal(getAssistantDraft(racePost.path)!.body, 'New API suggestion.');
+	assert.equal(getAssistantDraft(racePost.path)!.revision, beforeFileEdit.revision);
+	assert.equal(listVersions(racePost.path).find((version) => version.writer === 'llm-file')?.body, 'A later file edit.');
 	assert.equal(getStoredPost(racePost.path)!.body, racePost.body);
 
 	console.log('content.check: ok');
