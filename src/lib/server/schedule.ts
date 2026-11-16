@@ -95,7 +95,7 @@ const runClaimed = async (schedule: PublishSchedule) => {
 			const failed = result.results.find((target) => !target.ok);
 			finishSchedule(schedule.id, 'running', {
 				state: 'failed',
-				error: `${failed?.name ?? 'Publish'} failed; nothing was published. Fix it, then schedule again.`,
+				error: `${failed?.name === 'build' ? 'Build' : 'Publish'} failed; nothing was published. Fix it, then schedule again.`,
 				output: tail(failed?.output ?? result.push.output)
 			});
 		}

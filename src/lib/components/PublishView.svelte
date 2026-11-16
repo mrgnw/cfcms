@@ -42,6 +42,7 @@
 	let staged = $derived(changes.filter((change) => change.staged));
 	let stageable = $derived(changes.filter((change) => !change.blocked));
 	let canRetryPush = $derived(pendingPush || Boolean(result?.push.output.startsWith('Committed but not pushed')));
+	let pendingSchedule = $derived(schedule?.state === 'pending' ? schedule : null);
 	let scheduleBlockedReason = $derived(
 		canRetryPush
 			? 'Retry the pending publish push before scheduling.'
@@ -108,6 +109,14 @@
 		error = null;
 		result = null;
 		try {
+			if (pendingSchedule && !canRetryPush) {
+				const cancelled = await fetch('/api/publish/schedule', {
+					method: 'DELETE',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ id: pendingSchedule.id })
+				});
+				if (!cancelled.ok) throw new Error((await cancelled.json()).message ?? 'Could not cancel the scheduled publish');
+			}
 			const res = await fetch('/api/publish', { method: 'POST' });
 			const data = await res.json();
 			await refreshAll();
@@ -243,7 +252,11 @@
 			? 'Publishing…'
 			: canRetryPush
 				? 'Retry publish push'
-				: staged.length ? `Publish ${staged.length} staged ${staged.length === 1 ? 'change' : 'changes'}` : 'Nothing staged'}
+				: !staged.length
+					? 'Nothing staged'
+					: pendingSchedule
+						? 'Publish now instead and cancel the schedule'
+						: `Publish ${staged.length} staged ${staged.length === 1 ? 'change' : 'changes'}`}
 	</button>
 
 	<PublishSchedule {schedule} drift={scheduleDrift} stagedCount={staged.length} blockedReason={scheduleBlockedReason} />
