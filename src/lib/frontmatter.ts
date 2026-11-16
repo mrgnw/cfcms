@@ -28,6 +28,13 @@ export const parseYamlScalar = (value: string) => {
 	return trimmed;
 };
 
+export const readFrontmatterValue = (frontmatter: string, key: string) => {
+	const line = frontmatter.split(/\r?\n/).find((item) => item.match(new RegExp(`^${key}:\\s*`)));
+	return line ? parseYamlScalar(line.replace(new RegExp(`^${key}:\\s*`), '')) : '';
+};
+
+export const readBoolean = (frontmatter: string, key: string) => readFrontmatterValue(frontmatter, key) === 'true';
+
 const parseTags = (raw: string): string[] => {
 	const value = raw.startsWith('[') && raw.endsWith(']') ? raw.slice(1, -1) : raw;
 	return value

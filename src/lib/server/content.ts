@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readdir, readFile, stat, unlink } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
-import { parseFrontmatter, parseYamlScalar } from '#lib/frontmatter.js';
+import { parseFrontmatter, parseYamlScalar, readBoolean, readFrontmatterValue } from '#lib/frontmatter.js';
 import { canonicalBody, hashPostContent, splitRawPost } from '#lib/post-text.js';
 import { slugify, svxSlug } from '#lib/svx.js';
 import { classifyLlmDrafts, llmImportPlan, llmOwnerPath, llmUserPath, standaloneLlmFiles, type LlmFile } from '#lib/llm-drafts.js';
@@ -77,16 +77,6 @@ export const getPostFilePath = (postPath: string) => {
 };
 
 export const getPostGitPath = (postPath: string) => normalizePostPath(relative(contentBaseDirectory, getPostFilePath(postPath)));
-
-const readFrontmatterValue = (frontmatter: string, key: string) => {
-	const line = frontmatter.split(/\r?\n/).find((item) => item.match(new RegExp(`^${key}:\\s*`)));
-
-	if (!line) return '';
-
-	return parseYamlScalar(line.replace(new RegExp(`^${key}:\\s*`), ''));
-};
-
-const readBoolean = (frontmatter: string, key: string) => readFrontmatterValue(frontmatter, key) === 'true';
 
 const readTags = (frontmatter: string) => {
 	const raw = readFrontmatterValue(frontmatter, 'tags');
