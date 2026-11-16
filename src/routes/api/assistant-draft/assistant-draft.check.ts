@@ -178,6 +178,22 @@ try {
 	assert.equal(getAssistantDraft(path)!.revision, smaller.revision);
 	await write('PATCH', { revision: smaller.revision, edits: [edit('REMOVE-TWO\n\n')] });
 	assert.ok(getAssistantDraft(path)!.body.length < smaller.body.length);
+
+	const customFrontmatter = 'title: Valid\ncustom:\n  nested: true\nsummary: |\n  Multiple lines\n  stay intact.';
+	await write('PUT', { revision: getAssistantDraft(path)!.revision, baseHash: nextHumanHash,
+		frontmatter: customFrontmatter, body: 'Valid body.' });
+	const valid = getAssistantDraft(path)!;
+	assert.equal(valid.frontmatter, customFrontmatter);
+	for (const invalidFrontmatter of ['title: [', "title: 'unterminated", '- item', 'not a mapping',
+		'---\ntitle: X\n---', 'title: X\n...', 'title: X\ntitle: Y', 'custom: *unknown', 'title: X\u0000']) {
+		await expectStatus(() => write('PUT', { revision: valid.revision, baseHash: nextHumanHash,
+			frontmatter: invalidFrontmatter, body: 'Valid body.' }), 400);
+	}
+	await expectStatus(() => write('PATCH', { revision: valid.revision, edits: [
+		edit('Valid body.', 'This must roll back.'),
+		{ field: 'frontmatter', find: 'title: Valid', replace: 'title: [' }
+	] }), 400);
+	assert.deepEqual(getAssistantDraft(path), valid, 'invalid frontmatter cannot change text or its token');
 } finally {
 	rmSync(root, { recursive: true, force: true });
 }

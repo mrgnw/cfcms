@@ -72,7 +72,8 @@
 		"@voithos-labs/aragonite-slash-commands": "0.11.5",
 		"pele": "^1.6.0",
 		"runed": "^0.37.1",
-		"svelte-dnd-action": "^0.9.78"
+		"svelte-dnd-action": "^0.9.78",
+		"yaml": "2.9.1"
 	},
 	"imports": {
 		"#lib": "./src/lib/index.js",
