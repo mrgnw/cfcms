@@ -12,21 +12,31 @@ type GitResult = {
 
 const outputLimit = 20_000;
 
-export const runGit = (args: string[], timeoutMs?: number): Promise<GitResult> =>
+type GitContext = {
+	cwd?: string;
+	env?: NodeJS.ProcessEnv;
+	input?: string;
+	keepStart?: boolean;
+};
+
+export const runGit = (args: string[], timeoutMs?: number, context: GitContext = {}): Promise<GitResult> =>
 	new Promise((resolve) => {
 		let output = '';
 		const child = spawn('git', args, {
-			cwd: contentBaseDirectory,
-			env: process.env,
+			cwd: context.cwd ?? contentBaseDirectory,
+			env: context.env ?? process.env,
 			timeout: timeoutMs
 		});
 
 		const appendOutput = (chunk: Buffer) => {
-			output = `${output}${chunk.toString()}`.slice(-outputLimit);
+			const combined = `${output}${chunk.toString()}`;
+			output = context.keepStart ? combined.slice(0, outputLimit) : combined.slice(-outputLimit);
 		};
 
 		child.stdout.on('data', appendOutput);
 		child.stderr.on('data', appendOutput);
+		child.stdin.on('error', () => undefined);
+		child.stdin.end(context.input ?? '');
 
 		child.on('close', (status) => {
 			resolve({ ok: status === 0, status, output: child.killed ? `${output}\nGit command timed out.` : output });
