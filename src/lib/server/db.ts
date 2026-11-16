@@ -5,6 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { contentBaseDirectory, databasePath } from './paths';
 import { randomPostId } from '#lib/post-id.js';
 import { isEffort, nextStepLimit, type Triage, type TriageField } from '#lib/types.js';
+import { randomUUID } from 'node:crypto';
 
 // Lazy init: opening at module load would run during `vite build` with
 // build-time cwd/env and poison the db with a wrong-path legacy import.
@@ -87,6 +88,11 @@ const db = () => {
 		'UPDATE posts SET triage_rev = 1 WHERE triage_rev IS NULL AND (next_step IS NOT NULL OR effort IS NOT NULL)'
 	);
 	instance.exec('CREATE UNIQUE INDEX IF NOT EXISTS posts_by_id ON posts(id)');
+	const versionColumns = instance.prepare(`SELECT name FROM pragma_table_info('versions')`).all() as { name: string }[];
+	if (!versionColumns.some((row) => row.name === 'revision')) {
+		instance.exec('ALTER TABLE versions ADD COLUMN revision TEXT');
+	}
+	instance.exec('UPDATE versions SET revision = lower(hex(randomblob(16))) WHERE revision IS NULL');
 	const revisionColumns = instance.prepare(`SELECT name FROM pragma_table_info('revisions')`).all() as { name: string }[];
 	if (!revisionColumns.some((row) => row.name === 'label')) instance.exec('ALTER TABLE revisions ADD COLUMN label TEXT');
 	backfillPostIds();
@@ -346,21 +352,23 @@ export type WriterVersion = {
 	frontmatter: string;
 	body: string;
 	updatedAt: string;
+	revision: string;
 };
 
 const versionWriterLimit = 10;
 
-export const upsertVersion = (version: Omit<WriterVersion, 'updatedAt'>): string => {
+export const upsertVersion = (version: Omit<WriterVersion, 'updatedAt' | 'revision'>): string => {
 	const now = new Date().toISOString();
 	const owner = db().prepare('SELECT session_id FROM versions WHERE path = ? AND writer = ?');
 	const write = db().prepare(`
-		INSERT INTO versions (path, writer, session_id, base_hash, frontmatter, body, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO versions (path, writer, session_id, base_hash, frontmatter, body, updated_at, revision)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(path, writer) DO UPDATE SET
 			base_hash = excluded.base_hash,
 			frontmatter = excluded.frontmatter,
 			body = excluded.body,
-			updated_at = excluded.updated_at
+			updated_at = excluded.updated_at,
+			revision = excluded.revision
 	`);
 
 	for (let attempt = 0; attempt < versionWriterLimit; attempt += 1) {
@@ -369,7 +377,7 @@ export const upsertVersion = (version: Omit<WriterVersion, 'updatedAt'>): string
 
 		if (existing && existing.session_id !== version.sessionId) continue;
 
-		write.run(version.path, writer, version.sessionId, version.baseHash, version.frontmatter, version.body, now);
+		write.run(version.path, writer, version.sessionId, version.baseHash, version.frontmatter, version.body, now, randomUUID());
 		return writer;
 	}
 
@@ -379,7 +387,7 @@ export const upsertVersion = (version: Omit<WriterVersion, 'updatedAt'>): string
 export const listVersions = (path: string): WriterVersion[] => {
 	const rows = db()
 		.prepare(
-			'SELECT path, writer, session_id, base_hash, frontmatter, body, updated_at FROM versions WHERE path = ? ORDER BY writer'
+			'SELECT path, writer, session_id, base_hash, frontmatter, body, updated_at, revision FROM versions WHERE path = ? ORDER BY writer'
 		)
 		.all(path) as {
 		path: string;
@@ -389,6 +397,7 @@ export const listVersions = (path: string): WriterVersion[] => {
 		frontmatter: string;
 		body: string;
 		updated_at: string;
+		revision: string;
 	}[];
 
 	return rows.map((row) => ({
@@ -398,12 +407,47 @@ export const listVersions = (path: string): WriterVersion[] => {
 		baseHash: row.base_hash,
 		frontmatter: row.frontmatter,
 		body: row.body,
-		updatedAt: row.updated_at
+		updatedAt: row.updated_at,
+		revision: row.revision
 	}));
 };
 
 export const deleteVersion = (path: string, writer: string) => {
 	db().prepare('DELETE FROM versions WHERE path = ? AND writer = ?').run(path, writer);
+};
+
+export const getAssistantDraft = (path: string) =>
+	listVersions(path).find((version) => version.writer === 'llm') ?? null;
+
+export type AssistantDraftText = Pick<WriterVersion, 'frontmatter' | 'body' | 'baseHash'>;
+
+export const changeAssistantDraft = (
+	path: string,
+	expectedRevision: string | null,
+	change: (draft: WriterVersion | null, post: StoredPost) => AssistantDraftText
+) => {
+	const connection = db();
+	connection.exec('BEGIN IMMEDIATE');
+	try {
+		const post = getStoredPost(path);
+		if (!post) {
+			connection.exec('ROLLBACK');
+			return { outcome: 'missing' } as const;
+		}
+		const draft = getAssistantDraft(path);
+		if ((draft?.revision ?? null) !== expectedRevision) {
+			connection.exec('ROLLBACK');
+			return { outcome: 'conflict' } as const;
+		}
+		const text = change(draft, post);
+		upsertVersion({ path, writer: 'llm', sessionId: draft?.sessionId ?? 'file', ...text });
+		const saved = getAssistantDraft(path)!;
+		connection.exec('COMMIT');
+		return { outcome: 'write', draft: saved } as const;
+	} catch (caught) {
+		connection.exec('ROLLBACK');
+		throw caught;
+	}
 };
 
 const leaseGraceMs = 40_000;
