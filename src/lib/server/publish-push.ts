@@ -16,7 +16,7 @@ export const assertNoPendingPublishMutation = (operation: string) => {
 	}
 };
 
-const isAncestor = async (ancestor: string, descendant: string) => {
+export const isAncestor = async (ancestor: string, descendant: string) => {
 	const result = await runGit(['merge-base', '--is-ancestor', ancestor, descendant], historyTimeoutMs);
 	if (result.status === 0) return true;
 	if (result.status === 1) return false;
@@ -48,12 +48,16 @@ export const assertPendingPublishTip = async () => {
 	return head;
 };
 
-export const isCommitOnRemoteMain = async (commit: string) => {
+export const getRemoteMain = async () => {
 	assertCheckoutWriteLock();
 	const fetched = await runGit(['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'], 30_000);
 	if (!fetched.ok) throw new Error(`Cannot check whether the commit was pushed: ${fetched.output}`);
-	return isAncestor(commit, 'refs/remotes/origin/main');
+	const remote = await runGit(['rev-parse', 'refs/remotes/origin/main'], 10_000);
+	if (!remote.ok) throw new Error('Cannot read fetched origin/main');
+	return remote.output.trim();
 };
+
+export const isCommitOnRemoteMain = async (commit: string) => isAncestor(commit, await getRemoteMain());
 
 export const reconcilePublishedPush = async () => {
 	const pending = getPendingPublishPush();
