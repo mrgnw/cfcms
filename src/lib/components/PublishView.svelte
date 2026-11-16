@@ -223,7 +223,7 @@
 				{/if}
 			</div>
 		{:else}
-			<p class="empty">Nothing pending — everything live matches the content files.</p>
+			<p class="empty">{pendingPush ? 'The captured publication is waiting for remote delivery.' : 'Nothing pending — everything live matches the content files.'}</p>
 		{/each}
 	</div>
 

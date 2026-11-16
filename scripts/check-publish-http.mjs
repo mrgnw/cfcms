@@ -116,6 +116,7 @@ try {
 	assert.match(patch.headers.get('cache-control'), /\bno-store\b/);
 	assert.match(await patch.text(), /\+later body/);
 	const recoveryPage = await (await request('/publish')).text();
+	assert.match(recoveryPage, /The captured publication is waiting for remote delivery/);
 	assert.match(recoveryPage, /Verify remote delivery/);
 	assert.match(recoveryPage, /Download the captured patch/);
 	git('rebase', 'origin/main');
