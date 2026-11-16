@@ -236,34 +236,36 @@
 		<p class="note">last published {new Date(lastPublishedAt).toLocaleString()}</p>
 	{/if}
 
-	{#if result}
-		<section class="result" class:ok={result.ok} role="status">
-			<h3>{result.ok ? 'Published' : 'Publish errored'}</h3>
-			{#if !result.push.ok && result.lastPublishedAt}
-				<p>Committed but not pushed. Retry the publish push when the remote is available.</p>
-			{/if}
-			{#each result.results as target (target.name)}
-				<details open={!target.ok}>
-					<summary>
-						<span>{target.name}</span>
-						<em>{target.ok ? `ok · ${(target.durationMs / 1000).toFixed(1)}s` : 'failed'}</em>
-					</summary>
-					{#if outputLinks(target.output).length}
-						<div class="links">
-							{#each outputLinks(target.output) as link (link)}
-								<a href={link} target="_blank" rel="noreferrer">{link}</a>
-							{/each}
-						</div>
-					{/if}
-					{#if !target.ok && target.output.trim()}
-						<pre class="output-tail">{target.output.slice(-600)}</pre>
-					{/if}
-				</details>
-			{/each}
-		</section>
-	{:else if error}
-		<p class="error" role="alert">{error}</p>
-	{/if}
+	<div role="status" aria-atomic="true">
+		{#if result}
+			<section class="result" class:ok={result.ok}>
+				<h3>{result.ok ? 'Published' : 'Publish errored'}</h3>
+				{#if !result.push.ok && result.lastPublishedAt}
+					<p>Committed but not pushed. Retry the publish push when the remote is available.</p>
+				{/if}
+				{#each result.results as target (target.name)}
+					<details open={!target.ok}>
+						<summary>
+							<span>{target.name}</span>
+							<em>{target.ok ? `ok · ${(target.durationMs / 1000).toFixed(1)}s` : 'failed'}</em>
+						</summary>
+						{#if outputLinks(target.output).length}
+							<div class="links">
+								{#each outputLinks(target.output) as link (link)}
+									<a href={link} target="_blank" rel="noreferrer">{link}</a>
+								{/each}
+							</div>
+						{/if}
+						{#if !target.ok && target.output.trim()}
+							<pre class="output-tail">{target.output.slice(-600)}</pre>
+						{/if}
+					</details>
+				{/each}
+			</section>
+		{:else if error}
+			<p class="error" role="alert">{error}</p>
+		{/if}
+	</div>
 </div>
 
 <style>
