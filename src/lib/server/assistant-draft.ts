@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { canonicalBody } from '#lib/post-body.js';
 import { normalizeNewlines } from '#lib/save-rules.js';
+import { isMap, parseDocument } from 'yaml';
 import type { AssistantDraftText, WriterVersion } from './db';
 
 export const assistantDraftMaxBytes = 128 * 1024;
@@ -28,11 +29,29 @@ const checkAssistantSize = (text: AssistantDraftText, maximumBytes: number) => {
 	}
 };
 
+const validateAssistantFrontmatter = (frontmatter: string) => {
+	if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\r]/.test(frontmatter) ||
+		/^(?:---|\.\.\.)(?:[ \t]*(?:#.*)?)$/m.test(frontmatter)) {
+		throw error(400, 'frontmatter must contain YAML fields without document delimiters or control characters');
+	}
+	const document = parseDocument(frontmatter, { prettyErrors: false, strict: true, uniqueKeys: true });
+	if (document.errors.length || (document.contents && (!isMap(document.contents) || document.contents.flow))) {
+		throw error(400, 'frontmatter must be a valid YAML block mapping');
+	}
+	try {
+		document.toJS({ maxAliasCount: 32 });
+	} catch {
+		throw error(400, 'frontmatter contains invalid or excessive aliases');
+	}
+};
+
 export const normalizeAssistantText = (text: AssistantDraftText, maximumBytes = assistantDraftMaxBytes): AssistantDraftText => {
 	checkAssistantSize(text, maximumBytes);
+	const frontmatter = normalizeNewlines(text.frontmatter).trim();
+	validateAssistantFrontmatter(frontmatter);
 	return {
 		baseHash: text.baseHash,
-		frontmatter: normalizeNewlines(text.frontmatter).trim(),
+		frontmatter,
 		body: canonicalBody(normalizeNewlines(text.body))
 	};
 };
