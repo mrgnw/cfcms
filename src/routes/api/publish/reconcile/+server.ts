@@ -17,6 +17,13 @@ export const GET: RequestHandler = async ({ url }) => {
 
 export const POST: RequestHandler = async ({ url, request }) => {
 	const expected = url.searchParams.get('commit') ?? '';
+	const delivery = url.searchParams.get('delivered');
+	const remote = url.searchParams.get('remote') ?? '';
+	if (delivery !== null && (!/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(delivery)
+		|| !/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(remote)
+		|| url.searchParams.get('confirm') !== 'reviewed-delivery')) {
+		return Response.json({ ok: false, message: 'Confirm the full reviewed delivery commit and verified remote tip' }, { status: 400 });
+	}
 	if (!/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(expected)) {
 		return Response.json({ ok: false, message: 'The pending publication commit is required' }, { status: 400 });
 	}
@@ -24,7 +31,7 @@ export const POST: RequestHandler = async ({ url, request }) => {
 		return Response.json({ ok: false, message: 'Recovery must be requested from the CMS origin' }, { status: 403 });
 	}
 	try {
-		const report = await reconcilePublication(expected);
+		const report = await reconcilePublication(expected, delivery === null ? undefined : { commit: delivery, remote, confirmed: true });
 		return Response.json(report, { status: report.ok ? 200 : 409 });
 	} catch (caught) {
 		return Response.json({ ok: false, message: caught instanceof Error ? caught.message : 'Recovery verification failed' },
