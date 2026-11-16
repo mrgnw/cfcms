@@ -29,7 +29,7 @@ export const assertPendingPublishTip = async () => {
 	const head = await getHeadCommit();
 	if (head === pending) return head;
 	if (!head || !await isAncestor(pending, head)) {
-		throw new Error('Blog HEAD no longer contains the pending publish; reconcile it before retrying');
+		throw new Error('Blog HEAD no longer contains the pending publish. Use Verify remote delivery on the Publish page after manual Git recovery. If delivery is unverified, download and review the captured patch.');
 	}
 	const range = `${pending}..${head}`;
 	const merges = await runGit(['rev-list', '--max-count=1', '--min-parents=2', range], historyTimeoutMs);
@@ -43,7 +43,7 @@ export const assertPendingPublishTip = async () => {
 		throw new Error(`Cannot inspect pending publish descendants: ${merges.output}${unrelated.output}${nestedBackupPaths.output}`);
 	}
 	if (merges.output.trim() || unrelated.output.trim() || nestedBackupPaths.output.trim()) {
-		throw new Error('Unrelated commits follow the pending publish; refusing to push them automatically');
+		throw new Error('Unrelated commits follow the pending publish; refusing to push them automatically. Use Verify remote delivery on the Publish page after manual Git recovery.');
 	}
 	return head;
 };

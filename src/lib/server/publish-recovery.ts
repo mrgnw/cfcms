@@ -7,10 +7,13 @@ import { getPendingPublishPush, getRemoteMain, isAncestor, setPendingPublishPush
 const commitPattern = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
 const reportKey = 'publishRecoveryMessage';
 
-export const getPublicationRecovery = () => ({
-	pendingCommit: getPendingPublishPush(),
-	message: getMetaValue(reportKey)
-});
+export const getPublicationRecovery = () => {
+	const pending = getPendingPublishPush();
+	return {
+		pendingCommit: pending,
+		message: pending === getMetaValue('publishRecoveryPending') ? getMetaValue(reportKey) : null
+	};
+};
 
 export const reconcilePublication = (expected: string) => withCheckoutLock(async () => {
 	const pending = getPendingPublishPush();
@@ -37,6 +40,7 @@ export const reconcilePublication = (expected: string) => withCheckoutLock(async
 		patchUrl: `/api/publish/reconcile?patch=${pending}`
 	};
 	setMetaValue(reportKey, report.message);
+	setMetaValue('publishRecoveryPending', pending);
 	if (proof.equivalent) setPendingPublishPush(null);
 	return report;
 });

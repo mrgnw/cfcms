@@ -25,7 +25,7 @@ export const getBackupStatus = () => {
 		pendingCommit: pending,
 		lastBackupAt: getMetaValue('lastBackupAt'),
 		error: getMetaValue('lastBackupError'),
-		message: getMetaValue('backupRecoveryMessage'),
+		message: pending === getMetaValue('backupRecoveryPending') ? getMetaValue('backupRecoveryMessage') : null,
 		remoteCommit: pending && pending === getMetaValue('backupRecoveryPending') ? getMetaValue('backupRecoveryRemote') : null
 	};
 };
@@ -161,6 +161,12 @@ const startBackup = (operation: () => Promise<void>) => {
 };
 
 export const runBackup = () => startBackup(backupLockedCheckout);
+
+export const retryPendingBackup = (expected: string) => withCheckoutLock(async () => {
+	if (!expected || expected !== getMetaValue(pendingBackupKey)) throw new CheckoutBusyError('Saved backup changed. Reload before retrying it.');
+	await backupLockedCheckout();
+	return { ok: true, message: 'Saved backup delivery completed.' };
+});
 
 const backupIsDue = () => {
 	if (hasPendingPublishPush()) return false;

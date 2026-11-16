@@ -3,10 +3,13 @@
 	import { resolve } from '$app/paths';
 	import { slide } from 'svelte/transition';
 	import SegmentCard from './SegmentCard.svelte';
+	import RecoveryPanel from './RecoveryPanel.svelte';
 	import type { PendingChange, PublishData } from '#lib/types.js';
 
-	let { changes, lastPublishedAt, pendingPush = false }: {
+	let { changes, lastPublishedAt, pendingPush = false, publicationRecovery, backupStatus }: {
 		changes: PendingChange[]; lastPublishedAt: string | null; pendingPush?: boolean;
+		publicationRecovery?: { pendingCommit: string | null; message: string | null };
+		backupStatus?: { pendingCommit: string | null; error: string | null; message: string | null; remoteCommit: string | null };
 	} = $props();
 
 	let publishing = $state(false);
@@ -234,6 +237,10 @@
 
 	{#if lastPublishedAt}
 		<p class="note">last published {new Date(lastPublishedAt).toLocaleString()}</p>
+	{/if}
+	{#if publicationRecovery && backupStatus}
+		<RecoveryPanel publication={publicationRecovery} backup={backupStatus} disabled={publishing}
+			onPublicationVerified={() => { result = null; error = null; }} />
 	{/if}
 
 	<div role="status" aria-atomic="true">
