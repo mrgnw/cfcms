@@ -11,7 +11,7 @@ import { backupLockedCheckout } from './backup';
 import { withCheckoutLock } from './checkout-lock';
 import { getPostFilePath, getPostGitPath, initializeContentLocked, listPostsLocked, type Post } from './content';
 import {
-	clearStaged, getLastPublishedAt, getPublishedPosts, getRevisionByHash,
+	cancelAllPending, clearStaged, getLastPublishedAt, getPublishedPosts, getRevisionByHash,
 	getStagedRevisions, listStoredPosts, setExportedState
 } from './db';
 import { recordPublishedState } from './deploy-state';
@@ -206,7 +206,12 @@ export const pinMismatch = (pins: PinnedRevision[], going: PinnedRevision[], edi
 	].filter(Boolean).join('; ');
 };
 
-export const runPublish = () => withCheckoutLock(() => publishLocked());
+// A manual publish ships the staged batch now, so a pending schedule for it is cancelled in the same lock.
+export const runPublish = () => withCheckoutLock(async () => {
+	const result = await publishLocked();
+	if (result.commit) cancelAllPending();
+	return result;
+});
 
 // pins: publish only if the staged batch is exactly these revisions; anything else throws PinnedBatchError before writing.
 export const publishLocked = async (pins?: PinnedRevision[]) => {

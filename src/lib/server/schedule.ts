@@ -2,7 +2,7 @@ import { isPending, statusOf, type PublishSchedule, type SchedulePin } from '#li
 import { CheckoutBusyError, withCheckoutLock } from './checkout-lock';
 import { listPosts, type Post } from './content';
 import {
-	cancelPending, claimPending, finishSchedule, getSchedule, getStagedRevisions, insertSchedule,
+	cancelPending, claimPending, failMissedPending, finishSchedule, getSchedule, getStagedRevisions, insertSchedule,
 	listActiveSchedules, reschedulePending
 } from './db';
 import { pinMismatch, publishLocked } from './publish';
@@ -117,13 +117,10 @@ const runDueLocked = async (now: Date) => {
 	const due = listActiveSchedules().find((schedule) => isDue(schedule, now));
 	if (!due) return null;
 	if (now.getTime() - Date.parse(due.dueAt) > missedGraceMs) {
-		finishSchedule(due.id, 'pending', {
-			state: 'failed',
-			error: `Missed: the CMS was not running between ${due.dueAt} and ${now.toISOString()}. Nothing was published; schedule again or publish now.`
-		});
-		return getSchedule(due.id);
+		const error = `Missed: the CMS was not running between ${due.dueAt} and ${now.toISOString()}. Nothing was published; schedule again or publish now.`;
+		return failMissedPending(due.id, due.dueAt, error) ? getSchedule(due.id) : null;
 	}
-	if (!claimPending(due.id, now.toISOString())) return null;
+	if (!claimPending(due.id, due.dueAt, now.toISOString())) return null;
 	await runClaimed(due);
 	return getSchedule(due.id);
 };
