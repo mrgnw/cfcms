@@ -63,6 +63,23 @@ const db = () => {
 			PRIMARY KEY (path, rev)
 		);
 		CREATE INDEX IF NOT EXISTS revisions_by_hash ON revisions(path, hash);
+
+		CREATE TABLE IF NOT EXISTS publish_schedules (
+			id INTEGER PRIMARY KEY,
+			due_at TEXT NOT NULL,
+			time_zone TEXT NOT NULL,
+			pins TEXT NOT NULL,
+			state TEXT NOT NULL CHECK (state IN ('pending', 'running', 'published', 'failed', 'cancelled')),
+			created_at TEXT NOT NULL,
+			started_at TEXT,
+			finished_at TEXT,
+			commit_sha TEXT,
+			pushed INTEGER,
+			error TEXT,
+			output TEXT
+		);
+		CREATE UNIQUE INDEX IF NOT EXISTS one_active_publish_schedule
+			ON publish_schedules((state IN ('pending', 'running'))) WHERE state IN ('pending', 'running');
 	`);
 
 	const postColumns = new Set(
@@ -722,3 +739,95 @@ export const labelRevision = (path: string, rev: number, label: string | null) =
 	const result = db().prepare('UPDATE revisions SET label = ? WHERE path = ? AND rev = ?').run(label, path, rev);
 	return result.changes > 0;
 };
+
+export type SchedulePin = { path: string; hash: string; title: string };
+export type ScheduleState = 'pending' | 'running' | 'published' | 'failed' | 'cancelled';
+export type PublishSchedule = {
+	id: number;
+	dueAt: string;
+	timeZone: string;
+	pins: SchedulePin[];
+	state: ScheduleState;
+	createdAt: string;
+	startedAt: string | null;
+	finishedAt: string | null;
+	commit: string | null;
+	pushed: boolean | null;
+	error: string | null;
+	output: string | null;
+};
+
+type ScheduleRow = {
+	id: number; due_at: string; time_zone: string; pins: string; state: ScheduleState; created_at: string;
+	started_at: string | null; finished_at: string | null; commit_sha: string | null; pushed: number | null;
+	error: string | null; output: string | null;
+};
+
+const scheduleFromRow = (row: ScheduleRow): PublishSchedule => ({
+	id: row.id,
+	dueAt: row.due_at,
+	timeZone: row.time_zone,
+	pins: JSON.parse(row.pins) as SchedulePin[],
+	state: row.state,
+	createdAt: row.created_at,
+	startedAt: row.started_at,
+	finishedAt: row.finished_at,
+	commit: row.commit_sha,
+	pushed: row.pushed === null ? null : row.pushed === 1,
+	error: row.error,
+	output: row.output
+});
+
+export const getSchedule = (id: number): PublishSchedule | null => {
+	const row = db().prepare('SELECT * FROM publish_schedules WHERE id = ?').get(id) as ScheduleRow | undefined;
+	return row ? scheduleFromRow(row) : null;
+};
+
+export const getLatestSchedule = (): PublishSchedule | null => {
+	const row = db().prepare(
+		"SELECT * FROM publish_schedules WHERE state != 'cancelled' ORDER BY id DESC LIMIT 1"
+	).get() as ScheduleRow | undefined;
+	return row ? scheduleFromRow(row) : null;
+};
+
+export const listActiveSchedules = (): PublishSchedule[] =>
+	(db().prepare("SELECT * FROM publish_schedules WHERE state IN ('pending', 'running') ORDER BY id").all() as ScheduleRow[])
+		.map(scheduleFromRow);
+
+export const insertSchedule = (dueAt: string, timeZone: string, pins: SchedulePin[]): number | null => {
+	const result = db().prepare(`
+		INSERT INTO publish_schedules (due_at, time_zone, pins, state, created_at)
+		VALUES (?, ?, ?, 'pending', ?) ON CONFLICT DO NOTHING
+	`).run(dueAt, timeZone, JSON.stringify(pins), new Date().toISOString());
+	return result.changes === 1 ? Number(result.lastInsertRowid) : null;
+};
+
+export const reschedulePending = (id: number, dueAt: string, timeZone: string) =>
+	db().prepare("UPDATE publish_schedules SET due_at = ?, time_zone = ? WHERE id = ? AND state = 'pending'")
+		.run(dueAt, timeZone, id).changes === 1;
+
+export const cancelPending = (id: number) =>
+	db().prepare("UPDATE publish_schedules SET state = 'cancelled', finished_at = ? WHERE id = ? AND state = 'pending'")
+		.run(new Date().toISOString(), id).changes === 1;
+
+export const claimPending = (id: number, startedAt: string) =>
+	db().prepare("UPDATE publish_schedules SET state = 'running', started_at = ? WHERE id = ? AND state = 'pending'")
+		.run(startedAt, id).changes === 1;
+
+export const finishSchedule = (
+	id: number,
+	from: 'pending' | 'running',
+	outcome: { state: 'published' | 'failed'; commit?: string | null; pushed?: boolean | null; error?: string | null; output?: string | null }
+) => db().prepare(`
+	UPDATE publish_schedules SET state = ?, finished_at = ?, commit_sha = ?, pushed = ?, error = ?, output = ?
+	WHERE id = ? AND state = ?
+`).run(
+	outcome.state,
+	new Date().toISOString(),
+	outcome.commit ?? null,
+	outcome.pushed == null ? null : outcome.pushed ? 1 : 0,
+	outcome.error ?? null,
+	outcome.output ?? null,
+	id,
+	from
+).changes === 1;

@@ -64,6 +64,7 @@ export type PublishData = {
 	liveCount: number;
 	lastPublishedAt: string | null;
 	runAt: string;
+	commit?: string;
 	editedAfterStaging?: string[];
 	push: { ok: boolean; status: number | null; output: string };
 	results: PublishResult[];

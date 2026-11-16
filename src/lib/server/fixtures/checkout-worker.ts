@@ -6,6 +6,9 @@ if (mode === 'publish') {
 	const { POST } = await import('../../../routes/api/publish/+server.ts');
 	const response = await POST();
 	process.send?.({ ok: response.ok, status: response.status, data: await response.json() });
+} else if (mode === 'schedule-tick') {
+	const { runDueSchedule } = await import('../schedule.ts');
+	process.send?.({ schedule: await runDueSchedule(new Date(process.argv[3])) });
 } else if (mode === 'purge' || mode === 'baseline' || mode === 'import') {
 	try {
 		if (mode === 'purge') {

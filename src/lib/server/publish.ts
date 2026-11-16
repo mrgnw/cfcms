@@ -187,9 +187,35 @@ const pushPublishedCommit = async () => {
 	};
 };
 
-export const runPublish = () => withCheckoutLock(async () => {
+export class PinnedBatchError extends Error {}
+
+export type PinnedRevision = { path: string; hash: string };
+
+export const pinMismatch = (pins: PinnedRevision[], going: PinnedRevision[], editedAfterStaging: string[]) => {
+	const pinned = new Map(pins.map((pin) => [pin.path, pin.hash]));
+	const goingPaths = new Set(going.map((post) => post.path));
+	const changed = going.filter((post) => pinned.has(post.path) && pinned.get(post.path) !== post.hash);
+	const missing = pins.filter((pin) => !goingPaths.has(pin.path));
+	const added = going.filter((post) => !pinned.has(post.path));
+	if (!changed.length && !missing.length && !added.length) return null;
+	return [
+		changed.length ? `restaged with different text: ${changed.map((post) => post.path).join(', ')}` : '',
+		missing.length ? `no longer staged at the scheduled revision: ${missing.map((pin) => pin.path).join(', ')}` : '',
+		added.length ? `staged after scheduling: ${added.map((post) => post.path).join(', ')}` : '',
+		editedAfterStaging.length ? `edited after staging: ${editedAfterStaging.join(', ')}` : ''
+	].filter(Boolean).join('; ');
+};
+
+export const runPublish = () => withCheckoutLock(() => publishLocked());
+
+// pins: publish only if the staged batch is exactly these revisions; anything else throws PinnedBatchError before writing.
+export const publishLocked = async (pins?: PinnedRevision[]) => {
 	const branchError = mainBranchError(await getCurrentBranch());
 	if (branchError) throw new Error(branchError);
+
+	if (pins && getPendingPublishPush()) {
+		throw new PinnedBatchError('An earlier publish push is pending; retry it from the Publish view, then reschedule');
+	}
 
 	if (getPendingPublishPush()) {
 		const approvals = getStagedRevisions();
@@ -222,6 +248,9 @@ export const runPublish = () => withCheckoutLock(async () => {
 		.filter((post) => approvals.has(post.path) && approvals.get(post.path) !== post.contentHash)
 		.map((post) => post.path);
 	const going = posts.filter((post) => isPending(statusOf(post)) && staged.has(post.path));
+	const goingRevisions = going.map((post) => ({ path: post.path, hash: post.contentHash }));
+	const mismatch = pins ? pinMismatch(pins, goingRevisions, editedAfterStaging) : null;
+	if (mismatch) throw new PinnedBatchError(`The staged batch changed since scheduling (${mismatch}); nothing was published`);
 	if (going.length === 0) {
 		if (editedAfterStaging.length) throw new PublishConflictError(editedAfterStaging);
 		throw new Error('Nothing staged for publish');
@@ -270,6 +299,7 @@ export const runPublish = () => withCheckoutLock(async () => {
 			stagedCount: going.length,
 			liveCount: liveSet.length,
 			lastPublishedAt: deployment.lastPublishedAt,
+			commit: head,
 			runAt,
 			editedAfterStaging,
 			push,
@@ -279,4 +309,4 @@ export const runPublish = () => withCheckoutLock(async () => {
 		if (!committed) await snapshot.restore();
 		await snapshot.discard();
 	}
-});
+};
