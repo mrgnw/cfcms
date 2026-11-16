@@ -1,9 +1,9 @@
-import { isPending, statusOf } from '#lib/types.js';
+import { isPending, statusOf, type PublishSchedule, type SchedulePin } from '#lib/types.js';
 import { CheckoutBusyError, withCheckoutLock } from './checkout-lock';
 import { listPosts, type Post } from './content';
 import {
 	cancelPending, claimPending, finishSchedule, getSchedule, getStagedRevisions, insertSchedule,
-	listActiveSchedules, reschedulePending, type PublishSchedule, type SchedulePin
+	listActiveSchedules, reschedulePending
 } from './db';
 import { pinMismatch, publishLocked } from './publish';
 import { getPendingPublishPush } from './publish-push';

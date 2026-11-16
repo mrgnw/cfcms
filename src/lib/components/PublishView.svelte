@@ -2,14 +2,18 @@
 	import { refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { slide } from 'svelte/transition';
+	import PublishSchedule from './PublishSchedule.svelte';
 	import SegmentCard from './SegmentCard.svelte';
 	import RecoveryPanel from './RecoveryPanel.svelte';
-	import type { PendingChange, PublicationRecoveryPreview, PublishData } from '#lib/types.js';
+	import type { PendingChange, PublicationRecoveryPreview, PublishData, PublishSchedule as Schedule } from '#lib/types.js';
 
-	let { changes, lastPublishedAt, pendingPush = false, publicationRecovery, backupStatus }: {
+	let {
+		changes, lastPublishedAt, pendingPush = false, publicationRecovery, backupStatus, schedule = null, scheduleDrift = null
+	}: {
 		changes: PendingChange[]; lastPublishedAt: string | null; pendingPush?: boolean;
 		publicationRecovery?: PublicationRecoveryPreview;
 		backupStatus?: { pendingCommit: string | null; error: string | null; message: string | null; remoteCommit: string | null };
+		schedule?: Schedule | null; scheduleDrift?: string | null;
 	} = $props();
 
 	let publishing = $state(false);
@@ -38,6 +42,13 @@
 	let staged = $derived(changes.filter((change) => change.staged));
 	let stageable = $derived(changes.filter((change) => !change.blocked));
 	let canRetryPush = $derived(pendingPush || Boolean(result?.push.output.startsWith('Committed but not pushed')));
+	let scheduleBlockedReason = $derived(
+		canRetryPush
+			? 'Retry the pending publish push before scheduling.'
+			: changes.some((change) => change.editedAfterStaging)
+				? 'Restage or unstage posts edited after staging before scheduling.'
+				: !staged.length ? 'Stage changes to schedule them.' : null
+	);
 
 	let totals = $derived({
 		added: changes.reduce((sum, change) => sum + (change.added ?? 0), 0),
@@ -234,6 +245,8 @@
 				? 'Retry publish push'
 				: staged.length ? `Publish ${staged.length} staged ${staged.length === 1 ? 'change' : 'changes'}` : 'Nothing staged'}
 	</button>
+
+	<PublishSchedule {schedule} drift={scheduleDrift} stagedCount={staged.length} blockedReason={scheduleBlockedReason} />
 
 	{#if lastPublishedAt}
 		<p class="note">last publication committed {new Date(lastPublishedAt).toLocaleString()}</p>
