@@ -7,6 +7,7 @@ import {
 } from './db';
 import { pinMismatch, publishLocked } from './publish';
 import { getPendingPublishPush } from './publish-push';
+import { getPublicationReconciliation } from './publish-protection';
 import { databasePath } from './paths';
 import { existsSync } from 'node:fs';
 
@@ -50,6 +51,7 @@ export const parseScheduleTime = (dueAt: unknown, timeZone: unknown, now: Date) 
 export const createSchedule = (dueAt: unknown, timeZone: unknown, now = new Date()) => withCheckoutLock(async () => {
 	const time = parseScheduleTime(dueAt, timeZone, now);
 	if (getPendingPublishPush()) throw new ScheduleRequestError('Retry the pending publish push before scheduling');
+	if (getPublicationReconciliation()) throw new ScheduleRequestError('Finish the publish recovery review before scheduling');
 	await initializeContentLocked();
 	const posts = await listPostsLocked();
 	const approvals = getStagedRevisions();

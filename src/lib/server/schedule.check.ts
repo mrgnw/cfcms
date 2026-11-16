@@ -30,7 +30,7 @@ process.chdir(root);
 const schedule = await import('../../routes/api/publish/schedule/+server.ts');
 const { createPost, getPost, savePost } = await import('./content.ts');
 const {
-	claimPending, failMissedPending, getLatestSchedule, getSchedule, insertSchedule, listActiveSchedules, setStaged
+	claimPending, failMissedPending, getLatestSchedule, getSchedule, insertSchedule, listActiveSchedules, setMetaValue, setStaged
 } = await import('./db.ts');
 const { POST: publishNow } = await import('../../routes/api/publish/+server.ts');
 const { describeScheduleDrift, missedGraceMs, runDueSchedule } = await import('./schedule.ts');
@@ -139,6 +139,18 @@ try {
 	assert.equal(getSchedule(crashedId)?.state, 'failed');
 	assert.match(getSchedule(crashedId)?.error ?? '', /^Interrupted/);
 	assert.equal(publishCommits(), 1, 'an interrupted run is never retried automatically');
+
+	setMetaValue('publishRecoveryReconciliation', '{"invalid": true}');
+	const gated = await call('POST', { dueAt: new Date(Date.now() + minute).toISOString(), timeZone });
+	assert.equal(gated.status, 409, 'no scheduling while publish recovery needs review');
+	assert.match(gated.data.message, /recovery review/);
+	const gatedId = insertSchedule(new Date(Date.now() + minute).toISOString(), timeZone, [{ path: pinned.path, hash: edited.post.contentHash, title: 'Pinned' }]);
+	assert.ok(gatedId);
+	const gatedRun = await runDueSchedule(new Date(Date.now() + 2 * minute));
+	assert.equal(gatedRun?.state, 'failed');
+	assert.match(gatedRun?.error ?? '', /recovery needs your review/);
+	assert.equal(publishCommits(), 1, 'an unattended run never publishes through a recovery gate');
+	setMetaValue('publishRecoveryReconciliation', '');
 
 	const recovered = (await call('POST', { dueAt: new Date(Date.now() + minute).toISOString(), timeZone })).data.schedule;
 	const finished = await runDueSchedule(new Date(Date.parse(recovered.dueAt) + 1_000));

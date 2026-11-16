@@ -46,9 +46,11 @@
 	let scheduleBlockedReason = $derived(
 		canRetryPush
 			? 'Retry the pending publish push before scheduling.'
-			: changes.some((change) => change.editedAfterStaging)
-				? 'Restage or unstage posts edited after staging before scheduling.'
-				: !staged.length ? 'Stage changes to schedule them.' : null
+			: publicationRecovery?.reconciliation
+				? 'Finish the publish recovery review before scheduling.'
+				: changes.some((change) => change.editedAfterStaging)
+					? 'Restage or unstage posts edited after staging before scheduling.'
+					: !staged.length ? 'Stage changes to schedule them.' : null
 	);
 
 	let totals = $derived({
