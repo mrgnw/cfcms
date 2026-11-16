@@ -14,7 +14,7 @@ import {
 	setTriageField,
 	upsertVersion
 } from '#lib/server/db.js';
-import { commitPost } from '#lib/server/git.js';
+import { CheckoutBusyError } from '#lib/server/checkout-lock.js';
 import { hasSiteVersion, shipsHeadText } from '#lib/server/pending.js';
 import { isBlankDraft, setDeleteFlag } from '#lib/frontmatter.js';
 import { isValidWriter, normalizeNewlines } from '#lib/save-rules.js';
@@ -279,8 +279,12 @@ export const actions = {
 
 		if (!path) return fail(400, { message: 'Post path is required' });
 
-		const hadFile = await purgePost(path);
-		if (hadFile) await commitPost(path, 'delete');
+		try {
+			await purgePost(path);
+		} catch (caught) {
+			if (caught instanceof CheckoutBusyError) return fail(409, { message: caught.message });
+			throw caught;
+		}
 		return { purged: path };
 	}
 } satisfies Actions;

@@ -3,8 +3,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { runGit } from './git';
 import { contentBaseDirectory } from './paths';
+import { assertCheckoutWriteLock } from './checkout-lock';
 
 export const snapshotPublishTree = async (paths: string[]) => {
+	assertCheckoutWriteLock();
 	const index = await runGit(['rev-parse', '--git-path', 'index']);
 	if (!index.ok) throw new Error(`Cannot locate Git index: ${index.output}`);
 	const directory = await mkdtemp(join(tmpdir(), 'cms-publish-snapshot-'));

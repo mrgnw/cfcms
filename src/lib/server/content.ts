@@ -24,8 +24,14 @@ import {
 } from './db';
 import { getDeployStatus, readDeployState, type DeployState, type DeployStatus } from './deploy-state';
 import type { Effort, Triage } from '#lib/types.js';
-import { ensureCorpusImported } from './import-corpus';
-import { ensureSiteBaseRepaired, ensureSvxBaseline } from './import-svx';
+import { ensureCorpusImported, ensureCorpusImportedLocked } from './import-corpus';
+import {
+	ensureSiteBaseRepaired, ensureSiteBaseRepairedLocked, ensureSvxBaseline, ensureSvxBaselineLocked
+} from './import-svx';
+import {
+	assertCheckoutReadLock, CheckoutBusyError, withCheckoutLock, withCheckoutReadLock
+} from './checkout-lock';
+import { commitPaths } from './git';
 import { contentBaseDirectory, contentDirectory } from './paths';
 import { decideSave, normalizeNewlines, type SaveDecision } from '#lib/save-rules.js';
 
@@ -264,10 +270,39 @@ const scanContentDir = async (): Promise<string[]> => {
 	return files;
 };
 
+export const initializeContentLocked = async () => {
+	await ensureCorpusImportedLocked();
+	await ensureSvxBaselineLocked();
+	await ensureSiteBaseRepairedLocked();
+};
+
 export const listPosts = async () => {
 	await ensureCorpusImported();
 	await ensureSvxBaseline();
 	await ensureSiteBaseRepaired();
+	try {
+		return await withCheckoutReadLock(listPostsLocked);
+	} catch (caught) {
+		if (!(caught instanceof CheckoutBusyError)) throw caught;
+		return listPostsFromStore();
+	}
+};
+
+const sortPosts = (posts: Post[]) => posts.sort((first, second) => {
+	const firstDate = first.date || first.updatedAt;
+	const secondDate = second.date || second.updatedAt;
+	return secondDate.localeCompare(firstDate);
+});
+
+export const listPostsFromStore = async () => {
+	const deployState = await readDeployState();
+	const order = getEditingOrder();
+	const triage = getTriage();
+	return sortPosts(listStoredPosts().map((stored) => postFromStored(stored, deployState, order, triage)));
+};
+
+export const listPostsLocked = async () => {
+	assertCheckoutReadLock();
 	const files = await scanContentDir();
 	await autoImportLlmDrafts(files);
 	const deployState = await readDeployState();
@@ -286,11 +321,7 @@ export const listPosts = async () => {
 		posts = posts.map((post) => ({ ...post, editingOrder: order.get(post.path) ?? null }));
 	}
 
-	return posts.sort((first, second) => {
-		const firstDate = first.date || first.updatedAt;
-		const secondDate = second.date || second.updatedAt;
-		return secondDate.localeCompare(firstDate);
-	});
+	return sortPosts(posts);
 };
 
 export const postsRev = (posts: PostSummary[]) =>
@@ -436,24 +467,34 @@ const autoImportLlmDrafts = async (files: string[]) => {
 
 export const importAllLlmDrafts = async () => {
 	await ensureCorpusImported();
-	const files = await scanContentDir();
-	const standalone = standaloneLlmFiles(await listLlmFiles(files), listStoredPosts().map((post) => post.path));
-	return importLlmFiles(standalone);
+	return withCheckoutReadLock(async () => {
+		const files = await scanContentDir();
+		const standalone = standaloneLlmFiles(await listLlmFiles(files), listStoredPosts().map((post) => post.path));
+		return importLlmFiles(standalone);
+	});
 };
 
 export const listLlmDrafts = async () => {
 	await ensureCorpusImported();
-	const files = await scanContentDir();
-	const drafts = classifyLlmDrafts(await listLlmFiles(files), listStoredPosts().map((post) => post.path));
-	return drafts.sort((first, second) => first.path.localeCompare(second.path));
+	return withCheckoutReadLock(async () => {
+		const files = await scanContentDir();
+		const drafts = classifyLlmDrafts(await listLlmFiles(files), listStoredPosts().map((post) => post.path));
+		return drafts.sort((first, second) => first.path.localeCompare(second.path));
+	});
 };
 
-export const purgePost = async (postPath: string) => {
-	deletePostRows(postPath);
+export const purgePost = (postPath: string) => withCheckoutLock(async () => {
+	let hadFile = true;
 	try {
 		await unlink(getPostFilePath(postPath));
-		return true;
-	} catch {
-		return false;
+	} catch (caught) {
+		if (!(caught instanceof Error) || !('code' in caught) || caught.code !== 'ENOENT') throw caught;
+		hadFile = false;
 	}
-};
+	if (hadFile) {
+		const commit = await commitPaths([getPostGitPath(postPath)], `cms: delete ${postPath}`);
+		if (!commit.ok) throw new Error(`Purge commit failed: ${commit.output}`);
+	}
+	deletePostRows(postPath);
+	return hadFile;
+});

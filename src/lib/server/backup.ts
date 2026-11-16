@@ -3,13 +3,14 @@ import { dirname, resolve } from 'node:path';
 import { getMetaValue, setMetaValue, vacuumInto } from './db';
 import { commitPaths, pushContent } from './git';
 import { contentBaseDirectory } from './paths';
-import { CheckoutBusyError, withCheckoutLock } from './checkout-lock';
+import { assertCheckoutWriteLock, CheckoutBusyError, withCheckoutLock } from './checkout-lock';
 import { assertPendingPublishTip, setPendingPublishPush } from './publish-push';
 
 const backupRelativePath = '.cms/cms-backup.db';
 const dailyMs = 24 * 60 * 60 * 1000;
 
 export const backupLockedCheckout = async () => {
+	assertCheckoutWriteLock();
 	await assertPendingPublishTip();
 	const target = resolve(contentBaseDirectory, backupRelativePath);
 	const temp = `${target}.tmp`;

@@ -1,7 +1,7 @@
-import { listPosts } from '#lib/server/content.js';
+import { listPosts, listPostsFromStore } from '#lib/server/content.js';
 import { getPublishedPosts, getRevisionByHash, getStagedRevisions, listVersions } from '#lib/server/db.js';
-import { CheckoutBusyError, withCheckoutLock } from '#lib/server/checkout-lock.js';
-import { syncSiteText } from '#lib/server/site-text.js';
+import { CheckoutBusyError, withCheckoutReadLock } from '#lib/server/checkout-lock.js';
+import { syncSiteTextLocked } from '#lib/server/site-text.js';
 import { diffSegments, lineDiffCounts } from '#lib/segment-diff.js';
 import { isPending, statusOf } from '#lib/types.js';
 
@@ -12,9 +12,9 @@ export const hasSiteVersion = (path: string) => listVersions(path).some((version
 export const getPendingChanges = async (posts: Awaited<ReturnType<typeof listPosts>>) => {
 	// llm drafts are a writing tool; they never publish, so they never pend
 	try {
-		posts = await withCheckoutLock(async () => {
-			await syncSiteText();
-			return listPosts();
+		posts = await withCheckoutReadLock(async () => {
+			await syncSiteTextLocked();
+			return listPostsFromStore();
 		});
 	} catch (caught) {
 		if (!(caught instanceof CheckoutBusyError)) throw caught;

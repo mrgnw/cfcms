@@ -9,7 +9,7 @@ import { mkdir, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { backupLockedCheckout } from './backup';
 import { withCheckoutLock } from './checkout-lock';
-import { getPostFilePath, getPostGitPath, listPosts, type Post } from './content';
+import { getPostFilePath, getPostGitPath, initializeContentLocked, listPostsLocked, type Post } from './content';
 import {
 	clearStaged, getLastPublishedAt, getPublishedPosts, getRevisionByHash,
 	getStagedRevisions, setExportedState
@@ -21,7 +21,7 @@ import { snapshotPublishTree } from './publish-snapshot';
 import {
 	assertPendingPublishTip, getPendingPublishPush, reconcilePublishedPush, setPendingPublishPush
 } from './publish-push';
-import { syncSiteText } from './site-text';
+import { syncSiteTextLocked } from './site-text';
 
 const svxGitDirectory = 'src/posts';
 // The blog build vendors icons used by posts here on first use (remark-icons.js in the blog repo).
@@ -186,8 +186,9 @@ export const runPublish = () => withCheckoutLock(async () => {
 	const branchError = mainBranchError(await getCurrentBranch());
 	if (branchError) throw new Error(branchError);
 
-	await syncSiteText();
-	const posts = await listPosts();
+	await initializeContentLocked();
+	await syncSiteTextLocked();
+	const posts = await listPostsLocked();
 	const published = getPublishedPosts();
 	const approvals = getStagedRevisions();
 	const staged = new Set(posts.filter((post) => approvals.get(post.path) === post.contentHash).map((post) => post.path));

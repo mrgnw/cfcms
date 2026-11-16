@@ -13,6 +13,7 @@ import {
 	upsertVersion
 } from './db';
 import { svxDirectory } from './paths';
+import { assertCheckoutReadLock } from './checkout-lock';
 
 export type FastForward = 'head' | 'site' | 'conflict';
 
@@ -42,7 +43,8 @@ const readSiteBody = async (slug: string) => {
 	return raw === null ? null : canonicalBody(splitRawPost(normalizeNewlines(raw)).body);
 };
 
-export const syncSiteText = async () => {
+export const syncSiteTextLocked = async () => {
+	assertCheckoutReadLock();
 	for (const [path, published] of Object.entries(getPublishedPosts())) {
 		if (!published.slug) continue;
 		const publishedRevision = getRevisionByHash(path, published.hash);

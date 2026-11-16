@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, fork } from 'node:child_process';
+import { once } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -28,10 +29,10 @@ process.env.BLOG_BUILD_COMMAND = `"${process.execPath}" "${fileURLToPath(new URL
 process.chdir(root);
 
 const { POST } = await import('../../routes/api/publish/+server.ts');
-const { createPost, getPost, listPosts, savePost } = await import('./content.ts');
-const { getPublishedPosts, getStagedPaths, setStaged, getStagedRevisions } = await import('./db.ts');
+const { createPost, getPost, listPosts, purgePost, savePost } = await import('./content.ts');
+const { getPublishedPosts, getStagedPaths, setStaged, getStagedRevisions, listVersions } = await import('./db.ts');
 const { runBackup } = await import('./backup.ts');
-const { CheckoutBusyError } = await import('./checkout-lock.ts');
+const { CheckoutBusyError, withCheckoutReadLock } = await import('./checkout-lock.ts');
 const { getPendingChanges } = await import('./pending.ts');
 const { hasPendingPublishPush } = await import('./publish.ts');
 const { setPendingPublishPush } = await import('./publish-push.ts');
@@ -41,17 +42,50 @@ const publish = async () => {
 	return { status: response.status, data: await response.json() };
 };
 
-try {
-	await listPosts();
-	const first = await createPost(fm('First'), 'Approved first body.', 'cms');
-	setStaged(first.path, true);
-	process.env.CMS_CHECK_BUILD_MODE = 'wait';
-	const active = publish();
+const waitForBuild = async () => {
 	const deadline = Date.now() + 10_000;
 	while (!existsSync(join(blog, 'build.started'))) {
 		if (Date.now() > deadline) assert.fail('publish did not reach the build');
 		await setTimeout(10);
 	}
+};
+
+const runContender = async (mode: string, database: string, path = '') => {
+	const child = fork(new URL('./fixtures/checkout-worker.ts', import.meta.url), [mode, path], {
+		env: { ...process.env, BLOG_CMS_DB: database },
+		execArgv: ['--disable-warning=ExperimentalWarning', '--import', new URL('../../../scripts/check-hooks.ts', import.meta.url).href],
+		stdio: ['ignore', 'pipe', 'pipe', 'ipc']
+	});
+	const exited = once(child, 'exit');
+	try {
+		const [message] = await once(child, 'message', { signal: AbortSignal.timeout(10_000) });
+		await exited;
+		return message;
+	} finally {
+		if (child.exitCode === null) {
+			child.kill('SIGKILL');
+			await exited;
+		}
+	}
+};
+
+try {
+	await Promise.all([listPosts(), listPosts()]);
+	const first = await createPost(fm('First'), 'Approved first body.', 'cms');
+	setStaged(first.path, true);
+	process.env.CMS_CHECK_BUILD_MODE = 'wait';
+	const pageInspectionStarted = Promise.withResolvers<void>();
+	const finishPageInspection = Promise.withResolvers<void>();
+	const pageInspection = withCheckoutReadLock(async () => {
+		pageInspectionStarted.resolve();
+		await finishPageInspection.promise;
+	});
+	await pageInspectionStarted.promise;
+	const active = publish();
+	await setTimeout(50);
+	finishPageInspection.resolve();
+	await pageInspection;
+	await waitForBuild();
 	const refused = await publish();
 	assert.equal(refused.status, 409);
 	assert.match(refused.data.message, /already running/);
@@ -59,6 +93,9 @@ try {
 	assert.ok((await getPendingChanges(await listPosts())).some((post) => post.path === first.path),
 		'the publish view can load while rendering holds the checkout lock');
 	const edit = await savePost(first.path, first.frontmatter, 'Edited while building.', first.contentHash, 'cms');
+	await listPosts();
+	assert.ok(!listVersions(first.path).some((version) => version.writer === 'ext'),
+		'listing posts during a build does not ingest transient boundary files as external edits');
 	setStaged(first.path, true);
 	writeFileSync(join(blog, 'build.release'), '');
 	const finished = await active;
@@ -99,12 +136,26 @@ try {
 	const beforeFailure = git('rev-parse', 'HEAD');
 	const publishedBeforeFailure = getPublishedPosts();
 	const liveBeforeFailure = readFileSync(join(blog, 'src/posts/first.svx'), 'utf8');
-	process.env.CMS_CHECK_BUILD_MODE = 'fail';
+	process.env.CMS_CHECK_BUILD_MODE = 'wait-fail';
+	rmSync(join(blog, 'build.started'));
+	rmSync(join(blog, 'build.release'));
 	rmSync(join(blog, 'src/lib/icons/build.svg'));
 	writeFileSync(join(blog, 'src/lib/icons/keep.svg'), '<svg>keep</svg>');
 	git('add', 'src/lib/icons/keep.svg');
 	const indexBeforeFailure = readFileSync(join(blog, '.git/index'));
-	const failed = await publish();
+	const failingPublish = publish();
+	await waitForBuild();
+	const freshBoundary = readFileSync(join(blog, 'content/fresh.md'), 'utf8');
+	await assert.rejects(purgePost(fresh.path), CheckoutBusyError);
+	assert.equal((await runContender('purge', join(root, 'cms.db'), fresh.path)).busy, true);
+	for (const mode of ['baseline', 'import']) {
+		assert.deepEqual(await runContender(mode, join(root, `${mode}-contender.db`)), {
+			ok: false, busy: true, posts: 0
+		}, `${mode} cannot read or mutate the half-rendered checkout from another process`);
+	}
+	assert.deepEqual(readFileSync(join(blog, '.git/index')), indexBeforeFailure, 'contending writers cannot mutate the captured index');
+	writeFileSync(join(blog, 'build.release'), '');
+	const failed = await failingPublish;
 	assert.equal(failed.status, 502);
 	assert.equal(git('rev-parse', 'HEAD'), beforeFailure);
 	assert.deepEqual(getPublishedPosts(), publishedBeforeFailure);
@@ -115,6 +166,8 @@ try {
 	assert.equal(readFileSync(join(blog, 'src/lib/icons/keep.svg'), 'utf8'), '<svg>keep</svg>');
 	assert.deepEqual(readFileSync(join(blog, '.git/index')), indexBeforeFailure, 'rollback preserves the exact prior Git index');
 	assert.equal(readFileSync(join(blog, 'src/posts/first.svx'), 'utf8'), liveBeforeFailure);
+	assert.equal(readFileSync(join(blog, 'content/fresh.md'), 'utf8'), freshBoundary);
+	assert.equal((await getPost(fresh.path)).contentHash, fresh.contentHash, 'a refused purge leaves its database row intact');
 
 	process.env.CMS_CHECK_BUILD_MODE = 'success';
 	mkdirSync(join(blog, 'content/stale.md'));
@@ -205,6 +258,14 @@ try {
 	assert.ok(!existsSync(join(blog, 'src/posts/first.svx')));
 	assert.ok(!existsSync(join(blog, 'content/first.md')));
 	assert.equal((await getPost(first.path)).contentHash, staleUnpublish.post.contentHash, 'unpublish retains the stored draft');
+	const purgeVictim = await createPost(fm('Purge victim'), 'Stored draft.', 'cms');
+	writeFileSync(join(blog, 'content/purge-victim.md'), 'Tracked boundary file.');
+	git('add', 'content/purge-victim.md');
+	git('commit', '-qm', 'track purge fixture');
+	assert.equal(await purgePost(purgeVictim.path), true);
+	assert.ok(!(await listPosts()).some((post) => post.path === purgeVictim.path));
+	assert.ok(!existsSync(join(blog, 'content/purge-victim.md')));
+	assert.equal(git('log', '-1', '--format=%s'), 'cms: delete purge-victim.md', 'purge commits its deletion while owning the write lock');
 	assert.equal(git('status', '--porcelain'), '?? build.release\n?? build.started');
 	console.log('publish.check: ok');
 } finally {
