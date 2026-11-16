@@ -170,11 +170,12 @@ const renderBoundary = async (posts: Post[]) => {
 };
 
 const pushPublishedCommit = async () => {
-	await assertPendingPublishTip();
-	const push = await pushContent();
+	const tip = await assertPendingPublishTip();
+	if (!tip) throw new Error('The captured publish commit is unavailable');
+	const push = await pushContent(tip);
 	if (push.ok) {
 		setPendingPublishPush(null);
-		await backupLockedCheckout().catch(() => undefined);
+		if (await getHeadCommit() === tip) await backupLockedCheckout().catch(() => undefined);
 	}
 	return push.ok ? push : {
 		...push,
