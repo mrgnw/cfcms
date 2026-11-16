@@ -22,7 +22,9 @@ import {
 	assertPendingPublishTip, getPendingPublishPush, reconcilePublishedPush, setPendingPublishPush
 } from './publish-push';
 import { syncSiteTextLocked } from './site-text';
-import { assertRecoveredPathsPreserved, finishPublicationReconciliation } from './publish-protection';
+import {
+	assertRecoveredPathsPreserved, finishPublicationReconciliation, getPublicationReconciliation
+} from './publish-protection';
 
 const svxGitDirectory = 'src/posts';
 // The blog build vendors icons used by posts here on first use (remark-icons.js in the blog repo).
@@ -220,6 +222,9 @@ export const publishLocked = async (pins?: PinnedRevision[]) => {
 
 	if (pins && getPendingPublishPush()) {
 		throw new PinnedBatchError('An earlier publish push is pending; retry it from the Publish view, then reschedule');
+	}
+	if (pins && getPublicationReconciliation()) {
+		throw new PinnedBatchError('Publish recovery needs your review first; finish it in the Publish view, then reschedule');
 	}
 
 	if (getPendingPublishPush()) {
