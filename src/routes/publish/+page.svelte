@@ -8,4 +8,5 @@
 	<title>Publish · cfcms</title>
 </svelte:head>
 
-<PublishView changes={data.pendingChanges} lastPublishedAt={data.lastPublishedAt} pendingPush={data.pendingPush} />
+<PublishView changes={data.pendingChanges} lastPublishedAt={data.lastPublishedAt} pendingPush={data.pendingPush}
+	publicationRecovery={data.publicationRecovery} backupStatus={data.backupStatus} />
