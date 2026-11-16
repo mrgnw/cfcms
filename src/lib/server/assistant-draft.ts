@@ -20,14 +20,16 @@ const hasKeys = (value: Record<string, unknown>, keys: string[]) =>
 const isRevision = (value: unknown): value is string =>
 	typeof value === 'string' && value.length > 0 && value.length <= 128;
 
-const checkAssistantSize = (text: AssistantDraftText) => {
-	if (Buffer.byteLength(text.frontmatter) + Buffer.byteLength(text.body) > assistantDraftMaxBytes) {
+const assistantTextSize = (text: AssistantDraftText) => Buffer.byteLength(text.frontmatter) + Buffer.byteLength(text.body);
+
+const checkAssistantSize = (text: AssistantDraftText, maximumBytes: number) => {
+	if (assistantTextSize(text) > maximumBytes) {
 		throw error(413, 'Assistant draft exceeds 128 KiB');
 	}
 };
 
-export const normalizeAssistantText = (text: AssistantDraftText): AssistantDraftText => {
-	checkAssistantSize(text);
+export const normalizeAssistantText = (text: AssistantDraftText, maximumBytes = assistantDraftMaxBytes): AssistantDraftText => {
+	checkAssistantSize(text, maximumBytes);
 	return {
 		baseHash: text.baseHash,
 		frontmatter: normalizeNewlines(text.frontmatter).trim(),
@@ -71,6 +73,8 @@ export const parseAssistantPatch = (value: unknown): Patch => {
 
 export const patchAssistantText = (draft: WriterVersion | null, edits: DraftEdit[]): AssistantDraftText => {
 	if (!draft) throw error(409, 'No assistant draft to edit');
+	const originalBytes = assistantTextSize(draft);
+	const maximumBytes = Math.max(assistantDraftMaxBytes, originalBytes);
 	let text: AssistantDraftText = { baseHash: draft.baseHash, frontmatter: draft.frontmatter, body: draft.body };
 	for (const edit of edits) {
 		const current = text[edit.field];
@@ -82,9 +86,14 @@ export const patchAssistantText = (draft: WriterVersion | null, edits: DraftEdit
 			...text,
 			[edit.field]: current.slice(0, start) + edit.replace + current.slice(start + edit.find.length)
 		};
-		checkAssistantSize(text);
+		checkAssistantSize(text, maximumBytes);
 	}
-	return normalizeAssistantText(text);
+	const normalized = normalizeAssistantText(text, maximumBytes);
+	const finalBytes = assistantTextSize(normalized);
+	if (finalBytes > assistantDraftMaxBytes && finalBytes >= originalBytes) {
+		throw error(413, 'Oversized imported drafts must shrink with each patch');
+	}
+	return normalized;
 };
 
 export const assistantDraftView = (draft: WriterVersion | null) => draft ? ({

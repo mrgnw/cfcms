@@ -163,6 +163,21 @@ try {
 	assert.equal(getStoredPost(path)!.body, nextHumanBody);
 	await write('PUT', { ...replacement, revision: getAssistantDraft(path)!.revision, baseHash: nextHumanHash });
 	assert.equal(getAssistantDraft(path)!.baseHash, nextHumanHash, 'full replacement may use the latest human base');
+
+	const legacyBody = `REMOVE-ONE\n\nREMOVE-TWO\n\n${'x'.repeat(assistantDraftMaxBytes + 64)}`;
+	upsertVersion({ path, writer: 'llm', sessionId: 'file', baseHash: nextHumanHash, frontmatter, body: legacyBody });
+	const legacy = getAssistantDraft(path)!;
+	const smallerResponse = await write('PATCH', { revision: legacy.revision, edits: [edit('REMOVE-ONE\n\n')] });
+	assert.equal(smallerResponse.status, 200, 'an oversized imported draft can shrink incrementally');
+	const smaller = getAssistantDraft(path)!;
+	assert.ok(smaller.body.length < legacyBody.length);
+	assert.ok(Buffer.byteLength(smaller.body) > assistantDraftMaxBytes);
+	await expectStatus(() => write('PATCH', { revision: smaller.revision, edits: [edit('REMOVE-TWO', 'y'.repeat(100))] }), 413);
+	await expectStatus(() => write('PATCH', { revision: smaller.revision,
+		edits: [{ field: 'frontmatter', find: 'Human', replace: 'Other' }] }), 413);
+	assert.equal(getAssistantDraft(path)!.revision, smaller.revision);
+	await write('PATCH', { revision: smaller.revision, edits: [edit('REMOVE-TWO\n\n')] });
+	assert.ok(getAssistantDraft(path)!.body.length < smaller.body.length);
 } finally {
 	rmSync(root, { recursive: true, force: true });
 }
