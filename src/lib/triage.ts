@@ -7,14 +7,137 @@ export const triageOf = (post: Pick<PostListItem, 'nextStep' | 'effort'>): Triag
 	effort: post.effort ?? ''
 });
 
-// Takes values another session saved, but only into fields this session has not edited.
-// An edited field keeps its old base, so its save is refused rather than overwriting theirs.
-export const adoptIncoming = (saved: TriageValues, shown: TriageValues, incoming: TriageValues) => {
-	const next = { saved: { ...saved }, shown: { ...shown } };
-	for (const field of triageFields) {
-		if (shown[field] !== saved[field]) continue;
-		next.saved[field] = incoming[field];
-		next.shown[field] = incoming[field];
-	}
-	return next;
+export type TriageReply = { kind: 'saved'; value: string } | { kind: 'conflict'; current: string } | { kind: 'failed' };
+
+export type TriageProblem = { kind: 'conflict'; theirs: string } | { kind: 'failed' };
+
+export type TriageView = {
+	shown: TriageValues;
+	saved: TriageValues;
+	problems: Partial<Record<TriageField, TriageProblem>>;
+	saving: boolean;
 };
+
+type Send = (field: TriageField, value: string, base: string) => Promise<TriageReply>;
+
+// Client side of the per-field compare-and-set. Saves run one at a time in order, a conflict
+// holds that field until the writer picks Keep mine or Use theirs, a failed or malformed reply
+// never stops later saves, and values polled during a save are applied once the queue drains.
+export class TriageSync {
+	#shown: TriageValues;
+	#saved: TriageValues;
+	#problems: Partial<Record<TriageField, TriageProblem>> = {};
+	#pending = 0;
+	#queue: Promise<void> = Promise.resolve();
+	#seq = 0;
+	#confirmedSeq: Record<TriageField, number> = { nextStep: 0, effort: 0 };
+	#incoming: { values: TriageValues; seq: number } | null = null;
+	#send: Send;
+	#onChange: (view: TriageView) => void;
+	#onSaved: () => void;
+
+	constructor(initial: TriageValues, send: Send, onChange: (view: TriageView) => void, onSaved: () => void = () => {}) {
+		this.#shown = { ...initial };
+		this.#saved = { ...initial };
+		this.#send = send;
+		this.#onChange = onChange;
+		this.#onSaved = onSaved;
+	}
+
+	view(): TriageView {
+		return {
+			shown: { ...this.#shown },
+			saved: { ...this.#saved },
+			problems: { ...this.#problems },
+			saving: this.#pending > 0
+		};
+	}
+
+	edit(field: TriageField, value: string) {
+		this.#shown[field] = value;
+		this.#notify();
+	}
+
+	save(field: TriageField) {
+		if (this.#problems[field]?.kind === 'conflict') return;
+		return this.#enqueue(field);
+	}
+
+	keepMine(field: TriageField) {
+		delete this.#problems[field];
+		return this.#enqueue(field);
+	}
+
+	useTheirs(field: TriageField) {
+		this.#shown[field] = this.#saved[field];
+		delete this.#problems[field];
+		this.#notify();
+	}
+
+	receive(values: TriageValues) {
+		this.#seq += 1;
+		this.#incoming = { values: { ...values }, seq: this.#seq };
+		if (this.#pending === 0) this.#applyIncoming();
+		this.#notify();
+	}
+
+	#enqueue(field: TriageField) {
+		this.#pending += 1;
+		this.#notify();
+		this.#queue = this.#queue.then(() => this.#run(field));
+		return this.#queue;
+	}
+
+	async #run(field: TriageField) {
+		try {
+			await this.#sendField(field);
+		} catch {
+			this.#problems[field] = { kind: 'failed' };
+		}
+		this.#pending -= 1;
+		if (this.#pending === 0) this.#applyIncoming();
+		this.#notify();
+	}
+
+	async #sendField(field: TriageField) {
+		if (this.#problems[field]?.kind === 'conflict') return;
+		const value = this.#shown[field];
+		const base = this.#saved[field];
+		if (value === base) {
+			delete this.#problems[field];
+			return;
+		}
+
+		const reply = await this.#send(field, value, base);
+		if (reply.kind === 'saved') {
+			this.#saved[field] = reply.value;
+			if (this.#shown[field] === value) this.#shown[field] = reply.value;
+			this.#confirmedSeq[field] = this.#seq;
+			delete this.#problems[field];
+			queueMicrotask(this.#onSaved);
+		} else if (reply.kind === 'conflict') {
+			this.#saved[field] = reply.current;
+			this.#problems[field] = { kind: 'conflict', theirs: reply.current };
+		} else {
+			this.#problems[field] = { kind: 'failed' };
+		}
+	}
+
+	// Polled values replace only fields with no unsaved edit and no open problem, and never
+	// a field whose own save was confirmed after that poll arrived.
+	#applyIncoming() {
+		const incoming = this.#incoming;
+		if (!incoming) return;
+		this.#incoming = null;
+		for (const field of triageFields) {
+			if (incoming.seq <= this.#confirmedSeq[field]) continue;
+			if (this.#problems[field] || this.#shown[field] !== this.#saved[field]) continue;
+			this.#saved[field] = incoming.values[field];
+			this.#shown[field] = incoming.values[field];
+		}
+	}
+
+	#notify() {
+		this.#onChange(this.view());
+	}
+}
