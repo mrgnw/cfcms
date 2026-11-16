@@ -22,6 +22,12 @@ legacy.exec(`
 	);
 	INSERT INTO posts (path, published_hash, published_title, published_slug, published_at)
 	VALUES ('old-post.md', 'abc', 'Old Post', 'old-post', '2026-01-01T00:00:00.000Z');
+	CREATE TABLE versions (
+		path TEXT NOT NULL, writer TEXT NOT NULL, session_id TEXT NOT NULL, base_hash TEXT NOT NULL,
+		frontmatter TEXT NOT NULL, body TEXT NOT NULL, updated_at TEXT NOT NULL,
+		PRIMARY KEY (path, writer)
+	);
+	INSERT INTO versions VALUES ('old-post.md', 'llm', 'file', 'abc', 'title: Old Post', 'Old suggestion', '2026-01-01');
 `);
 legacy.close();
 
@@ -29,8 +35,11 @@ process.env.BLOG_CMS_DB = databasePath;
 process.env.BLOG_CONTENT_BASE_DIR = root;
 
 try {
-	const { getPublishedPosts } = await import('./db.ts');
+	const { getPublishedPosts, listVersions } = await import('./db.ts');
 	assert.deepEqual(Object.keys(getPublishedPosts()), ['old-post.md'], 'migration keeps existing rows');
+	const suggestion = listVersions('old-post.md')[0];
+	assert.equal(suggestion.body, 'Old suggestion');
+	assert.match(suggestion.revision, /^[a-f0-9]{32}$/);
 
 	const migrated = new DatabaseSync(databasePath);
 	const columns = (migrated.prepare(`SELECT name FROM pragma_table_info('posts')`).all() as { name: string }[]).map(
