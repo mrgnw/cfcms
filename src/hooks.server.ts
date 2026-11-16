@@ -1,4 +1,10 @@
-import type { Handle } from '@sveltejs/kit/hooks';
+import { building } from '$app/env';
+import type { Handle, ServerInit } from '@sveltejs/kit/hooks';
+import { startScheduler } from '#lib/server/schedule.js';
+
+export const init: ServerInit = () => {
+	if (!building) startScheduler();
+};
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const response = await resolve(event);
