@@ -30,7 +30,7 @@ process.chdir(root);
 
 const { POST } = await import('../../routes/api/publish/+server.ts');
 const { createPost, getPost, listPosts, purgePost, savePost } = await import('./content.ts');
-const { getPublishedPosts, getStagedPaths, setStaged, getStagedRevisions, listVersions } = await import('./db.ts');
+const { getMetaValue, getPublishedPosts, getStagedPaths, setStaged, getStagedRevisions, listVersions } = await import('./db.ts');
 const { runBackup } = await import('./backup.ts');
 const { CheckoutBusyError, withCheckoutReadLock } = await import('./checkout-lock.ts');
 const { getPendingChanges } = await import('./pending.ts');
@@ -187,6 +187,10 @@ try {
 	assert.deepEqual(getPublishedPosts(), publishedBeforeFailure);
 	assert.ok(getStagedPaths().has(stale.path));
 	assert.ok(!existsSync(join(blog, 'content/stale.md')));
+	const lastBackupBeforeFailure = getMetaValue('lastBackupAt');
+	await assert.rejects(runBackup(), /Backup commit failed/);
+	assert.equal(git('rev-parse', 'HEAD'), beforeFailure);
+	assert.equal(getMetaValue('lastBackupAt'), lastBackupBeforeFailure, 'failed backup commits do not advance the backup timestamp');
 	rmSync(join(blog, '.git/hooks/pre-commit'));
 
 	writeFileSync(join(remote, 'hooks/pre-receive'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
@@ -199,13 +203,14 @@ try {
 	assert.equal(hasPendingPublishPush(), true, 'push retry remains available after reloading the view');
 	const committedBeforeRetry = git('rev-parse', 'HEAD');
 	await assert.rejects(runBackup(), /Backup push failed/);
+	assert.equal(getMetaValue('lastBackupAt'), lastBackupBeforeFailure, 'rejected backup pushes do not advance the backup timestamp');
 	assert.notEqual(git('rev-parse', 'HEAD'), committedBeforeRetry, 'a backup can advance HEAD after a rejected publish push');
 	const backupTip = git('rev-parse', 'HEAD');
 	const remoteBeforeRetry = git('rev-parse', 'origin/main');
 	rmSync(join(remote, 'hooks/pre-receive'));
 	writeFileSync(join(blog, 'manual.txt'), 'Unrelated local change.');
 	git('add', 'manual.txt');
-	git('commit', '-qm', 'manual change');
+	git('commit', '-qm', 'cms: db backup');
 	const unrelatedTip = git('rev-parse', 'HEAD');
 	await assert.rejects(runBackup(), /Unrelated commits/);
 	assert.equal(git('rev-parse', 'HEAD'), unrelatedTip, 'backup rejects unrelated descendants before committing');
@@ -213,6 +218,20 @@ try {
 	assert.equal(unrelatedRetry.status, 500);
 	assert.match(unrelatedRetry.data.message, /Unrelated commits/);
 	assert.equal(git('rev-parse', 'origin/main'), remoteBeforeRetry, 'retry does not push unrelated commits');
+	const nextStage = await createPost(fm('Next stage'), 'A new approval cannot authorize the unrelated commit.', 'cms');
+	setStaged(nextStage.path, true);
+	const unrelatedWithStage = await publish();
+	assert.equal(unrelatedWithStage.status, 500);
+	assert.match(unrelatedWithStage.data.message, /Unrelated commits/);
+	assert.ok(!existsSync(join(blog, 'src/posts/next-stage.svx')));
+	assert.equal(git('rev-parse', 'HEAD'), unrelatedTip);
+	setStaged(nextStage.path, false);
+	git('reset', '--hard', backupTip);
+	git('reset', '--hard', beforeFailure);
+	const rewoundRetry = await publish();
+	assert.equal(rewoundRetry.status, 500);
+	assert.match(rewoundRetry.data.message, /no longer contains the pending publish/);
+	assert.equal(git('rev-parse', 'origin/main'), remoteBeforeRetry);
 	git('reset', '--hard', backupTip);
 	const retried = await publish();
 	assert.equal(retried.status, 200, JSON.stringify(retried.data));
