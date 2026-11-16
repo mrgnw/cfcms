@@ -5,7 +5,8 @@ export const efforts = ['quick', 'deep'] as const;
 export type Effort = (typeof efforts)[number];
 export const isEffort = (value: unknown): value is Effort => (efforts as readonly unknown[]).includes(value);
 export const effortLabels: Record<Effort, string> = { quick: 'Quick', deep: 'Deeper' };
-export type Triage = { nextStep: string | null; effort: Effort | null };
+// rev counts saved triage changes for a post, so a client can tell an older poll from a newer one
+export type Triage = { nextStep: string | null; effort: Effort | null; rev: number };
 export const nextStepLimit = 140;
 export const triageFields = ['nextStep', 'effort'] as const;
 export type TriageField = (typeof triageFields)[number];
@@ -24,6 +25,7 @@ export type PostListItem = {
 	editingOrder?: number | null;
 	nextStep?: string | null;
 	effort?: Effort | null;
+	triageRev?: number;
 	deleteRequested?: boolean;
 	slug: string;
 	excerpt?: string;

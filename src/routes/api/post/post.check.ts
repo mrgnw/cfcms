@@ -56,24 +56,28 @@ try {
 	assert.deepEqual(await triage({ path, field: 'nextStep', value: '  Tighten   the ending ', base: '' }), {
 		triaged: path,
 		field: 'nextStep',
-		value: 'Tighten the ending'
+		value: 'Tighten the ending',
+		rev: 1
 	});
 	assert.deepEqual(await triage({ path, field: 'effort', value: 'quick', base: '' }), {
 		triaged: path,
 		field: 'effort',
-		value: 'quick'
+		value: 'quick',
+		rev: 2
 	});
 	const triaged = (await listPosts()).find((item) => item.path === path);
 	assert.equal(triaged?.nextStep, 'Tighten the ending', 'next step is trimmed and collapsed');
 	assert.equal(triaged?.effort, 'quick', 'saving the size kept the next step and vice versa');
+	assert.equal(triaged?.triageRev, 2, 'posts carry the triage rev');
 
 	// a session still holding the empty value it loaded must not replace another session's step
 	const stale = (await triage({ path, field: 'nextStep', value: 'Something else', base: '' })) as unknown as {
 		status: number;
-		data: { current: string };
+		data: { current: string; rev: number };
 	};
 	assert.equal(stale.status, 409);
 	assert.equal(stale.data.current, 'Tighten the ending', 'the refusal carries the value to show');
+	assert.equal(stale.data.rev, 2, 'and the rev it belongs to');
 	assert.ok('triaged' in (await triage({ path, field: 'nextStep', value: 'Something else', base: stale.data.current })));
 
 	const invalids: Record<string, string>[] = [
