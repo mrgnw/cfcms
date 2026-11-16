@@ -10,7 +10,7 @@
 	import StatusDot from './StatusDot.svelte';
 	import { glyphs, type Glyph } from '#lib/glyphs.js';
 	import { rememberSidebar } from '#lib/ui-state.js';
-	import { isEditing, isPending, isStage, statusOf, type PostCounts, type PostFilter, type PostListItem, type Stage } from '#lib/types.js';
+	import { effortLabels, efforts, isEditing, isPending, isStage, statusOf, type Effort, type PostCounts, type PostFilter, type PostListItem, type Stage } from '#lib/types.js';
 
 	let {
 		posts,
@@ -43,6 +43,13 @@
 			.map((post) => ({ id: post.path, post }))
 	);
 	let queueItems = $derived(dragItems ?? baseQueueItems);
+
+	let effortFilter = $state<Effort | 'all'>('all');
+	let queueSized = $derived(queueItems.some((item) => item.post.effort));
+	let shownQueueItems = $derived(
+		effortFilter === 'all' || !queueSized ? queueItems : queueItems.filter((item) => item.post.effort === effortFilter)
+	);
+	const effortCount = (effort: Effort) => queueItems.filter((item) => item.post.effort === effort).length;
 
 	let matchesQuery = $derived.by(() => {
 		const term = query.trim().toLowerCase();
@@ -201,6 +208,12 @@
 	<StatusDot status={statusOf(item)} />
 	<strong>{item.title}</strong>
 	<span class="date" class:missing={!date}>{date ?? 'no date'}</span>
+	{#if item.effort || item.nextStep}
+		<small class="next">
+			{#if item.effort}<span class="effort {item.effort}">{effortLabels[item.effort]}</span>{/if}
+			{item.nextStep ?? ''}
+		</small>
+	{/if}
 {/snippet}
 
 {#snippet postRow(item: PostListItem)}
@@ -395,14 +408,29 @@
 		{#if sectioned}
 			{#if queueItems.length}
 				<h3 class="section-label editing-label" id="editing">Editing</h3>
+				{#if queueSized}
+					<fieldset class="effort-filter">
+						<legend class="sr-only">Show</legend>
+						<label><input type="radio" bind:group={effortFilter} value="all" />All {queueItems.length}</label>
+						{#each efforts as effort (effort)}
+							<label><input type="radio" bind:group={effortFilter} value={effort} />{effortLabels[effort]} {effortCount(effort)}</label>
+						{/each}
+					</fieldset>
+				{/if}
 				<div
 					class="queue"
 					aria-label="Editing queue, long-press or drag to reorder"
-					use:dndzone={{ items: queueItems, flipDurationMs: 150, delayTouchStart: 300, dropTargetStyle: {} }}
+					use:dndzone={{
+						items: shownQueueItems,
+						flipDurationMs: 150,
+						delayTouchStart: 300,
+						dropTargetStyle: {},
+						dragDisabled: shownQueueItems !== queueItems
+					}}
 					onconsider={handleDnd}
 					onfinalize={handleDndFinalize}
 				>
-					{#each queueItems as item (item.id)}
+					{#each shownQueueItems as item (item.id)}
 						<div class="qrow" class:selected={item.post.path === selectedPath} aria-label={item.post.title}>
 							<a class="row" href={postHref(item.post.slug)} draggable="false">
 								{@render rowBody(item.post)}
@@ -705,6 +733,70 @@
 		cursor: grab;
 	}
 
+	.effort-filter {
+		display: flex;
+		gap: 2px;
+		border: none;
+		margin: 0 0 2px;
+		padding: 0;
+	}
+
+	.effort-filter label {
+		border-radius: 7px;
+		color: var(--ink-2);
+		cursor: pointer;
+		font-size: 12px;
+		font-variant-numeric: tabular-nums;
+		padding: 4px 8px;
+	}
+
+	.effort-filter label:hover,
+	.effort-filter label:has(:checked) {
+		background: var(--hover);
+	}
+
+	.effort-filter label:has(:checked) {
+		color: var(--ink);
+		font-weight: 560;
+	}
+
+	.effort-filter label:has(:focus-visible) {
+		outline: 2px solid var(--accent);
+	}
+
+	.effort-filter input,
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+
+	.next {
+		grid-column: 2 / -1;
+		color: var(--ink-2);
+		font-size: 12px;
+		line-height: 1.35;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.effort {
+		font-weight: 600;
+		margin-right: 4px;
+	}
+
+	.effort.quick {
+		color: var(--ok);
+	}
+
+	.effort.deep {
+		color: var(--accent-ink);
+	}
+
 	.qrow.selected .row {
 		background: var(--hover);
 		box-shadow: inset 2px 0 0 var(--accent);
@@ -761,7 +853,7 @@
 		position: relative;
 		display: grid;
 		grid-template-columns: 7px minmax(0, 1fr) auto;
-		gap: 9px;
+		gap: 2px 9px;
 		align-items: baseline;
 		border-radius: 8px;
 		color: inherit;

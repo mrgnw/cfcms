@@ -12,7 +12,7 @@
 	import ReferencePane from './ReferencePane.svelte';
 	import { isBlankDraft, parseFrontmatter, serializeFrontmatter } from '#lib/frontmatter.js';
 	import { applySegment as applySegmentTo } from '#lib/segment-diff.js';
-	import type { FieldSegment, Post, Segment, WriterVersion } from '#lib/types.js';
+	import { effortLabels, efforts, nextStepLimit, type FieldSegment, type Post, type Segment, type WriterVersion } from '#lib/types.js';
 
 	type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error';
 
@@ -92,6 +92,22 @@
 	let selectedSourceId = $state<string | null>(null);
 	let activeSource = $derived(sources.find((s) => s.id === selectedSourceId) ?? sources[0] ?? null);
 	const sourceKey = (source: PaneSource) => `${source.id}:${source.updatedAt ?? ''}`;
+
+	let nextStepField = $state(untrack(() => post.nextStep ?? ''));
+	let effortField = $state(untrack(() => post.effort ?? ''));
+
+	async function saveTriage() {
+		const fd = new FormData();
+		fd.set('path', post.path);
+		fd.set('nextStep', nextStepField);
+		fd.set('effort', effortField);
+		const res = await fetch('?/triage', { method: 'POST', body: fd }).catch(() => null);
+		if (!res?.ok) {
+			lastError = 'Could not save the next step';
+			return;
+		}
+		onSaved?.();
+	}
 
 	async function dismissSource(id: string) {
 		const fd = new FormData();
@@ -731,6 +747,24 @@
 				</label>
 			</div>
 
+			{#if post.path}
+				<div class="next-line">
+					<select aria-label="Size" bind:value={effortField} onchange={saveTriage}>
+						<option value="">Size</option>
+						{#each efforts as effort (effort)}
+							<option value={effort}>{effortLabels[effort]}</option>
+						{/each}
+					</select>
+					<input
+						aria-label="Next step"
+						bind:value={nextStepField}
+						onchange={saveTriage}
+						placeholder="Next step, e.g. tighten the ending"
+						maxlength={nextStepLimit}
+					/>
+				</div>
+			{/if}
+
 			<div class="tags-line">
 				<textarea
 					id="tags"
@@ -1123,6 +1157,46 @@
 
 	.icon-toggle:has(input:checked) .pin-solid {
 		display: block;
+	}
+
+	.next-line {
+		display: flex;
+		gap: 6px;
+		align-items: center;
+	}
+
+	.next-line select,
+	.next-line input {
+		background: transparent;
+		border: none;
+		border-radius: 6px;
+		color: inherit;
+		font: inherit;
+		font-size: 13px;
+		padding: 5px 6px;
+	}
+
+	.next-line select {
+		color: var(--accent-ink);
+		font-weight: 560;
+		cursor: pointer;
+	}
+
+	.next-line select:has(option[value='']:checked) {
+		color: var(--ink-3);
+		font-weight: inherit;
+	}
+
+	.next-line input {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.next-line select:focus,
+	.next-line input:focus,
+	.next-line select:hover {
+		background: var(--bg);
+		outline: none;
 	}
 
 	.tags-line,
