@@ -194,6 +194,20 @@ try {
 		{ field: 'frontmatter', find: 'title: Valid', replace: 'title: [' }
 	] }), 400);
 	assert.deepEqual(getAssistantDraft(path), valid, 'invalid frontmatter cannot change text or its token');
+
+	upsertVersion({ path, writer: 'llm', sessionId: 'file', baseHash: nextHumanHash,
+		frontmatter: 'title: [\ncustom: Kept', body: 'Imported body.' });
+	const invalidImport = getAssistantDraft(path)!;
+	await expectStatus(() => write('PATCH', { revision: invalidImport.revision,
+		edits: [edit('Imported body.', 'Edited body.')] }), 400);
+	assert.deepEqual(getAssistantDraft(path), invalidImport, 'body-only edits preserve an invalid imported draft on rejection');
+	const repairedResponse = await write('PATCH', { revision: invalidImport.revision, edits: [
+		edit('Imported body.', 'Edited body.'),
+		{ field: 'frontmatter', find: 'title: [', replace: 'title: Repaired' }
+	] });
+	assert.equal(repairedResponse.status, 200, 'PATCH can repair imported frontmatter and edit the body atomically');
+	assert.equal(getAssistantDraft(path)!.frontmatter, 'title: Repaired\ncustom: Kept');
+	assert.equal(getAssistantDraft(path)!.body, 'Edited body.');
 } finally {
 	rmSync(root, { recursive: true, force: true });
 }
