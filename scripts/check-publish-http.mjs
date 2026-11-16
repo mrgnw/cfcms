@@ -22,7 +22,8 @@ git('config', 'commit.gpgsign', 'false');
 git('remote', 'add', 'origin', remote);
 mkdirSync(join(blog, 'content'));
 mkdirSync(join(blog, 'src/posts'), { recursive: true });
-writeFileSync(join(blog, 'src/posts/live.svx'), '---\ntitle: Live\ndate: 2026-01-01\npublished: true\n---\n\nLive body.\n');
+const handwrittenLive = '---\ntitle: Live\ndate: 2026-01-01\npublished: true\n---\n\nLive body.\n';
+writeFileSync(join(blog, 'src/posts/live.svx'), handwrittenLive);
 for (const name of ['pending', 'later']) {
 	writeFileSync(join(blog, `content/${name}.md`), `---\ntitle: ${name}\ndate: 2026-01-01\npublish: true\n---\n\n${name} body.\n`);
 }
@@ -93,6 +94,9 @@ try {
 	assert.equal(later.staged, 1, 'new staging survives recovery of the previous publication');
 	assert.equal(later.published_hash, null);
 	assert.equal(database.prepare('SELECT value FROM meta WHERE key = ?').get('pendingPublishPush').value, '');
+	writeFileSync(join(blog, 'src/posts/live.svx'), handwrittenLive);
+	git('commit', '-qam', 'keep handwritten live rendering');
+	git('push', '-q', 'origin', 'main');
 	writeFileSync(join(remote, 'hooks/pre-receive'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
 	assert.equal((await request('/api/publish', {})).status, 502);
 	const captured = git('rev-parse', 'HEAD');
@@ -141,7 +145,8 @@ try {
 	const preview = await revertedPreview.json();
 	assert.deepEqual(preview.currentRemote.differences, [
 		{ path: 'content/later.md', kind: 'deleted', matchesBefore: true },
-		{ path: 'src/posts/later.svx', kind: 'deleted', matchesBefore: true }
+		{ path: 'src/posts/later.svx', kind: 'deleted', matchesBefore: true },
+		{ path: 'src/posts/live.svx', kind: 'modified', matchesBefore: true }
 	]);
 	const confirmationPage = await (await request('/publish')).text();
 	assert.match(confirmationPage, /Confirm historical Git delivery/);
@@ -175,7 +180,7 @@ try {
 	assert.equal(receipt.lastDelivery.commit, rewritten);
 	assert.equal(receipt.lastDelivery.capturedCommit, captured);
 	assert.deepEqual(receipt.lastDelivery.currentRemote, preview.currentRemote);
-	assert.deepEqual(receipt.reconciliation.paths, ['content/later.md', 'src/posts/later.svx']);
+	assert.deepEqual(receipt.reconciliation.paths, ['content/later.md', 'src/posts/later.svx', 'src/posts/live.svx']);
 	assert.match(await (await request('/publish')).text(), /Remote reconciliation required before publishing/);
 	assert.equal((await request(`/api/publish/reconcile?commit=${captured}`, {})).status, 409);
 	git('reset', '--hard', 'origin/main');
@@ -192,7 +197,7 @@ try {
 	assert.equal(conflict.status, 409, await conflict.clone().text());
 	const conflictReport = await conflict.json();
 	assert.match(conflictReport.message, /reconcil/i);
-	assert.deepEqual(conflictReport.reconciliationRequired, ['src/posts/later.svx']);
+	assert.deepEqual(conflictReport.reconciliationRequired, ['src/posts/later.svx', 'src/posts/live.svx']);
 	assert.equal(git('rev-parse', 'HEAD'), beforeUnrelated);
 	assert.equal(git('rev-parse', 'origin/main'), editedRemote);
 	assert.deepEqual(readFileSync(join(blog, '.git/index')), beforeUnrelatedIndex);
@@ -207,16 +212,54 @@ try {
 		baseHash: removed.contentHash, writer: 'cms', sessionId: 'httprecovery'
 	})).status, 200);
 	assert.equal((await request('/publish?/stage', { path: 'later.md' })).status, 200);
+	const normalizationConflict = await request('/api/publish', {});
+	assert.equal(normalizationConflict.status, 409, await normalizationConflict.clone().text());
+	assert.deepEqual((await normalizationConflict.json()).reconciliationRequired, ['src/posts/live.svx']);
+	let outputReview = (await (await request('/api/publish/reconcile')).json()).reconciliation.review;
+	assert.deepEqual(outputReview.paths, ['src/posts/live.svx']);
+	assert.match(outputReview.patch, /diff --git a\/src\/posts\/live.svx/);
+	assert.equal(outputReview.approved, false, 'normalization is never automatically approved');
+	assert.equal(git('show', 'origin/main:src/posts/live.svx') + '\n', handwrittenLive);
+	const outputForm = (review) => ({ token: review.token, remote: review.remoteCommit, confirm: 'reviewed-protected-output' });
+	assert.equal((await request('/api/publish/output', { token: outputReview.token, remote: outputReview.remoteCommit })).status, 400);
+	assert.equal((await request('/api/publish/output', { ...outputForm(outputReview), token: '0'.repeat(64) })).status, 409);
+	const crossOrigin = await fetch(origin + '/api/publish/output', {
+		method: 'POST', headers: { Origin: 'https://outside.example', 'x-forwarded-proto': 'http' },
+		body: new URLSearchParams(outputForm(outputReview))
+	});
+	assert.equal(crossOrigin.status, 403);
+	writeFileSync(join(peer, 'remote-only.txt'), 'Remote changed after output preview.\n');
+	peerGit('commit', '-qam', 'invalidate reviewed remote token');
+	peerGit('push', '-q', 'origin', 'main');
+	assert.equal((await request('/api/publish/output', outputForm(outputReview))).status, 409);
+	assert.ok((await (await request('/api/publish/reconcile')).json()).reconciliation);
+	assert.equal((await (await request('/api/publish/reconcile')).json()).reconciliation.review, null);
+	git('reset', '--hard', 'origin/main');
+	assert.equal((await request('/api/publish', {})).status, 409);
+	outputReview = (await (await request('/api/publish/reconcile')).json()).reconciliation.review;
+	const outputPage = await (await request('/publish')).text();
+	assert.match(outputPage, /Review protected output/);
+	assert.match(outputPage, /src\/posts\/live.svx/);
+	assert.match(outputPage, /reviewed-protected-output/);
+	const beforeApprovalIndex = readFileSync(join(blog, '.git/index'));
+	const beforeApprovalHead = git('rev-parse', 'HEAD');
+	assert.equal((await request('/api/publish/output', outputForm(outputReview))).status, 200);
+	assert.deepEqual(readFileSync(join(blog, '.git/index')), beforeApprovalIndex);
+	assert.equal(git('rev-parse', 'HEAD'), beforeApprovalHead);
+	assert.equal((await (await request('/api/publish/reconcile')).json()).reconciliation.review.approved, true);
+	assert.equal(database.prepare('SELECT staged FROM posts WHERE path = ?').get('later.md').staged, 1);
 	writeFileSync(join(blog, '.git/hooks/pre-commit'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
 	const beforeCommitFailure = readFileSync(join(blog, '.git/index'));
 	assert.equal((await request('/api/publish', {})).status, 500);
 	assert.deepEqual(readFileSync(join(blog, '.git/index')), beforeCommitFailure);
-	assert.equal(git('rev-parse', 'HEAD'), beforeUnrelated);
+	assert.equal(git('rev-parse', 'HEAD'), beforeApprovalHead);
 	assert.ok((await (await request('/api/publish/reconcile')).json()).reconciliation);
 	rmSync(join(blog, '.git/hooks/pre-commit'));
 	const reconciledPublish = await request('/api/publish', {});
 	assert.equal(reconciledPublish.status, 200, await reconciledPublish.clone().text());
 	assert.equal(existsSync(join(blog, 'src/posts/later.svx')), false);
+	assert.notEqual(git('show', 'origin/main:src/posts/live.svx') + '\n', handwrittenLive,
+		'only explicitly reviewed rendering replaces the handwritten remote form');
 	assert.match(git('show', 'origin/main:src/posts/pending.svx'), /An unrelated approved update/);
 	assert.equal(database.prepare('SELECT published_hash FROM posts WHERE path = ?').get('later.md').published_hash, null);
 	assert.equal((await (await request('/api/publish/reconcile')).json()).reconciliation, null);

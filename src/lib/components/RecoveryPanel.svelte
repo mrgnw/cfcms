@@ -17,6 +17,7 @@
 	let replacementApproved = $state(false);
 	let historicalCommit = $state('');
 	let historicalApproved = $state(false);
+	let outputApproved = $state(false);
 	let confirmedRemote = $state<PublicationRemoteState | null>(null);
 
 	$effect(() => {
@@ -29,6 +30,11 @@
 		publication.pendingCommit;
 		publication.remoteCommit;
 		historicalApproved = false;
+	});
+
+	$effect(() => {
+		publication.reconciliation?.review?.token;
+		outputApproved = false;
 	});
 
 	$effect(() => {
@@ -72,6 +78,28 @@
 			busy = false;
 		}
 	}
+
+	async function approveOutput(form: HTMLFormElement) {
+		if (busy || disabled) return;
+		busy = true;
+		message = '';
+		try {
+			const data = new FormData(form);
+			const body = new URLSearchParams();
+			for (const [name, value] of data) if (typeof value === 'string') body.set(name, value);
+			const response = await fetch('/api/publish/output', { method: 'POST', body });
+			const report = await response.json();
+			failed = !response.ok;
+			message = report.message ?? 'Output approval failed';
+			await refreshAll();
+		} catch (caught) {
+			failed = true;
+			message = caught instanceof Error ? caught.message : 'Output approval failed';
+		} finally {
+			busy = false;
+			outputApproved = false;
+		}
+	}
 </script>
 
 {#snippet remoteSnapshot(state: PublicationRemoteState)}
@@ -101,11 +129,38 @@
 		{#if publication.reconciliation.error}
 			<p>{publication.reconciliation.error}</p>
 		{:else}
-			<p>Historical confirmation left the CMS publication records unchanged. Publishing still renders those posts, so a candidate that would overwrite the reported remote changes will be rejected before commit.</p>
+			<p>Historical confirmation left the CMS publication records unchanged. Publishing still renders those posts. A candidate that would overwrite the reported remote changes is rejected before commit unless you explicitly approve its exact protected-path patch.</p>
 			<ul>
 				{#each publication.reconciliation.paths as path (path)}<li><code>{path}</code></li>{/each}
 			</ul>
-			<p>To keep a remote removal, explicitly unpublish/delete the affected post and stage that decision. For other edits, reconcile the CMS output with the remote, or make a separate reviewed change on the remote. Then retry publishing. Nothing is unpublished automatically.</p>
+			<p>To keep a remote removal, explicitly unpublish/delete the affected post and stage that decision. For other edits, reconcile the CMS output with the remote, or review and approve the exact candidate below. Retry publishing to generate a fresh preview after changing your decision. Nothing is unpublished or accepted automatically.</p>
+			{#if publication.reconciliation.review}
+				{@const review = publication.reconciliation.review}
+				<details>
+					<summary>Review protected output</summary>
+					<h4 id={`${replacementId}-output-heading`}>Replace the listed remote paths on next publish</h4>
+					<p>This is the last blocked candidate, compared with Git remote <code>{review.remoteCommit}</code>. Approval permits exactly these changes, including any additions or deletions shown. It does not publish or change files now.</p>
+					<ul>{#each review.paths as path (path)}<li><code>{path}</code></li>{/each}</ul>
+					<label class="field-label" for={`${replacementId}-output-patch`}>Exact protected-path changes from remote to candidate</label>
+					<textarea id={`${replacementId}-output-patch`} readonly rows="14" value={review.patch}></textarea>
+					<p>Candidate snapshot: <code>{review.candidateTree}</code>. A changed candidate, local commit, or remote snapshot requires a fresh review. Other staged changes retain the normal publishing approval rules.</p>
+					{#if review.approved}
+						<p>Approved for this exact output and remote snapshot. Retry publishing; the server checks them again before committing.</p>
+					{:else}
+						<form method="POST" action="/api/publish/output" aria-labelledby={`${replacementId}-output-heading`}
+							onsubmit={(event) => { event.preventDefault(); void approveOutput(event.currentTarget); }}>
+							<input type="hidden" name="token" value={review.token} />
+							<input type="hidden" name="remote" value={review.remoteCommit} />
+							<label for={`${replacementId}-output-confirm`}>
+								<input id={`${replacementId}-output-confirm`} name="confirm" type="checkbox" value="reviewed-protected-output"
+									bind:checked={outputApproved} required disabled={busy || disabled} />
+								I reviewed every change in this patch. Replace these protected remote paths with this exact output on the next publish (required).
+							</label>
+							<button type="submit" disabled={busy || disabled}>Approve exact protected output</button>
+						</form>
+					{/if}
+				</details>
+			{/if}
 		{/if}
 	</section>
 {/if}
@@ -227,6 +282,20 @@
 
 	.protection code {
 		white-space: pre-wrap;
+	}
+
+	.protection textarea {
+		box-sizing: border-box;
+		inline-size: 100%;
+		max-block-size: 24rem;
+		overflow: auto;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		font-size: 12px;
+		font-family: var(--font-mono, monospace);
+		line-height: 1.5;
+		padding: 10px;
+		border: 1px solid var(--line);
 	}
 
 	p, label {
