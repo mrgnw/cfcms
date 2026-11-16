@@ -118,7 +118,7 @@ try {
 	const recoveryPage = await (await request('/publish')).text();
 	assert.match(recoveryPage, /The captured publication is waiting for remote delivery/);
 	assert.match(recoveryPage, /Verify remote delivery/);
-	assert.match(recoveryPage, /Download the captured patch/);
+	assert.match(recoveryPage, /Download captured patch/);
 	git('rebase', 'origin/main');
 	git('push', '-q', 'origin', 'main');
 	const rewritten = git('rev-parse', 'HEAD');
@@ -127,20 +127,38 @@ try {
 	git('reflog', 'expire', '--expire=now', '--all');
 	git('gc', '--prune=now');
 	git('cat-file', '-e', `${captured}^{commit}`);
+	peerGit('pull', '--ff-only', '-q');
+	writeFileSync(join(peer, 'content/later.md'), readFileSync(join(peer, 'content/later.md'), 'utf8').replace('later body.', 'A later remote edit.'));
+	peerGit('commit', '-qam', 'edit after rewritten delivery');
+	peerGit('push', '-q', 'origin', 'main');
+	const editedRemote = peerGit('rev-parse', 'HEAD');
 	writeFileSync(join(blog, 'local-only.txt'), 'Do not push this local work.\n');
 	git('add', 'local-only.txt');
 	git('commit', '-qm', 'local work after manual push');
 	const localOnly = git('rev-parse', 'HEAD');
 	const preservedIndex = readFileSync(join(blog, '.git/index'));
+	assert.equal((await request(`/api/publish/reconcile?commit=${captured}`, {})).status, 409);
+	assert.match(await (await request('/publish')).text(), /Delivered before a later remote edit/);
 	const preservedPosts = database.prepare('SELECT * FROM posts ORDER BY path').all();
-	const verified = await request(`/api/publish/reconcile?commit=${captured}`, {});
+	assert.equal((await request(`/api/publish/reconcile?commit=${captured}&delivered=${rewritten}&remote=${editedRemote}`, {})).status, 400,
+		'historical delivery cannot be inferred without explicit author confirmation');
+	const verified = await request('/api/publish/reconcile', {
+		commit: captured, delivered: rewritten, remote: editedRemote, confirm: 'reviewed-delivery'
+	});
 	assert.equal(verified.status, 200, await verified.clone().text());
-	assert.equal((await verified.json()).remoteCommit, rewritten);
+	const deliveryReport = await verified.json();
+	assert.equal(deliveryReport.remoteCommit, editedRemote);
+	assert.equal(deliveryReport.deliveryCommit, rewritten);
+	assert.equal(deliveryReport.authorConfirmed, true);
 	assert.equal(git('rev-parse', 'HEAD'), localOnly);
-	assert.equal(git('rev-parse', 'origin/main'), rewritten);
+	assert.equal(git('rev-parse', 'origin/main'), editedRemote);
+	assert.match(peerGit('show', 'main:content/later.md'), /A later remote edit/);
 	assert.deepEqual(readFileSync(join(blog, '.git/index')), preservedIndex);
 	assert.deepEqual(database.prepare('SELECT * FROM posts ORDER BY path').all(), preservedPosts);
 	assert.equal(database.prepare('SELECT value FROM meta WHERE key = ?').get('pendingPublishPush').value, '');
+	const receipt = await (await request('/api/publish/reconcile')).json();
+	assert.equal(receipt.lastDelivery.commit, rewritten);
+	assert.equal(receipt.lastDelivery.capturedCommit, captured);
 	assert.equal((await request(`/api/publish/reconcile?commit=${captured}`, {})).status, 409);
 	const missing = 'a'.repeat(40);
 	database.prepare('INSERT INTO meta(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value')
