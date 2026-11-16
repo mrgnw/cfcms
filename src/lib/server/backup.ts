@@ -1,7 +1,7 @@
 import { mkdir, rename, rm } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { getMetaValue, setMetaValue, vacuumInto } from './db';
-import { commitPaths, getCurrentBranch, getHeadCommit, pushContent, runGit } from './git';
+import { commitPaths, getCurrentBranch, getHeadCommit, pushContent, retainPushCommit, runGit } from './git';
 import { mainBranchError } from '#lib/branch.js';
 import { contentBaseDirectory } from './paths';
 import { assertCheckoutWriteLock, CheckoutBusyError, withCheckoutLock } from './checkout-lock';
@@ -33,6 +33,7 @@ export const getBackupStatus = () => {
 const backupIsDelivered = async (pending: string, remote: string) => {
 	const exists = await runGit(['cat-file', '-e', `${pending}^{commit}`], 10_000);
 	if (!exists.ok) return false;
+	await retainPushCommit('backup', pending);
 	if (await isAncestor(pending, remote)) return true;
 	const captured = await runGit(['ls-tree', pending, '--', backupRelativePath], 10_000);
 	const delivered = await runGit(['ls-tree', remote, '--', backupRelativePath], 10_000);
@@ -96,6 +97,7 @@ export const backupLockedCheckout = async () => {
 		}
 		const head = await captureBackup();
 		setMetaValue(pendingBackupKey, head);
+		await retainPushCommit('backup', head);
 		await pushBackup(head);
 	} catch (caught) {
 		recordFailure(caught);
@@ -141,6 +143,7 @@ export const replacePendingBackup = (expected: string, expectedRemote: string) =
 		}
 		setMetaValue('supersededBackupPush', expected);
 		setMetaValue(pendingBackupKey, head);
+		await retainPushCommit('backup', head);
 		await pushBackup(head);
 		const message = 'Saved backup replaced with a fresh database snapshot and pushed. Post files and saved edits were unchanged.';
 		setMetaValue('backupRecoveryMessage', message);

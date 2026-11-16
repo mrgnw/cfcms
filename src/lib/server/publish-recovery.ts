@@ -1,6 +1,6 @@
 import { withCheckoutLock, CheckoutBusyError } from './checkout-lock';
 import { getMetaValue, setMetaValue } from './db';
-import { runGit } from './git';
+import { retainPushCommit, runGit } from './git';
 import { verifyRewrittenCommit } from './git-proof';
 import { getPendingPublishPush, getRemoteMain, isAncestor, setPendingPublishPush } from './publish-push';
 
@@ -22,6 +22,7 @@ export const reconcilePublication = (expected: string) => withCheckoutLock(async
 	let proof = { equivalent: false, paths: [] as string[] };
 	let failure = '';
 	try {
+		await retainPushCommit('publication', pending);
 		proof = await isAncestor(pending, remote)
 			? { equivalent: true, paths: [] }
 			: await verifyRewrittenCommit(pending, remote);
