@@ -207,6 +207,13 @@ try {
 	assert.notEqual(git('rev-parse', 'HEAD'), git('rev-parse', 'origin/main'));
 	assert.equal(hasPendingPublishPush(), true, 'push retry remains available after reloading the view');
 	const committedBeforeRetry = git('rev-parse', 'HEAD');
+	const boundaryBeforePendingPurge = readFileSync(join(blog, 'content/fresh.md'));
+	const indexBeforePendingPurge = readFileSync(join(blog, '.git/index'));
+	await assert.rejects(purgePost(fresh.path), /publish push is pending/);
+	assert.equal(git('rev-parse', 'HEAD'), committedBeforeRetry);
+	assert.deepEqual(readFileSync(join(blog, 'content/fresh.md')), boundaryBeforePendingPurge);
+	assert.deepEqual(readFileSync(join(blog, '.git/index')), indexBeforePendingPurge);
+	assert.equal((await getPost(fresh.path)).contentHash, fresh.contentHash);
 	await assert.rejects(runBackup(), /Backup push failed/);
 	assert.equal(getMetaValue('lastBackupAt'), lastBackupBeforeFailure, 'rejected backup pushes do not advance the backup timestamp');
 	assert.notEqual(git('rev-parse', 'HEAD'), committedBeforeRetry, 'a backup can advance HEAD after a rejected publish push');
