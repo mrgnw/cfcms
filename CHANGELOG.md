@@ -2,6 +2,12 @@
 
 User-visible changes to the CMS, newest first. Add an entry under today's date with every PR merged to main. History before 2026-10-05 is in `git log`.
 
+## 2026-11-16
+
+### Added
+
+- Give a post a next step and a size, Quick or Deeper, from the line under its date in the editor. The sidebar shows both under the post's title, and the editing queue can be narrowed to Quick or Deeper posts. They stay in the CMS and are never published.
+
 ## 2026-11-12
 
 ### Changed
