@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { contentBaseDirectory, databasePath } from './paths';
 import { randomPostId } from '#lib/post-id.js';
+import { isEffort, nextStepLimit, type Triage } from '#lib/types.js';
 
 // Lazy init: opening at module load would run during `vite build` with
 // build-time cwd/env and poison the db with a wrong-path legacy import.
@@ -74,7 +75,9 @@ const db = () => {
 		['llm_hash', 'TEXT'],
 		['llm_mtime_ms', 'INTEGER'],
 		['staged', 'INTEGER'],
-		['id', 'TEXT']
+		['id', 'TEXT'],
+		['next_step', 'TEXT'],
+		['effort', 'TEXT']
 	];
 	for (const [name, type] of newColumns) {
 		if (!postColumns.has(name)) instance.exec(`ALTER TABLE posts ADD COLUMN ${name} ${type}`);
@@ -221,7 +224,10 @@ export const recordPublished = (
 		upsert.run(post.path, post.contentHash, post.title, post.slug, commit, deployedAt);
 	}
 	db()
-		.prepare('DELETE FROM posts WHERE published_hash IS NULL AND editing_order IS NULL AND head_rev IS NULL')
+		.prepare(
+			`DELETE FROM posts WHERE published_hash IS NULL AND editing_order IS NULL AND head_rev IS NULL
+			 AND next_step IS NULL AND effort IS NULL`
+		)
 		.run();
 	setMeta('lastPublishedAt', deployedAt);
 	db().exec('COMMIT');
@@ -249,7 +255,10 @@ export const removeFromEditing = (path: string) => {
 	db().exec('BEGIN');
 	db().prepare('UPDATE posts SET editing_order = NULL WHERE path = ?').run(path);
 	db()
-		.prepare('DELETE FROM posts WHERE published_hash IS NULL AND editing_order IS NULL AND head_rev IS NULL')
+		.prepare(
+			`DELETE FROM posts WHERE published_hash IS NULL AND editing_order IS NULL AND head_rev IS NULL
+			 AND next_step IS NULL AND effort IS NULL`
+		)
 		.run();
 	db().exec('COMMIT');
 };
@@ -269,6 +278,25 @@ export const reorderEditing = (paths: string[]) => {
 		update.run(index, path);
 	}
 	db().exec('COMMIT');
+};
+
+export const getTriage = (): Map<string, Triage> => {
+	const rows = db()
+		.prepare('SELECT path, next_step, effort FROM posts WHERE next_step IS NOT NULL OR effort IS NOT NULL')
+		.all() as { path: string; next_step: string | null; effort: string | null }[];
+
+	return new Map(
+		rows.map((row) => [row.path, { nextStep: row.next_step, effort: isEffort(row.effort) ? row.effort : null }])
+	);
+};
+
+export const setTriage = (path: string, triage: Triage) => {
+	if (triage.nextStep !== null && triage.nextStep.length > nextStepLimit) throw new Error('Next step is too long');
+
+	db().prepare(
+		`INSERT INTO posts (path, next_step, effort) VALUES (?, ?, ?)
+		 ON CONFLICT(path) DO UPDATE SET next_step = excluded.next_step, effort = excluded.effort`
+	).run(path, triage.nextStep, triage.effort);
 };
 
 export const seedEditingQueue = (paths: string[]) => {

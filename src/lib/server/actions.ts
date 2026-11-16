@@ -11,13 +11,14 @@ import {
 	removeFromEditing,
 	reorderEditing,
 	setStaged,
+	setTriage,
 	upsertVersion
 } from '#lib/server/db.js';
 import { commitPost } from '#lib/server/git.js';
 import { hasSiteVersion, shipsHeadText } from '#lib/server/pending.js';
 import { isBlankDraft, setDeleteFlag } from '#lib/frontmatter.js';
 import { isValidWriter, normalizeNewlines } from '#lib/save-rules.js';
-import { statusOf } from '#lib/types.js';
+import { isEffort, nextStepLimit, statusOf } from '#lib/types.js';
 
 const maxRevisionLabel = 60;
 
@@ -216,6 +217,24 @@ export const actions = {
 			return fail(400, { message: caught instanceof Error ? caught.message : 'Reorder failed' });
 		}
 		return { reordered: paths.length };
+	},
+	triage: async ({ request }) => {
+		const form = await request.formData();
+		const path = String(form.get('path') ?? '');
+		const nextStep = String(form.get('nextStep') ?? '').trim().replace(/\s+/g, ' ');
+		const effort = String(form.get('effort') ?? '');
+
+		if (!path) return fail(400, { message: 'Post path is required' });
+		if (nextStep.length > nextStepLimit) {
+			return fail(400, { message: `Next step must be ${nextStepLimit} characters or fewer` });
+		}
+		if (effort && !isEffort(effort)) return fail(400, { message: 'effort must be quick, deep or empty' });
+
+		const post = await getPost(path).catch(() => null);
+		if (!post) return fail(400, { message: `Unknown post: ${path}` });
+
+		setTriage(path, { nextStep: nextStep || null, effort: isEffort(effort) ? effort : null });
+		return { triaged: path };
 	},
 	trash: async ({ request }) => {
 		const form = await request.formData();
