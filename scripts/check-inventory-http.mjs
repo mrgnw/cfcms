@@ -56,11 +56,11 @@ try {
 	assert.equal(list.status, 200);
 	assert.match(list.headers.get('cache-control'), /no-store/);
 	const inventory = await list.json();
-	assert.equal(inventory.posts[0].hasAssistantDraft, true);
+	assert.equal(inventory.posts[0].hasVersions, true);
 	const detail = await request('/api/inventory/aaaaaa');
 	assert.equal(detail.status, 200);
 	const post = await detail.json();
-	assert.equal(post.human.body, '');
+	assert.equal(post.head.body, '');
 	assert.equal(post.versions[0].body, 'Proposal');
 	assert.equal(post.versions[0].contentHash.length, 64);
 	assert.equal((await request('/api/inventory/cccccc')).status, 404);
