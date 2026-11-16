@@ -68,7 +68,7 @@ try {
 	assert.equal(triaged?.effort, 'quick', 'saving the size kept the next step and vice versa');
 
 	// a session still holding the empty value it loaded must not replace another session's step
-	const stale = (await triage({ path, field: 'nextStep', value: 'Something else', base: '' })) as {
+	const stale = (await triage({ path, field: 'nextStep', value: 'Something else', base: '' })) as unknown as {
 		status: number;
 		data: { current: string };
 	};
