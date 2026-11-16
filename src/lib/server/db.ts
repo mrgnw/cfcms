@@ -78,6 +78,7 @@ const db = () => {
 		['llm_mtime_ms', 'INTEGER'],
 		['llm_version_revision', 'TEXT'],
 		['staged', 'INTEGER'],
+		['staged_hash', 'TEXT'],
 		['id', 'TEXT'],
 		['next_step', 'TEXT'],
 		['effort', 'TEXT'],
@@ -646,17 +647,33 @@ const setLlmState = (path: string, hash: string, mtimeMs: number, versionRevisio
 };
 
 export const setStaged = (path: string, staged: boolean) => {
-	db().prepare('UPDATE posts SET staged = ? WHERE path = ? AND head_rev IS NOT NULL').run(staged ? 1 : 0, path);
+	db().prepare(`
+		UPDATE posts SET staged = ?, staged_hash = CASE WHEN ? THEN
+			(SELECT hash FROM revisions WHERE revisions.path = posts.path AND rev = posts.head_rev)
+			ELSE NULL END
+		WHERE path = ? AND head_rev IS NOT NULL
+	`).run(staged ? 1 : 0, staged ? 1 : 0, path);
 };
+
+export const getStagedRevisions = (): Map<string, string | null> =>
+	new Map(
+		(db().prepare('SELECT path, staged_hash FROM posts WHERE staged = 1').all() as {
+			path: string; staged_hash: string | null;
+		}[]).map((row) => [row.path, row.staged_hash])
+	);
 
 export const getStagedPaths = (): Set<string> =>
 	new Set(
-		(db().prepare('SELECT path FROM posts WHERE staged = 1').all() as { path: string }[]).map((row) => row.path)
+		(db().prepare(`
+			SELECT posts.path FROM posts JOIN revisions
+			ON revisions.path = posts.path AND revisions.rev = posts.head_rev
+			WHERE posts.staged = 1 AND posts.staged_hash = revisions.hash
+		`).all() as { path: string }[]).map((row) => row.path)
 	);
 
-export const clearStaged = (paths: string[]) => {
-	const clear = db().prepare('UPDATE posts SET staged = 0 WHERE path = ?');
-	for (const path of paths) clear.run(path);
+export const clearStaged = (posts: { path: string; contentHash: string }[]) => {
+	const clear = db().prepare('UPDATE posts SET staged = 0, staged_hash = NULL WHERE path = ? AND staged_hash = ?');
+	for (const post of posts) clear.run(post.path, post.contentHash);
 };
 
 export const updatePublishedHash = (path: string, hash: string) => {

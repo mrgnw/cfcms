@@ -61,9 +61,37 @@ try {
 	}).llm_version_revision, null, 'migration does not treat an API edit as the last imported file');
 	migrated.close();
 	for (const column of ['head_rev', 'exported_hash', 'llm_hash', 'llm_version_revision', 'staged',
-		'next_step', 'effort', 'triage_rev']) assert.ok(columns.includes(column), column);
+		'staged_hash', 'next_step', 'effort', 'triage_rev']) {
+		assert.ok(columns.includes(column), column);
+	}
 
 	const { appendRevision, labelRevision, listRevisions } = await import('./db.ts');
+	const { setStaged, getStagedPaths, getStagedRevisions, clearStaged } = await import('./db.ts');
+	appendRevision('staged.md', '', 'approved', 'approved-hash', 'mac');
+	setStaged('staged.md', true);
+	assert.ok(getStagedPaths().has('staged.md'));
+	appendRevision('staged.md', '', 'edited after staging', 'edited-hash', 'mac');
+	assert.ok(!getStagedPaths().has('staged.md'), 'edited after staging must wait for restaging');
+	assert.equal(getStagedRevisions().get('staged.md'), 'approved-hash', 'the approved hash survives an edit');
+	setStaged('staged.md', true);
+	assert.ok(getStagedPaths().has('staged.md'), 'restaging approves the new head');
+	clearStaged([{ path: 'staged.md', contentHash: 'approved-hash' }]);
+	assert.ok(getStagedPaths().has('staged.md'), 'publish completion preserves a newer restage');
+	clearStaged([{ path: 'staged.md', contentHash: 'edited-hash' }]);
+	assert.ok(!getStagedRevisions().has('staged.md'), 'publish completion clears only its own approved hash');
+	setStaged('staged.md', true);
+	setStaged('staged.md', false);
+	assert.ok(!getStagedRevisions().has('staged.md'), 'unstaging clears the approval');
+	setStaged('missing.md', true);
+	assert.ok(!getStagedRevisions().has('missing.md'), 'unknown posts cannot be staged');
+	const legacyStaging = new DatabaseSync(databasePath);
+	legacyStaging.prepare('UPDATE posts SET staged = 1, staged_hash = NULL WHERE path = ?').run('staged.md');
+	legacyStaging.close();
+	assert.ok(!getStagedPaths().has('staged.md'), 'legacy staging without an approved hash requires restaging');
+	assert.equal(getStagedRevisions().get('staged.md'), null);
+	setStaged('staged.md', true);
+	appendRevision('staged.md', 'publish: false', 'edited after staging', 'frontmatter-hash', 'mac');
+	assert.ok(!getStagedPaths().has('staged.md'), 'frontmatter edits also require restaging');
 	appendRevision('busy.md', '', 'v1', 'h1', 'mac');
 	appendRevision('busy.md', '', 'v2', 'h2', 'mac');
 	assert.ok(labelRevision('busy.md', 2, 'checkpoint'));

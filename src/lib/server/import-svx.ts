@@ -8,7 +8,6 @@ import {
 	clearStaged,
 	getMetaValue,
 	getRevision,
-	getStagedPaths,
 	listStoredPosts,
 	listVersions,
 	recordPublished,
@@ -87,7 +86,7 @@ const runBaseline = async () => {
 	}
 
 	recordPublished(live, null);
-	clearStaged([...getStagedPaths()]);
+	clearStaged(listStoredPosts().map((post) => ({ path: post.path, contentHash: post.hash })));
 	setMetaValue(metaKey, new Date().toISOString());
 	const reportDirectory = resolve(process.cwd(), '.data');
 	await mkdir(reportDirectory, { recursive: true });
