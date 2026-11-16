@@ -76,7 +76,7 @@ export const reconcilePublication = (expected: string, selected?: SelectedDelive
 			? selected
 				? `Delivery at your selected commit ${deliveryCommit} verified. Later remote edits were preserved. No post content or checkout files were changed.`
 				: 'Remote delivery verified. No post content or checkout files were changed.'
-			: `${failure ? `${failure}. ` : ''}Remote delivery is not verified. If a later remote edit replaced the delivered text, identify and explicitly confirm the rewritten publication commit below. Matching content alone is not a delivery record. Otherwise, download the captured patch, review and apply it on a branch based on origin/main, resolve conflicts, and push the reviewed result without force. Then verify again. If the captured Git object is missing, restore it from a clone or backup first. Newer CMS edits remain saved.`,
+			: `${failure ? `${failure}. ` : ''}Remote delivery is not verified. If a later remote edit replaced the delivered text, identify and explicitly confirm the rewritten publication commit on the Publish page. Matching content alone is not a delivery record. Otherwise, download the captured patch, review and apply it on a branch based on origin/main, resolve conflicts, and push the reviewed result without force. Then verify again. If the captured Git object is missing, restore it from a clone or backup first. Newer CMS edits remain saved.`,
 		patchUrl: `/api/publish/reconcile?patch=${pending}`
 	};
 	setMetaValue(reportKey, report.message);

@@ -2,7 +2,7 @@
 	import { refreshAll } from '$app/navigation';
 
 	let { publication, backup, disabled = false, onPublicationVerified }: {
-		publication: { pendingCommit: string | null; message: string | null };
+		publication: { pendingCommit: string | null; message: string | null; remoteCommit?: string | null };
 		backup: { pendingCommit: string | null; error: string | null; message: string | null; remoteCommit: string | null };
 		disabled?: boolean;
 		onPublicationVerified?: () => void;
@@ -14,6 +14,8 @@
 	let unresolved = $state<string[]>([]);
 	let failed = $state(false);
 	let replacementApproved = $state(false);
+	let historicalCommit = $state('');
+	let historicalApproved = $state(false);
 
 	$effect(() => {
 		backup.pendingCommit;
@@ -21,16 +23,29 @@
 		replacementApproved = false;
 	});
 
-	async function recover(kind: 'publish' | 'backup', commit: string, replace?: string, retry = false) {
+	$effect(() => {
+		publication.pendingCommit;
+		publication.remoteCommit;
+		historicalApproved = false;
+	});
+
+	async function recover(kind: 'publish' | 'backup', commit: string, replace?: string, retry = false,
+		selected?: { commit: string; remote: string }) {
 		if (busy || disabled) return;
 		busy = true;
 		replacementApproved = false;
+		historicalApproved = false;
 		message = '';
 		unresolved = [];
 		try {
 			const query = new URLSearchParams({ commit });
 			if (replace) query.set('replace', replace);
 			if (retry) query.set('retry', '1');
+			if (selected) {
+				query.set('delivered', selected.commit);
+				query.set('remote', selected.remote);
+				query.set('confirm', 'reviewed-delivery');
+			}
 			const response = await fetch(`/api/${kind}/reconcile?${query}`, { method: 'POST' });
 			const report = await response.json();
 			failed = !response.ok;
@@ -57,6 +72,31 @@
 			<button type="button" disabled={busy || disabled} onclick={() => recover('publish', publication.pendingCommit!)}>Verify remote delivery</button>
 			<a href={`/api/publish/reconcile?patch=${publication.pendingCommit}`} download>Download captured patch</a>
 		</div>
+		{#if publication.remoteCommit}
+			<details>
+				<summary>Delivered before a later remote edit?</summary>
+				<p id={`${replacementId}-history-help`}>Enter the full commit hash from your successful manual push. Confirm only a commit you reviewed as delivering this publication. Matching content alone does not establish delivery. Verification preserves all later remote edits.</p>
+				<form method="POST" action="/api/publish/reconcile" onsubmit={(event) => {
+					event.preventDefault();
+					void recover('publish', publication.pendingCommit!, undefined, false,
+						{ commit: historicalCommit, remote: publication.remoteCommit! });
+				}}>
+					<input type="hidden" name="commit" value={publication.pendingCommit} />
+					<input type="hidden" name="remote" value={publication.remoteCommit} />
+					<label class="field-label" for={`${replacementId}-delivered`}>Rewritten publication commit (required)</label>
+					<input id={`${replacementId}-delivered`} name="delivered" type="text" bind:value={historicalCommit}
+						oninput={() => historicalApproved = false} required minlength="40" maxlength="64" pattern={'[0-9a-f]{40}([0-9a-f]{24})?'}
+						autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
+						aria-describedby={`${replacementId}-history-help`} disabled={busy || disabled} />
+					<label for={`${replacementId}-history-confirm`}>
+						<input id={`${replacementId}-history-confirm`} name="confirm" type="checkbox" value="reviewed-delivery"
+							bind:checked={historicalApproved} required disabled={busy || disabled} />
+						I reviewed this commit as the delivered publication. Keep later remote edits.
+					</label>
+					<button type="submit" disabled={busy || disabled}>Verify selected delivery commit</button>
+				</form>
+			</details>
+		{/if}
 	</section>
 {/if}
 
@@ -125,9 +165,36 @@
 		margin: 12px 0 8px;
 	}
 
-	input {
+	input[type='checkbox'] {
 		accent-color: var(--accent);
 		margin-top: 4px;
+	}
+
+	details {
+		margin-top: 12px;
+		font-size: 13px;
+	}
+
+	summary {
+		cursor: pointer;
+	}
+
+	.field-label {
+		display: block;
+		margin-bottom: 4px;
+	}
+
+	input[type='text'] {
+		box-sizing: border-box;
+		width: 100%;
+		min-height: 40px;
+		padding: 8px;
+		border: 1px solid var(--ink-3);
+		border-radius: 6px;
+		font: inherit;
+		font-size: 16px;
+		background: var(--bg);
+		color: var(--ink);
 	}
 
 	button, a {
