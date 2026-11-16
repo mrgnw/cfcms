@@ -15,7 +15,7 @@ const db = () => {
 	if (instance) return instance;
 
 	mkdirSync(dirname(databasePath), { recursive: true });
-	instance = new DatabaseSync(databasePath);
+	instance = new DatabaseSync(databasePath, { timeout: 5_000 });
 	instance.exec(`
 		PRAGMA journal_mode = WAL;
 
@@ -444,6 +444,34 @@ export const changeAssistantDraft = (
 		const saved = getAssistantDraft(path)!;
 		connection.exec('COMMIT');
 		return { outcome: 'write', draft: saved } as const;
+	} catch (caught) {
+		connection.exec('ROLLBACK');
+		throw caught;
+	}
+};
+
+export const ingestAssistantFile = (
+	stored: StoredPost,
+	expectedRevision: string | null,
+	file: AssistantDraftText & { hash: string; mtimeMs: number }
+) => {
+	const connection = db();
+	connection.exec('BEGIN IMMEDIATE');
+	try {
+		const post = getStoredPost(stored.path);
+		if (!post || post.llmHash !== stored.llmHash || post.llmMtimeMs !== stored.llmMtimeMs) {
+			connection.exec('ROLLBACK');
+			return;
+		}
+		const draft = getAssistantDraft(stored.path);
+		if (file.hash !== post.llmHash && (draft?.revision ?? null) === expectedRevision) {
+			upsertVersion({
+				path: stored.path, writer: 'llm', sessionId: draft?.sessionId ?? 'file',
+				baseHash: file.baseHash, frontmatter: file.frontmatter, body: file.body
+			});
+		}
+		setLlmState(stored.path, file.hash, file.mtimeMs);
+		connection.exec('COMMIT');
 	} catch (caught) {
 		connection.exec('ROLLBACK');
 		throw caught;
