@@ -50,7 +50,15 @@ try {
 	assert.ok(!kept.includes(3), 'unnamed revisions past the cap are pruned');
 	assert.equal(kept[0], 203, 'newest first');
 
-	const { addToEditing, removeFromEditing, getTriage, setTriageField, reorderEditing, getEditingOrder } = await import(
+	const {
+		addToEditing,
+		removeFromEditing,
+		getTriage,
+		setTriageField,
+		reorderEditing,
+		getEditingOrder,
+		recordPublished
+	} = await import(
 		'./db.ts'
 	);
 	addToEditing('draft.md');
@@ -85,6 +93,19 @@ try {
 	);
 	assert.throws(() => setTriageField('draft.md', 'nextStep', 'x'.repeat(141), null), /too long/);
 	assert.throws(() => setTriageField('draft.md', 'effort', 'someday', null), /Unknown effort/);
+
+	// an assistant-only draft has no head_rev, so only its triage row remembers the rev
+	assert.ok(setTriageField('assistant.llm.md', 'nextStep', 'Check facts', null).saved);
+	assert.ok(setTriageField('assistant.llm.md', 'nextStep', null, 'Check facts').saved);
+	addToEditing('other.md');
+	removeFromEditing('other.md');
+	recordPublished([], null);
+	assert.deepEqual(
+		getTriage().get('assistant.llm.md'),
+		{ nextStep: null, effort: null, rev: 2 },
+		'queue and publish cleanups keep a cleared triage row'
+	);
+	assert.equal(setTriageField('assistant.llm.md', 'effort', 'quick', null).rev, 3, 'the next save keeps counting up');
 
 	for (const path of ['a.md', 'b.md', 'c.md', 'd.md']) addToEditing(path);
 	reorderEditing(['d.md', 'b.md']);
