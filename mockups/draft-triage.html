@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Draft triage mockup · cms</title>
+<style>
+	:root {
+		--paper: #fdfbf6;
+		--bg: #f3efe6;
+		--ink: #262019;
+		--ink-2: #6b6254;
+		--ink-3: #a19682;
+		--line: #e6ded0;
+		--hover: #ece5d7;
+		--accent: #c05b2e;
+		--accent-ink: #9c4415;
+		--ok: #3c7a44;
+		--warn: #8a6516;
+		--font-display: 'Iowan Old Style', Palatino, Georgia, serif;
+		--font-ui: ui-sans-serif, system-ui, -apple-system, sans-serif;
+	}
+	* { box-sizing: border-box; }
+	body {
+		margin: 0;
+		background: var(--bg);
+		color: var(--ink);
+		font-family: var(--font-ui);
+		padding: 24px 16px 64px;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 40px;
+		justify-content: center;
+	}
+	.variant { width: 340px; }
+	.variant.wide { width: 560px; }
+	.variant > h2 { font-family: var(--font-display); font-size: 20px; margin: 0 0 4px; }
+	.variant > p { color: var(--ink-2); font-size: 12px; margin: 0 0 14px; line-height: 1.5; }
+	.frame {
+		background: var(--bg);
+		border: 1px solid var(--line);
+		border-radius: 14px;
+		padding: 14px;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		box-shadow: 0 2px 4px rgba(38,32,25,.03), 0 8px 24px rgba(38,32,25,.06);
+	}
+	.section-label {
+		display: flex; align-items: center; gap: 8px;
+		color: var(--ink-3); font-size: 10.5px; font-weight: 600;
+		letter-spacing: .08em; text-transform: uppercase;
+		margin: 8px 2px 2px;
+	}
+	.section-label.editing { color: var(--accent-ink); }
+	.section-label::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+	.filter { display: flex; gap: 2px; border: none; margin: 0 0 2px; padding: 0; }
+	.filter label {
+		border-radius: 7px; color: var(--ink-2); cursor: pointer;
+		font-size: 12px; font-variant-numeric: tabular-nums; padding: 4px 8px;
+	}
+	.filter label:hover, .filter label:has(:checked) { background: var(--hover); }
+	.filter label:has(:checked) { color: var(--ink); font-weight: 560; }
+	.filter input { position: absolute; opacity: 0; pointer-events: none; }
+	.row {
+		display: grid; grid-template-columns: 7px minmax(0, 1fr) auto; gap: 2px 9px;
+		align-items: baseline; border-radius: 8px; padding: 7px 8px; font-size: 13px;
+	}
+	.row:hover { background: var(--hover); }
+	.row.selected { background: var(--hover); box-shadow: inset 2px 0 0 var(--accent); }
+	.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); align-self: center; }
+	.row strong { font-weight: 560; line-height: 1.3; }
+	.date { color: var(--ink-3); font-size: 11px; }
+	.next {
+		grid-column: 2 / -1; color: var(--ink-2); font-size: 12px;
+		overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+	}
+	.effort { font-weight: 600; margin-right: 4px; }
+	.quick .effort, .effort.quick { color: var(--ok); }
+	.deep .effort, .effort.deep { color: var(--accent-ink); }
+	.frame:has(#show-quick:checked) .row.deep,
+	.frame:has(#show-quick:checked) .row.none,
+	.frame:has(#show-deep:checked) .row.quick,
+	.frame:has(#show-deep:checked) .row.none { display: none; }
+
+	.editor { background: var(--paper); padding: 22px 26px; gap: 10px; }
+	.editor h1 { font-family: var(--font-display); font-size: 34px; margin: 0; }
+	.meta-line { display: flex; gap: 10px; align-items: center; color: var(--ink-2); font-family: ui-monospace, monospace; font-size: 13px; }
+	.next-line { display: flex; gap: 6px; align-items: center; }
+	.next-line select, .next-line input {
+		background: transparent; border: none; border-radius: 6px; color: inherit;
+		font: inherit; font-size: 13px; padding: 5px 6px;
+	}
+	.next-line select { color: var(--accent-ink); font-weight: 560; }
+	.next-line input { flex: 1; min-width: 0; }
+	.next-line input:focus, .next-line select:focus { background: var(--bg); outline: none; }
+	.tags { color: var(--ink-3); font-size: 14px; padding: 5px 6px; }
+	.body { color: var(--ink-2); font-family: var(--font-display); font-size: 17px; line-height: 1.6; margin: 6px 0 0; }
+	.notes { font-size: 13px; line-height: 1.55; color: var(--ink-2); }
+	.notes h3 { color: var(--ink); font-size: 14px; margin: 14px 0 4px; }
+	.notes ul { margin: 0; padding-left: 18px; }
+</style>
+</head>
+<body>
+
+<section class="variant">
+	<h2>Sidebar: editing queue</h2>
+	<p>Size and next step sit under the title, on every row that has them. The filter appears once a queued post has a size. Try it: the filter works in this mockup.</p>
+	<div class="frame">
+		<div class="section-label editing">Editing</div>
+		<fieldset class="filter">
+			<label><input type="radio" name="show" id="show-all" checked />All 5</label>
+			<label><input type="radio" name="show" id="show-quick" />Quick 2</label>
+			<label><input type="radio" name="show" id="show-deep" />Deeper 2</label>
+		</fieldset>
+		<div class="row quick selected"><span class="dot"></span><strong>Gear</strong><span class="date">2024</span><small class="next"><span class="effort">Quick</span>Add photos of the desk setup</small></div>
+		<div class="row deep"><span class="dot"></span><strong>MCP: Connecting Claude to your dev tools</strong><span class="date">2025</span><small class="next"><span class="effort">Deeper</span>Rewrite the server section for the new SDK</small></div>
+		<div class="row quick"><span class="dot"></span><strong>Python patterns, explained simply</strong><span class="date">2025</span><small class="next"><span class="effort">Quick</span>Fix the broken code sample</small></div>
+		<div class="row deep"><span class="dot"></span><strong>UV replaced my entire Python toolchain</strong><span class="date">2025</span><small class="next"><span class="effort">Deeper</span>Split into an intro post and a deep dive</small></div>
+		<div class="row none"><span class="dot"></span><strong>Tailscale as a Docker sidecar</strong><span class="date">2025</span></div>
+		<div class="section-label">Recent</div>
+		<div class="row"><span class="dot"></span><strong>my dev config</strong><span class="date">2025</span><small class="next">Check links</small></div>
+		<div class="row"><span class="dot"></span><strong>Configuring LLMs for Svelte 5</strong><span class="date">2025</span></div>
+	</div>
+</section>
+
+<section class="variant wide">
+	<h2>Editor: one line under the date</h2>
+	<p>Size is a native select; the next step is a single line of text, up to 140 characters. Both save on change and never touch the post's frontmatter.</p>
+	<div class="frame editor">
+		<h1>Gear</h1>
+		<div class="meta-line">2024-08-01 <span>✓ · pin · queue · delete</span></div>
+		<div class="next-line">
+			<select aria-label="Size"><option value="">Size</option><option selected>Quick</option><option>Deeper</option></select>
+			<input aria-label="Next step" value="Add photos of the desk setup" maxlength="140" />
+		</div>
+		<div class="tags">comma-separated tags</div>
+		<p class="body">The gear I carry and the desk I come back to…</p>
+	</div>
+
+	<div class="notes">
+		<h3>What it is</h3>
+		<ul>
+			<li>Two optional fields per post: a next step and a size, <span class="effort quick">Quick</span> or <span class="effort deep">Deeper</span>.</li>
+			<li>The manual queue order stays the plan. The filter only narrows it; dragging is off while filtered, so the order is never rewritten from a subset.</li>
+			<li>Stored in the CMS database beside the queue order. Nothing is written to the Markdown or published.</li>
+		</ul>
+		<h3>Left out on purpose</h3>
+		<ul>
+			<li>No scores, deadlines, statuses or required steps. A post with neither field looks as it does today.</li>
+			<li>No suggestions or topic research inside cfcms. Another tool can write the same fields through the <code>triage</code> form action.</li>
+		</ul>
+	</div>
+</section>
+
+</body>
+</html>
