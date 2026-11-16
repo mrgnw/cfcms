@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -160,6 +160,41 @@ try {
 	assert.equal((await reconcilePublication(queuedTip)).ok, false);
 	assert.equal((await reconcilePublication(queuedTip, { commit: mergeDelivery, remote: afterMerge, confirmed: true })).ok, true);
 	assert.equal(git(peer, 'show', 'HEAD:post.md'), 'A newer edit after the merged publication.');
+	assert.deepEqual(getStoredPost('post.md'), stored);
+	git(blog, 'fetch', '-q', 'origin');
+	git(blog, 'reset', '--hard', 'origin/main');
+	writeFileSync(join(blog, 'reverted-publication.md'), 'A publication later removed by a remote revert.\n');
+	git(blog, 'add', 'reverted-publication.md');
+	git(blog, 'commit', '-qm', 'publication that will be reverted');
+	const revertedCapture = git(blog, 'rev-parse', 'HEAD');
+	setPendingPublishPush(revertedCapture);
+	writeFileSync(join(peer, 'independent.txt'), 'Independent work before the rebase.\n');
+	git(peer, 'add', 'independent.txt');
+	git(peer, 'commit', '-qm', 'remote advanced before delivery');
+	git(peer, 'push', '-q', 'origin', 'main');
+	git(blog, 'fetch', '-q', 'origin');
+	git(blog, 'rebase', 'origin/main');
+	git(blog, 'push', '-q', 'origin', 'main');
+	const revertedDelivery = git(blog, 'rev-parse', 'HEAD');
+	git(peer, 'pull', '--ff-only', '-q');
+	git(peer, 'revert', '--no-edit', revertedDelivery);
+	git(peer, 'push', '-q', 'origin', 'main');
+	const revertedRemote = git(peer, 'rev-parse', 'HEAD');
+	const revertedIndex = readFileSync(join(blog, '.git/index'));
+	const preview = await reconcilePublication(revertedCapture);
+	assert.equal(preview.ok, false);
+	assert.deepEqual(preview.currentRemote?.differences, [
+		{ path: 'reverted-publication.md', kind: 'deleted', matchesBefore: true }
+	]);
+	assert.deepEqual(getPublicationRecovery().currentRemote, preview.currentRemote);
+	const revertedResult = await reconcilePublication(revertedCapture, { commit: revertedDelivery, remote: revertedRemote, confirmed: true });
+	assert.equal(revertedResult.ok, true);
+	assert.match(revertedResult.message, /Historical Git delivery/);
+	assert.match(revertedResult.message, /does not verify.*deployment|deployment.*not verified/i);
+	assert.deepEqual(revertedResult.currentRemote, preview.currentRemote);
+	assert.equal(existsSync(join(peer, 'reverted-publication.md')), false);
+	assert.deepEqual(readFileSync(join(blog, '.git/index')), revertedIndex);
+	assert.equal(git(blog, 'rev-parse', 'HEAD'), revertedDelivery);
 	assert.deepEqual(getStoredPost('post.md'), stored);
 	console.log('publish-recovery.check: ok');
 } finally {
