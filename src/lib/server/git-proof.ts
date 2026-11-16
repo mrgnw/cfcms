@@ -6,9 +6,19 @@ import { runGit } from './git';
 
 const commitPattern = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
 
+export const assertRecoveryGitVersion = (output: string) => {
+	const version = /^git version (\d+)\.(\d+)\./.exec(output.trim());
+	if (!version || Number(version[1]) < 2 || Number(version[1]) === 2 && Number(version[2]) < 43) {
+		throw new Error('Rewritten publication verification requires server Git 2.43.0 or newer. Upgrade Git and verify again; the pending publication stays saved.');
+	}
+};
+
 export const verifyRewrittenCommit = async (pending: string, remote: string) => {
 	assertCheckoutWriteLock();
 	if (!commitPattern.test(pending) || !commitPattern.test(remote)) throw new Error('Invalid recovery commit');
+	const version = await runGit(['--version'], 10_000);
+	if (!version.ok) throw new Error(`Cannot read server Git version: ${version.output}`);
+	assertRecoveryGitVersion(version.output);
 	const objects = await runGit(['rev-parse', '--path-format=absolute', '--git-path', 'objects'], 10_000);
 	const format = await runGit(['rev-parse', '--show-object-format'], 10_000);
 	if (!objects.ok || !format.ok || !['sha1', 'sha256'].includes(format.output.trim())) {
