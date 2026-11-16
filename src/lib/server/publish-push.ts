@@ -25,9 +25,9 @@ const isAncestor = async (ancestor: string, descendant: string) => {
 
 export const assertPendingPublishTip = async () => {
 	const pending = getPendingPublishPush();
-	if (!pending) return;
+	if (!pending) return null;
 	const head = await getHeadCommit();
-	if (head === pending) return;
+	if (head === pending) return head;
 	if (!head || !await isAncestor(pending, head)) {
 		throw new Error('Blog HEAD no longer contains the pending publish; reconcile it before retrying');
 	}
@@ -45,6 +45,7 @@ export const assertPendingPublishTip = async () => {
 	if (merges.output.trim() || unrelated.output.trim() || nestedBackupPaths.output.trim()) {
 		throw new Error('Unrelated commits follow the pending publish; refusing to push them automatically');
 	}
+	return head;
 };
 
 export const isCommitOnRemoteMain = async (commit: string) => {
