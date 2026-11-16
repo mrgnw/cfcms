@@ -59,9 +59,10 @@ export const commitPaths = async (requestedPaths: string[], message: string) => 
 	return { ...commit, committed: commit.ok };
 };
 
-export const pushContent = async () => {
+export const pushContent = async (commit?: string) => {
 	assertCheckoutWriteLock();
-	return runGit(['push', 'origin', 'main']);
+	if (commit && !/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(commit)) throw new Error('Invalid captured push commit');
+	return runGit(['push', 'origin', commit ? `${commit}:refs/heads/main` : 'main'], 30_000);
 };
 
 export const getHeadCommit = async () => {
