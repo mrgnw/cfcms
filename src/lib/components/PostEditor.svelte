@@ -12,7 +12,7 @@
 	import ReferencePane from './ReferencePane.svelte';
 	import { isBlankDraft, parseFrontmatter, serializeFrontmatter } from '#lib/frontmatter.js';
 	import { applySegment as applySegmentTo } from '#lib/segment-diff.js';
-	import { adoptIncoming, triageOf } from '#lib/triage.js';
+	import { TriageSync, triageOf, type TriageProblem, type TriageReply } from '#lib/triage.js';
 	import { effortLabels, efforts, isEffort, nextStepLimit, triageFields, type FieldSegment, type TriageField, type Post, type Segment, type WriterVersion } from '#lib/types.js';
 
 	type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error';
@@ -94,65 +94,45 @@
 	let activeSource = $derived(sources.find((s) => s.id === selectedSourceId) ?? sources[0] ?? null);
 	const sourceKey = (source: PaneSource) => `${source.id}:${source.updatedAt ?? ''}`;
 
-	let savedTriage = $state(untrack(() => triageOf(post)));
-	let triage = $state(untrack(() => triageOf(post)));
-	let triageErrors = $state<Partial<Record<TriageField, { message: string; theirs?: string }>>>({});
-	let triageSaving = 0;
-	let triageQueue = Promise.resolve();
 	const triageLabels: Record<TriageField, string> = { nextStep: 'Next step', effort: 'Size' };
 
-	$effect(() => {
-		const incoming = triageOf(post);
-		untrack(() => {
-			if (triageSaving > 0) return;
-			({ saved: savedTriage, shown: triage } = adoptIncoming(savedTriage, triage, incoming));
-		});
-	});
-
-	// one save at a time, so a later choice always lands after an earlier one
-	function saveTriage(field: TriageField) {
-		triageSaving += 1;
-		triageQueue = triageQueue.then(() => sendTriage(field)).finally(() => (triageSaving -= 1));
-	}
-
-	function useTheirs(field: TriageField) {
-		triage[field] = savedTriage[field];
-		delete triageErrors[field];
-	}
-
-	const shownValue = (field: TriageField, value: string) =>
-		field === 'effort' && isEffort(value) ? effortLabels[value] : value;
-
-	async function sendTriage(field: TriageField) {
-		const value = triage[field];
-		if (value === savedTriage[field]) {
-			delete triageErrors[field];
-			return;
-		}
+	async function sendTriage(field: TriageField, value: string, base: string): Promise<TriageReply> {
 		const fd = new FormData();
 		fd.set('path', post.path);
 		fd.set('field', field);
 		fd.set('value', value);
-		fd.set('base', savedTriage[field]);
-		const res = await fetch('?/triage', { method: 'POST', body: fd, headers: { 'x-sveltekit-action': 'true' } }).catch(
-			() => null
-		);
-		const result = res ? deserialize(await res.text()) : null;
-
-		if (result?.type === 'success') {
-			const confirmed = String(result.data?.value ?? '');
-			if (triage[field] === value) triage[field] = confirmed;
-			savedTriage[field] = confirmed;
-			delete triageErrors[field];
-			onSaved?.();
-		} else if (result?.type === 'failure' && result.status === 409) {
-			const theirs = String(result.data?.current ?? '');
-			savedTriage[field] = theirs;
-			const now = theirs ? `changed in another session to “${shownValue(field, theirs)}”` : 'was cleared in another session';
-			triageErrors[field] = { message: `${triageLabels[field]} ${now}.`, theirs };
-		} else {
-			triageErrors[field] = { message: `${triageLabels[field]} not saved.` };
+		fd.set('base', base);
+		const res = await fetch('?/triage', { method: 'POST', body: fd, headers: { 'x-sveltekit-action': 'true' } });
+		const result = deserialize(await res.text());
+		if (result.type === 'success') return { kind: 'saved', value: String(result.data?.value ?? '') };
+		if (result.type === 'failure' && result.status === 409) {
+			return { kind: 'conflict', current: String(result.data?.current ?? '') };
 		}
+		return { kind: 'failed' };
+	}
+
+	const triageSync = new TriageSync(
+		untrack(() => triageOf(post)),
+		sendTriage,
+		(view) => (triage = view),
+		() => onSaved?.()
+	);
+	let triage = $state(triageSync.view());
+
+	$effect(() => {
+		const incoming = triageOf(post);
+		untrack(() => triageSync.receive(incoming));
+	});
+
+	const shownValue = (field: TriageField, value: string) =>
+		field === 'effort' && isEffort(value) ? effortLabels[value] : value;
+
+	function triageMessage(field: TriageField, problem: TriageProblem) {
+		if (problem.kind === 'failed') return `${triageLabels[field]} not saved.`;
+		const now = problem.theirs
+			? `changed in another session to “${shownValue(field, problem.theirs)}”`
+			: 'was cleared in another session';
+		return `${triageLabels[field]} ${now}.`;
 	}
 
 	async function dismissSource(id: string) {
@@ -795,7 +775,14 @@
 
 			{#if post.path}
 				<div class="next-line">
-					<select aria-label="Size" bind:value={triage.effort} onchange={() => saveTriage('effort')}>
+					<select
+						aria-label="Size"
+						value={triage.shown.effort}
+						onchange={(event) => {
+							triageSync.edit('effort', event.currentTarget.value);
+							triageSync.save('effort');
+						}}
+					>
 						<option value="">Size</option>
 						{#each efforts as effort (effort)}
 							<option value={effort}>{effortLabels[effort]}</option>
@@ -803,22 +790,23 @@
 					</select>
 					<input
 						aria-label="Next step"
-						bind:value={triage.nextStep}
-						onchange={() => saveTriage('nextStep')}
+						value={triage.shown.nextStep}
+						oninput={(event) => triageSync.edit('nextStep', event.currentTarget.value)}
+						onchange={() => triageSync.save('nextStep')}
 						placeholder="Next step, e.g. tighten the ending"
 						maxlength={nextStepLimit}
 					/>
 				</div>
 				{#each triageFields as field (field)}
-					{@const problem = triageErrors[field]}
+					{@const problem = triage.problems[field]}
 					{#if problem}
 						<p class="triage-error" role="alert">
-							{problem.message}
-							<button type="button" onclick={() => saveTriage(field)}>
-								{problem.theirs === undefined ? 'Retry' : 'Keep mine'}
+							{triageMessage(field, problem)}
+							<button type="button" onclick={() => triageSync.keepMine(field)}>
+								{problem.kind === 'conflict' ? 'Keep mine' : 'Retry'}
 							</button>
-							{#if problem.theirs !== undefined}
-								<button type="button" onclick={() => useTheirs(field)}>Use theirs</button>
+							{#if problem.kind === 'conflict'}
+								<button type="button" onclick={() => triageSync.useTheirs(field)}>Use theirs</button>
 							{/if}
 						</p>
 					{/if}
