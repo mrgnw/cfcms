@@ -80,6 +80,14 @@ export type PublicationRemoteState = {
 	}[];
 };
 
+export type PublicationRecoveryPreview = {
+	pendingCommit: string | null;
+	message: string | null;
+	remoteCommit: string | null;
+	currentRemote: PublicationRemoteState | null;
+	currentRemoteError: string | null;
+};
+
 export const stages = ['drafts', 'ready', 'live'] as const;
 export type Stage = (typeof stages)[number];
 export const isStage = (value: string): value is Stage => (stages as readonly string[]).includes(value);

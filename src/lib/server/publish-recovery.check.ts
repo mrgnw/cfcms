@@ -28,7 +28,7 @@ git(peer, 'config', 'user.email', 'cms-peer@example.test');
 git(peer, 'config', 'commit.gpgsign', 'false');
 process.env.BLOG_CONTENT_BASE_DIR = blog;
 process.env.BLOG_CMS_DB = join(root, 'cms.db');
-const { appendRevision, getPublishedPosts, getStoredPost, recordPublished, setStaged, getStagedPaths } = await import('./db.ts');
+const { appendRevision, getPublishedPosts, getStoredPost, recordPublished, setMetaValue, setStaged, getStagedPaths } = await import('./db.ts');
 const { setPendingPublishPush, getPendingPublishPush } = await import('./publish-push.ts');
 const { getPublicationRecovery, reconcilePublication, readPendingPublicationPatch } = await import('./publish-recovery.ts');
 
@@ -187,6 +187,10 @@ try {
 		{ path: 'reverted-publication.md', kind: 'deleted', matchesBefore: true }
 	]);
 	assert.deepEqual(getPublicationRecovery().currentRemote, preview.currentRemote);
+	setMetaValue('publishRecoveryCurrentRemote', 'invalid');
+	await assert.rejects(reconcilePublication(revertedCapture, { commit: revertedDelivery, remote: revertedRemote, confirmed: true }), /Verify and review the current remote path comparison/);
+	assert.equal(getPendingPublishPush(), revertedCapture);
+	await reconcilePublication(revertedCapture);
 	const revertedResult = await reconcilePublication(revertedCapture, { commit: revertedDelivery, remote: revertedRemote, confirmed: true });
 	assert.equal(revertedResult.ok, true);
 	assert.match(revertedResult.message, /Historical Git delivery/);
