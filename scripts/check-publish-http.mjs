@@ -176,6 +176,52 @@ try {
 	assert.equal(receipt.lastDelivery.capturedCommit, captured);
 	assert.deepEqual(receipt.lastDelivery.currentRemote, preview.currentRemote);
 	assert.equal((await request(`/api/publish/reconcile?commit=${captured}`, {})).status, 409);
+	git('reset', '--hard', 'origin/main');
+	const other = await (await request('/api/post?path=pending.md')).json();
+	assert.equal((await request('/publish?/save', {
+		path: 'pending.md', frontmatter: other.frontmatter, body: 'An unrelated approved update.',
+		baseHash: other.contentHash, writer: 'cms', sessionId: 'httprecovery'
+	})).status, 200);
+	assert.equal((await request('/publish?/stage', { path: 'pending.md' })).status, 200);
+	const beforeUnrelated = git('rev-parse', 'HEAD');
+	const beforeUnrelatedIndex = readFileSync(join(blog, '.git/index'));
+	const beforeUnrelatedPosts = database.prepare('SELECT * FROM posts ORDER BY path').all();
+	const conflict = await request('/api/publish', {});
+	assert.equal(conflict.status, 409, await conflict.clone().text());
+	const conflictReport = await conflict.json();
+	assert.match(conflictReport.message, /reconcil/i);
+	assert.deepEqual(conflictReport.reconciliationRequired, ['src/posts/later.svx']);
+	assert.equal(git('rev-parse', 'HEAD'), beforeUnrelated);
+	assert.equal(git('rev-parse', 'origin/main'), editedRemote);
+	assert.deepEqual(readFileSync(join(blog, '.git/index')), beforeUnrelatedIndex);
+	assert.deepEqual(database.prepare('SELECT * FROM posts ORDER BY path').all(), beforeUnrelatedPosts);
+	assert.equal(existsSync(join(blog, 'src/posts/later.svx')), false);
+	assert.equal(existsSync(join(peer, 'src/posts/later.svx')), false);
+	assert.equal(database.prepare('SELECT staged FROM posts WHERE path = ?').get('pending.md').staged, 1);
+	const removed = await (await request('/api/post?path=later.md')).json();
+	assert.match(removed.frontmatter, /publish: true/);
+	assert.equal((await request('/publish?/save', {
+		path: 'later.md', frontmatter: removed.frontmatter.replace('publish: true', 'publish: false'), body: removed.body,
+		baseHash: removed.contentHash, writer: 'cms', sessionId: 'httprecovery'
+	})).status, 200);
+	assert.equal((await request('/publish?/stage', { path: 'later.md' })).status, 200);
+	writeFileSync(join(blog, '.git/hooks/pre-commit'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+	const beforeCommitFailure = readFileSync(join(blog, '.git/index'));
+	assert.equal((await request('/api/publish', {})).status, 500);
+	assert.deepEqual(readFileSync(join(blog, '.git/index')), beforeCommitFailure);
+	assert.equal(git('rev-parse', 'HEAD'), beforeUnrelated);
+	assert.ok((await (await request('/api/publish/reconcile')).json()).reconciliation);
+	rmSync(join(blog, '.git/hooks/pre-commit'));
+	const reconciledPublish = await request('/api/publish', {});
+	assert.equal(reconciledPublish.status, 200, await reconciledPublish.clone().text());
+	assert.equal(existsSync(join(blog, 'src/posts/later.svx')), false);
+	assert.match(git('show', 'origin/main:src/posts/pending.svx'), /An unrelated approved update/);
+	assert.equal(database.prepare('SELECT published_hash FROM posts WHERE path = ?').get('later.md').published_hash, null);
+	assert.equal((await (await request('/api/publish/reconcile')).json()).reconciliation, null);
+	writeFileSync(join(blog, 'backup-local-only.txt'), 'Keep this later checkout commit local.\n');
+	git('add', 'backup-local-only.txt');
+	git('commit', '-qm', 'local work before backup recovery');
+	const backupLocalOnly = git('rev-parse', 'HEAD');
 	const missing = 'a'.repeat(40);
 	database.prepare('INSERT INTO meta(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value')
 		.run('pendingBackupPush', missing);
@@ -184,7 +230,7 @@ try {
 	const backupReport = await absentBackup.json();
 	const replaceUrl = `/api/backup/reconcile?commit=${missing}&replace=${backupReport.remoteCommit}`;
 	assert.equal((await request(replaceUrl, {})).status, 409, 'replacement preserves unrelated local commits');
-	assert.equal(git('rev-parse', 'HEAD'), localOnly);
+	assert.equal(git('rev-parse', 'HEAD'), backupLocalOnly);
 	assert.match(await (await request('/publish')).text(), /align a clean main checkout/);
 	git('reset', '--hard', 'origin/main');
 	writeFileSync(join(remote, 'hooks/pre-receive'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
@@ -201,7 +247,7 @@ try {
 	assert.equal(git('rev-parse', 'origin/main'), replacement);
 	assert.equal((await (await request('/api/backup/reconcile')).json()).pendingCommit, '');
 	database.close();
-	console.log('publish HTTP: purge feedback, polling deferral, rewritten delivery, unverified patch, missing backup recovery and restored-remote retry passed');
+	console.log('publish HTTP: historical recovery, unrelated-publish 409, explicit reconciliation, commit rollback, pending-purge and backup recovery passed');
 } finally {
 	server.kill('SIGTERM');
 	await Promise.race([exited, setTimeout(2000)]);
