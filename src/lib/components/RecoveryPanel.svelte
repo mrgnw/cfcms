@@ -291,11 +291,15 @@
 		overflow: auto;
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
-		font-size: 12px;
+		font-size: max(1rem, 1em);
 		font-family: var(--font-mono, monospace);
 		line-height: 1.5;
 		padding: 10px;
 		border: 1px solid var(--line);
+	}
+
+	.protection button {
+		min-block-size: 3rem;
 	}
 
 	p, label {
