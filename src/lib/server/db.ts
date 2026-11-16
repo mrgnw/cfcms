@@ -77,7 +77,8 @@ const db = () => {
 		['staged', 'INTEGER'],
 		['id', 'TEXT'],
 		['next_step', 'TEXT'],
-		['effort', 'TEXT']
+		['effort', 'TEXT'],
+		['triage_rev', 'INTEGER']
 	];
 	for (const [name, type] of newColumns) {
 		if (!postColumns.has(name)) instance.exec(`ALTER TABLE posts ADD COLUMN ${name} ${type}`);
@@ -226,7 +227,7 @@ export const recordPublished = (
 	db()
 		.prepare(
 			`DELETE FROM posts WHERE published_hash IS NULL AND editing_order IS NULL AND head_rev IS NULL
-			 AND next_step IS NULL AND effort IS NULL`
+			 AND next_step IS NULL AND effort IS NULL AND triage_rev IS NULL`
 		)
 		.run();
 	setMeta('lastPublishedAt', deployedAt);
@@ -284,11 +285,14 @@ export const reorderEditing = (paths: string[]) => {
 
 export const getTriage = (): Map<string, Triage> => {
 	const rows = db()
-		.prepare('SELECT path, next_step, effort FROM posts WHERE next_step IS NOT NULL OR effort IS NOT NULL')
-		.all() as { path: string; next_step: string | null; effort: string | null }[];
+		.prepare('SELECT path, next_step, effort, triage_rev FROM posts WHERE triage_rev IS NOT NULL')
+		.all() as { path: string; next_step: string | null; effort: string | null; triage_rev: number }[];
 
 	return new Map(
-		rows.map((row) => [row.path, { nextStep: row.next_step, effort: isEffort(row.effort) ? row.effort : null }])
+		rows.map((row) => [
+			row.path,
+			{ nextStep: row.next_step, effort: isEffort(row.effort) ? row.effort : null, rev: row.triage_rev }
+		])
 	);
 };
 
@@ -301,25 +305,27 @@ export const setTriageField = (
 	field: TriageField,
 	value: string | null,
 	base: string | null
-): { saved: boolean; current: string | null } => {
+): { saved: boolean; current: string | null; rev: number } => {
 	if (field === 'nextStep' && value !== null && value.length > nextStepLimit) throw new Error('Next step is too long');
 	if (field === 'effort' && value !== null && !isEffort(value)) throw new Error(`Unknown effort: ${value}`);
 
 	const column = triageColumns[field];
 	db().exec('BEGIN IMMEDIATE');
-	const row = db().prepare(`SELECT ${column} AS value FROM posts WHERE path = ?`).get(path) as
-		| { value: string | null }
+	const row = db().prepare(`SELECT ${column} AS value, triage_rev AS rev FROM posts WHERE path = ?`).get(path) as
+		| { value: string | null; rev: number | null }
 		| undefined;
 	const current = row?.value ?? null;
+	const rev = row?.rev ?? 0;
 	if (current !== base && current !== value) {
 		db().exec('ROLLBACK');
-		return { saved: false, current };
+		return { saved: false, current, rev };
 	}
 	db().prepare(
-		`INSERT INTO posts (path, ${column}) VALUES (?, ?) ON CONFLICT(path) DO UPDATE SET ${column} = excluded.${column}`
-	).run(path, value);
+		`INSERT INTO posts (path, ${column}, triage_rev) VALUES (?, ?, ?)
+		 ON CONFLICT(path) DO UPDATE SET ${column} = excluded.${column}, triage_rev = excluded.triage_rev`
+	).run(path, value, rev + 1);
 	db().exec('COMMIT');
-	return { saved: true, current: value };
+	return { saved: true, current: value, rev: rev + 1 };
 };
 
 export const seedEditingQueue = (paths: string[]) => {

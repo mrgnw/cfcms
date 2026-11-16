@@ -42,6 +42,7 @@ export type PostSummary = {
 	editingOrder: number | null;
 	nextStep: string | null;
 	effort: Effort | null;
+	triageRev: number;
 	deleteRequested: boolean;
 	slug: string;
 	excerpt: string;
@@ -127,6 +128,7 @@ const postFromStored = (
 		editingOrder: editingOrder.get(path) ?? null,
 		nextStep: triage.get(path)?.nextStep ?? null,
 		effort: triage.get(path)?.effort ?? null,
+		triageRev: triage.get(path)?.rev ?? 0,
 		deleteRequested,
 		slug: svxSlug(path, frontmatter),
 		excerpt: getExcerpt(body),
@@ -166,6 +168,7 @@ const parseFilePost = async (
 		editingOrder: editingOrder.get(postPath) ?? null,
 		nextStep: triage.get(postPath)?.nextStep ?? null,
 		effort: triage.get(postPath)?.effort ?? null,
+		triageRev: triage.get(postPath)?.rev ?? 0,
 		deleteRequested,
 		slug: svxSlug(postPath, frontmatter),
 		excerpt: getExcerpt(body),
@@ -317,8 +320,7 @@ export const postsRev = (posts: PostSummary[]) =>
 					post.path,
 					post.contentHash,
 					post.editingOrder,
-					post.nextStep,
-					post.effort,
+					post.triageRev,
 					post.deployStatus,
 					post.deleteRequested,
 					post.pin

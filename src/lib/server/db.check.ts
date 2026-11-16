@@ -37,7 +37,7 @@ try {
 		(row) => row.name
 	);
 	migrated.close();
-	for (const column of ['head_rev', 'exported_hash', 'llm_hash', 'staged', 'next_step', 'effort']) assert.ok(columns.includes(column), column);
+	for (const column of ['head_rev', 'exported_hash', 'llm_hash', 'staged', 'next_step', 'effort', 'triage_rev']) assert.ok(columns.includes(column), column);
 
 	const { appendRevision, labelRevision, listRevisions } = await import('./db.ts');
 	appendRevision('busy.md', '', 'v1', 'h1', 'mac');
@@ -54,23 +54,35 @@ try {
 		'./db.ts'
 	);
 	addToEditing('draft.md');
-	assert.deepEqual(setTriageField('draft.md', 'nextStep', 'Cut the intro', null), { saved: true, current: 'Cut the intro' });
-	assert.deepEqual(setTriageField('draft.md', 'effort', 'quick', null), { saved: true, current: 'quick' });
+	assert.deepEqual(setTriageField('draft.md', 'nextStep', 'Cut the intro', null), {
+		saved: true,
+		current: 'Cut the intro',
+		rev: 1
+	});
+	assert.deepEqual(setTriageField('draft.md', 'effort', 'quick', null), { saved: true, current: 'quick', rev: 2 });
 	removeFromEditing('draft.md');
-	assert.deepEqual(getTriage().get('draft.md'), { nextStep: 'Cut the intro', effort: 'quick' }, 'triage outlives the queue');
+	assert.deepEqual(
+		getTriage().get('draft.md'),
+		{ nextStep: 'Cut the intro', effort: 'quick', rev: 2 },
+		'triage outlives the queue'
+	);
 
 	// two sessions both saw "Cut the intro"; the second save must not overwrite the first
 	assert.ok(setTriageField('draft.md', 'nextStep', 'Add a photo', 'Cut the intro').saved);
 	assert.deepEqual(
 		setTriageField('draft.md', 'nextStep', 'Fix links', 'Cut the intro'),
-		{ saved: false, current: 'Add a photo' },
+		{ saved: false, current: 'Add a photo', rev: 3 },
 		'a stale session is refused and told the current value'
 	);
 	assert.ok(setTriageField('draft.md', 'nextStep', 'Add a photo', 'Cut the intro').saved, 'a repeated save is idempotent');
 	assert.equal(getTriage().get('draft.md')?.effort, 'quick', 'saving one field leaves the other alone');
 	assert.ok(setTriageField('draft.md', 'effort', null, 'quick').saved);
 	assert.ok(setTriageField('draft.md', 'nextStep', null, 'Add a photo').saved);
-	assert.ok(!getTriage().has('draft.md'), 'cleared triage is not listed');
+	assert.deepEqual(
+		getTriage().get('draft.md'),
+		{ nextStep: null, effort: null, rev: 6 },
+		'a cleared post keeps its rev, so other sessions can tell the clear is newer'
+	);
 	assert.throws(() => setTriageField('draft.md', 'nextStep', 'x'.repeat(141), null), /too long/);
 	assert.throws(() => setTriageField('draft.md', 'effort', 'someday', null), /Unknown effort/);
 

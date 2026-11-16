@@ -242,9 +242,9 @@ export const actions = {
 
 		const result = setTriageField(path, field, value, base || null);
 		if (!result.saved) {
-			return fail(409, { message: 'Changed in another session', field, current: result.current });
+			return fail(409, { message: 'Changed in another session', field, current: result.current, rev: result.rev });
 		}
-		return { triaged: path, field, value: result.current };
+		return { triaged: path, field, value: result.current, rev: result.rev };
 	},
 	trash: async ({ request }) => {
 		const form = await request.formData();
