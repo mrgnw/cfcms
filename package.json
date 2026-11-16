@@ -17,7 +17,8 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test": "node --disable-warning=ExperimentalWarning --import ./scripts/check-hooks.ts --test --test-reporter=dot 'src/**/*.check.ts' && pnpm check",
-		"test:inventory-http": "node --disable-warning=ExperimentalWarning scripts/check-inventory-http.mjs"
+		"test:inventory-http": "node --disable-warning=ExperimentalWarning scripts/check-inventory-http.mjs",
+		"test:publish-http": "node --disable-warning=ExperimentalWarning scripts/check-publish-http.mjs"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-node": "6.0.0",
