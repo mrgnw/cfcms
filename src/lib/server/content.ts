@@ -11,13 +11,14 @@ import {
 	deletePostRows,
 	getEditingOrder,
 	getTriage,
+	getAssistantDraft,
 	getMetaValue,
 	getStoredPost,
+	ingestAssistantFile,
 	listMetaKeys,
 	listStoredPosts,
 	seedEditingQueue,
 	setExportedState,
-	setLlmState,
 	setMetaValue,
 	upsertVersion,
 	type StoredPost
@@ -218,6 +219,7 @@ const ingestUserFile = async (postPath: string, filePath: string, stored: Stored
 
 const ingestLlmFile = async (llmPath: string, filePath: string, stored: StoredPost | null) => {
 	if (!stored) return;
+	const expectedRevision = getAssistantDraft(stored.path)?.revision ?? null;
 	const meta = await stat(filePath);
 	if (stored.llmMtimeMs === meta.mtimeMs) return;
 
@@ -225,17 +227,9 @@ const ingestLlmFile = async (llmPath: string, filePath: string, stored: StoredPo
 	const { frontmatter, body } = splitRawPost(raw);
 	const hash = hashPostContent(frontmatter, body);
 
-	if (hash !== stored.llmHash) {
-		upsertVersion({
-			path: stored.path,
-			writer: 'llm',
-			sessionId: 'file',
-			baseHash: stored.hash,
-			frontmatter: frontmatter.trim(),
-			body: canonicalBody(body)
-		});
-	}
-	setLlmState(stored.path, hash, meta.mtimeMs);
+	ingestAssistantFile(stored, expectedRevision, {
+		baseHash: stored.hash, frontmatter: frontmatter.trim(), body: canonicalBody(body), hash, mtimeMs: meta.mtimeMs
+	});
 };
 
 const listLlmFiles = async (files: string[]): Promise<LlmFile[]> => {

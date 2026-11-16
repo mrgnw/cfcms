@@ -1,7 +1,10 @@
 // node --import ./scripts/check-hooks.ts src/lib/server/content.check.ts
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import fsPromises from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
+import { mock } from 'node:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -21,7 +24,7 @@ process.env.BLOG_CMS_DB = join(root, 'cms.db');
 process.chdir(root);
 
 const { createPost, getPost, importLlmDraft, listLlmDrafts, listPosts, purgePost, savePost } = await import('./content.ts');
-const { listVersions, upsertVersion, getStoredPost } = await import('./db.ts');
+const { changeAssistantDraft, getAssistantDraft, listVersions, upsertVersion, getStoredPost } = await import('./db.ts');
 const { setDeleteFlag } = await import('../frontmatter.ts');
 
 try {
@@ -111,6 +114,49 @@ try {
 		'an imported draft no longer shows as its own entry'
 	);
 	await purgePost('idea.md');
+
+	const racePost = await createPost(draftFm('Race case'), 'Human stays here.', 'mac');
+	const llmFile = join(root, 'content/race-case.llm.md');
+	writeFileSync(llmFile, '---\ntitle: Race case\n---\n\nInitial file suggestion.\n');
+	utimesSync(llmFile, 2_000_000_001, 2_000_000_001);
+	await listPosts();
+	const initialDraft = getAssistantDraft(racePost.path)!;
+	writeFileSync(llmFile, '---\ntitle: Race case\n---\n\nDelayed file suggestion.\n');
+	utimesSync(llmFile, 2_000_000_002, 2_000_000_002);
+	const started = Promise.withResolvers<void>();
+	const release = Promise.withResolvers<void>();
+	const originalReadFile = fsPromises.readFile;
+	const readMock = mock.method(fsPromises, 'readFile', async (...args: Parameters<typeof fsPromises.readFile>) => {
+		if (args[0] === llmFile) {
+			started.resolve();
+			await release.promise;
+		}
+		return originalReadFile(...args);
+	});
+	syncBuiltinESMExports();
+	try {
+		const scanning = listPosts();
+		await started.promise;
+		assert.equal(changeAssistantDraft(racePost.path, initialDraft.revision, () => ({
+			baseHash: racePost.contentHash, frontmatter: racePost.frontmatter, body: 'New API suggestion.'
+		})).outcome, 'write');
+		release.resolve();
+		await scanning;
+	} finally {
+		release.resolve();
+		readMock.mock.restore();
+		syncBuiltinESMExports();
+	}
+	assert.equal(getAssistantDraft(racePost.path)!.body, 'New API suggestion.', 'a delayed file scan cannot overwrite an API update');
+	await listPosts();
+	assert.equal(getAssistantDraft(racePost.path)!.body, 'New API suggestion.', 'the next scan cannot replay the delayed file');
+	writeFileSync(llmFile, '---\ntitle: Race case\n---\n\nA later file edit.\n');
+	utimesSync(llmFile, 2_000_000_003, 2_000_000_003);
+	const beforeFileEdit = getAssistantDraft(racePost.path)!;
+	await listPosts();
+	assert.equal(getAssistantDraft(racePost.path)!.body, 'A later file edit.');
+	assert.notEqual(getAssistantDraft(racePost.path)!.revision, beforeFileEdit.revision);
+	assert.equal(getStoredPost(racePost.path)!.body, racePost.body);
 
 	console.log('content.check: ok');
 } finally {
