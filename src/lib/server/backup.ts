@@ -4,19 +4,24 @@ import { getMetaValue, setMetaValue, vacuumInto } from './db';
 import { commitPaths, pushContent } from './git';
 import { contentBaseDirectory } from './paths';
 import { CheckoutBusyError, withCheckoutLock } from './checkout-lock';
+import { assertPendingPublishTip, setPendingPublishPush } from './publish-push';
 
 const backupRelativePath = '.cms/cms-backup.db';
 const dailyMs = 24 * 60 * 60 * 1000;
 
 export const backupLockedCheckout = async () => {
+	await assertPendingPublishTip();
 	const target = resolve(contentBaseDirectory, backupRelativePath);
 	const temp = `${target}.tmp`;
 	await mkdir(dirname(target), { recursive: true });
 	await rm(temp, { force: true });
 	vacuumInto(temp);
 	await rename(temp, target);
-	await commitPaths([backupRelativePath], 'cms: db backup');
-	await pushContent();
+	const commit = await commitPaths([backupRelativePath], 'cms: db backup');
+	if (!commit.ok) throw new Error(`Backup commit failed: ${commit.output}`);
+	const push = await pushContent();
+	if (!push.ok) throw new Error(`Backup push failed: ${push.output}`);
+	setPendingPublishPush(null);
 	setMetaValue('lastBackupAt', new Date().toISOString());
 };
 
