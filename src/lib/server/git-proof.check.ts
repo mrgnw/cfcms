@@ -55,6 +55,30 @@ try {
 	assert.equal((await verify(deletion, divergent)).equivalent, false,
 		'a union merge attribute cannot accept a remote edit that conflicts with the queued deletion');
 	assert.ok(!existsSync(join(root, 'driver-executed')));
+	git('checkout', '-qb', 'queued-ancestors', base);
+	writeFileSync(join(root, 'earlier-publication.txt'), 'Publication content from an earlier local commit.\n');
+	git('add', 'earlier-publication.txt');
+	git('commit', '-qm', 'earlier queued publication');
+	const queuedAncestor = git('rev-parse', 'HEAD');
+	writeFileSync(join(root, 'last-change.txt'), 'The final captured commit.\n');
+	git('add', 'last-change.txt');
+	git('commit', '-qm', 'last queued change');
+	const queuedTip = git('rev-parse', 'HEAD');
+	git('checkout', '-qb', 'partial-delivery', remoteBeforeDelivery);
+	git('cherry-pick', queuedTip);
+	const partialDelivery = git('rev-parse', 'HEAD');
+	assert.deepEqual(await verify(queuedTip, partialDelivery), { equivalent: false, paths: ['earlier-publication.txt'] },
+		'recovery cannot clear a publication whose final patch arrived without its queued ancestors');
+	git('cherry-pick', queuedAncestor);
+	assert.equal((await verify(queuedTip, git('rev-parse', 'HEAD'))).equivalent, true);
+	const tree = git('rev-parse', `${base}^{tree}`);
+	const left = git('commit-tree', tree, '-p', base, '-m', 'left base');
+	const right = git('commit-tree', tree, '-p', base, '-m', 'right base');
+	const leftMerge = git('commit-tree', tree, '-p', left, '-p', right, '-m', 'left merge');
+	const rightMerge = git('commit-tree', tree, '-p', right, '-p', left, '-m', 'right merge');
+	await assert.rejects(verify(leftMerge, rightMerge), /no unique common remote ancestor/);
+	const unrelated = git('commit-tree', tree, '-m', 'unrelated root');
+	await assert.rejects(verify(queuedTip, unrelated), /no unique common remote ancestor/);
 	console.log('git-proof.check: ok');
 } finally {
 	rmSync(root, { recursive: true, force: true });

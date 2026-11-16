@@ -50,12 +50,17 @@ export const readPendingPublicationPatch = async (expected: string) => {
 	if (!commitPattern.test(expected) || expected !== getPendingPublishPush()) {
 		throw new CheckoutBusyError('Pending publication changed. Reload before downloading its patch.');
 	}
+	const base = await runGit(['merge-base', '--all', expected, 'refs/remotes/origin/main'], 10_000);
+	if (!base.ok || !commitPattern.test(base.output.trim())) {
+		throw new Error('Cannot identify the complete captured change. Verify remote delivery first. Restore any missing Git objects from a clone or backup; inspect ambiguous history manually.');
+	}
 	const patch = await runGit([
-		'-c', 'color.ui=false', 'show', '--binary', '--full-index', '--no-ext-diff', '--no-textconv', '--format=', expected
+		'diff', '--binary', '--full-index', '--no-ext-diff', '--no-textconv', '--no-renames', '--no-color',
+		'--src-prefix=a/', '--dst-prefix=b/', '--no-relative', base.output.trim(), expected, '--'
 	], 15_000, { outputLimit: 4 * 1024 * 1024, keepStart: true, stdoutOnly: true });
 	if (!patch.ok) throw new Error(`Cannot export the captured publication patch: ${patch.stderr ?? patch.output}`);
 	if (patch.truncated) {
-		throw new Error(`The patch exceeds the 4 MiB download limit. Export the full captured commit ${expected} with Git show --binary, review it against origin/main, then verify delivery again.`);
+		throw new Error(`The patch exceeds the 4 MiB download limit. Export the complete binary Git diff from ${base.output.trim()} to ${expected}, review it against origin/main, then verify delivery again.`);
 	}
 	return patch.output;
 };
