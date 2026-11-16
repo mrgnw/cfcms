@@ -10,10 +10,14 @@ import { dirname, resolve } from 'node:path';
 import { backupLockedCheckout } from './backup';
 import { withCheckoutLock } from './checkout-lock';
 import { getPostFilePath, getPostGitPath, listPosts, type Post } from './content';
-import { clearStaged, getPublishedPosts, getRevisionByHash, getStagedRevisions, setExportedState } from './db';
+import {
+	clearStaged, getLastPublishedAt, getMetaValue, getPublishedPosts, getRevisionByHash,
+	getStagedRevisions, setExportedState, setMetaValue
+} from './db';
 import { recordPublishedState } from './deploy-state';
-import { commitPaths, getCurrentBranch, getHeadCommit, pushContent, runGit } from './git';
+import { commitPaths, getCurrentBranch, getHeadCommit, pushContent } from './git';
 import { contentBaseDirectory, svxDirectory } from './paths';
+import { snapshotPublishTree } from './publish-snapshot';
 import { syncSiteText } from './site-text';
 
 const svxGitDirectory = 'src/posts';
@@ -29,6 +33,16 @@ type CommandResult = {
 };
 
 const outputLimit = 20_000;
+const pendingPushKey = 'pendingPublishPush';
+
+export class PublishConflictError extends Error {
+	readonly editedAfterStaging: string[];
+
+	constructor(editedAfterStaging: string[]) {
+		super(`Edited after staging; restage before publishing: ${editedAfterStaging.join(', ')}`);
+		this.editedAfterStaging = editedAfterStaging;
+	}
+}
 
 const runCommand = (name: string, command: string, cwd: string): Promise<CommandResult> =>
 	new Promise((resolveResult) => {
@@ -132,7 +146,6 @@ const renderSvxDirectory = async (entries: LiveEntry[]) => {
 type PendingExport = { path: string; hash: string | null; mtimeMs: number | null };
 
 const renderBoundary = async (posts: Post[]) => {
-	const gitPaths: string[] = [];
 	const exports: PendingExport[] = [];
 
 	for (const post of posts) {
@@ -142,20 +155,27 @@ const renderBoundary = async (posts: Post[]) => {
 			await writeFile(filePath, renderPost(post.frontmatter, post.body), 'utf8');
 			const meta = await stat(filePath);
 			exports.push({ path: post.path, hash: post.contentHash, mtimeMs: meta.mtimeMs });
-			gitPaths.push(getPostGitPath(post.path));
 		} else if (post.deployStatus === 'delete' || post.deployStatus === 'unpublish') {
-			await unlink(filePath).catch(() => undefined);
+			await unlink(filePath).catch((caught: NodeJS.ErrnoException) => {
+				if (caught.code !== 'ENOENT') throw caught;
+			});
 			exports.push({ path: post.path, hash: null, mtimeMs: null });
-			gitPaths.push(getPostGitPath(post.path));
 		}
 	}
 
-	return { gitPaths, exports };
+	return exports;
 };
 
-const restoreWorkingTree = async (gitPaths: string[]) => {
-	await runGit(['checkout', '--', svxGitDirectory, ...gitPaths]);
-	await runGit(['clean', '-fd', '--', svxGitDirectory]);
+const pushPublishedCommit = async () => {
+	const push = await pushContent();
+	if (push.ok) {
+		setMetaValue(pendingPushKey, '');
+		await backupLockedCheckout().catch(() => undefined);
+	}
+	return push.ok ? push : {
+		...push,
+		output: `Committed but not pushed; publish again to retry the push.\n${push.output}`
+	};
 };
 
 export const runPublish = () => withCheckoutLock(async () => {
@@ -167,48 +187,76 @@ export const runPublish = () => withCheckoutLock(async () => {
 	const published = getPublishedPosts();
 	const approvals = getStagedRevisions();
 	const staged = new Set(posts.filter((post) => approvals.get(post.path) === post.contentHash).map((post) => post.path));
+	const editedAfterStaging = posts
+		.filter((post) => approvals.has(post.path) && approvals.get(post.path) !== post.contentHash)
+		.map((post) => post.path);
 	const going = posts.filter((post) => isPending(statusOf(post)) && staged.has(post.path));
-	if (going.length === 0) throw new Error('Nothing staged for publish');
-
-	const liveSet = buildLiveSet(posts, published, staged);
-	await renderSvxDirectory(liveSet);
-
-	const { gitPaths, exports } = await renderBoundary(going);
-	const build = await runCommand('build', BLOG_BUILD_COMMAND ?? 'pnpm build', contentBaseDirectory);
-	const runAt = new Date().toISOString();
-	if (!build.ok) {
-		await restoreWorkingTree(gitPaths);
+	if (going.length === 0) {
+		const pendingPush = getMetaValue(pendingPushKey);
+		if (!pendingPush) {
+			if (editedAfterStaging.length) throw new PublishConflictError(editedAfterStaging);
+			throw new Error('Nothing staged for publish');
+		}
+		if (pendingPush !== await getHeadCommit()) throw new Error('Blog HEAD moved since the failed push; reconcile it before retrying');
+		const push = await pushPublishedCommit();
 		return {
-			ok: false,
-			stagedCount: going.length,
-			liveCount: liveSet.length,
-			lastPublishedAt: null,
-			runAt,
-			push: { ok: false, status: null, output: 'skipped: build failed' },
-			results: [build]
+			ok: push.ok,
+			stagedCount: 0,
+			liveCount: Object.keys(published).length,
+			lastPublishedAt: getLastPublishedAt(),
+			runAt: new Date().toISOString(),
+			editedAfterStaging,
+			push,
+			results: []
 		};
 	}
 
-	const commit = await commitPaths([svxGitDirectory, iconGitDirectory, ...gitPaths], 'cms: publish');
-	if (!commit.ok) {
-		await restoreWorkingTree(gitPaths);
-		throw new Error(`Publish commit failed: ${commit.output}`);
+	const liveSet = buildLiveSet(posts, published, staged);
+	const paths = [svxGitDirectory, iconGitDirectory, ...going.map((post) => getPostGitPath(post.path))];
+	const snapshot = await snapshotPublishTree(paths);
+	let committed = false;
+	try {
+		await renderSvxDirectory(liveSet);
+		const exports = await renderBoundary(going);
+		const build = await runCommand('build', BLOG_BUILD_COMMAND ?? 'pnpm build', contentBaseDirectory);
+		const runAt = new Date().toISOString();
+		if (!build.ok) {
+			return {
+				ok: false,
+				stagedCount: going.length,
+				liveCount: liveSet.length,
+				lastPublishedAt: null,
+				runAt,
+				editedAfterStaging,
+				push: { ok: false, status: null, output: 'skipped: build failed' },
+				results: [build]
+			};
+		}
+
+		const commit = await commitPaths(paths, 'cms: publish');
+		if (!commit.ok) throw new Error(`Publish commit failed: ${commit.output}`);
+		committed = true;
+		for (const exported of exports) setExportedState(exported.path, exported.hash, exported.mtimeMs);
+		const head = await getHeadCommit();
+		if (!head) throw new Error('Cannot record the published commit: Git HEAD is unavailable');
+		const deployment = await recordPublishedState(liveSet, head);
+		clearStaged(going);
+		setMetaValue(pendingPushKey, head);
+
+		const push = await pushPublishedCommit();
+
+		return {
+			ok: push.ok,
+			stagedCount: going.length,
+			liveCount: liveSet.length,
+			lastPublishedAt: deployment.lastPublishedAt,
+			runAt,
+			editedAfterStaging,
+			push,
+			results: [build]
+		};
+	} finally {
+		if (!committed) await snapshot.restore();
+		await snapshot.discard();
 	}
-	for (const exported of exports) setExportedState(exported.path, exported.hash, exported.mtimeMs);
-	// The commit is what any later push deploys, so the recorded state follows the commit, not the push.
-	const deployment = await recordPublishedState(liveSet, await getHeadCommit());
-	clearStaged(going);
-
-	const push = await pushContent();
-	if (push.ok) await backupLockedCheckout().catch(() => undefined);
-
-	return {
-		ok: push.ok,
-		stagedCount: going.length,
-		liveCount: liveSet.length,
-		lastPublishedAt: deployment.lastPublishedAt,
-		runAt,
-		push: push.ok ? push : { ...push, output: `Committed but not pushed; publish again to retry the push.\n${push.output}` },
-		results: [build]
-	};
 });
