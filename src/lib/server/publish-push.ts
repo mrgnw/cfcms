@@ -1,5 +1,6 @@
 import { getMetaValue, setMetaValue } from './db';
 import { getHeadCommit, runGit } from './git';
+import { assertCheckoutWriteLock } from './checkout-lock';
 
 const pendingPushKey = 'pendingPublishPush';
 const backupPath = '.cms/cms-backup.db';
@@ -39,6 +40,7 @@ export const assertPendingPublishTip = async () => {
 };
 
 export const reconcilePublishedPush = async () => {
+	assertCheckoutWriteLock();
 	const pending = getPendingPublishPush();
 	if (!pending) return false;
 	const fetched = await runGit(['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main']);

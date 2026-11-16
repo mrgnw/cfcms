@@ -10,7 +10,8 @@ import {
 } from './db';
 import { commitPaths, runGit } from './git';
 import { getPostFilePath, getPostGitPath, listContentFiles } from './content';
-import { runBackup } from './backup';
+import { backupLockedCheckout } from './backup';
+import { assertCheckoutWriteLock, withCheckoutLock } from './checkout-lock';
 import { contentDirectory } from './paths';
 
 const demoPath = 'sync-demo.md';
@@ -35,6 +36,7 @@ const recoverPublishedFromFile = async (postPath: string, publishedHash: string)
 };
 
 const runImport = async () => {
+	assertCheckoutWriteLock();
 	if (getMetaValue('importedCorpus')) return;
 
 	const report: string[] = ['# Corpus import report', '', `Ran: ${new Date().toISOString()}`, ''];
@@ -118,15 +120,25 @@ const runImport = async () => {
 	await mkdir(resolve(process.cwd(), '.data'), { recursive: true });
 	await writeFile(resolve(process.cwd(), '.data/import-report.md'), `${report.join('\n')}\n`, 'utf8');
 	setMetaValue('importedCorpus', new Date().toISOString());
-	await runBackup().catch(() => undefined);
+	await backupLockedCheckout().catch(() => undefined);
 };
 
 let importPromise: Promise<void> | null = null;
 
-export const ensureCorpusImported = () => {
+export const ensureCorpusImportedLocked = () => {
+	assertCheckoutWriteLock();
 	importPromise ??= runImport().catch((caught) => {
 		importPromise = null;
 		throw caught;
 	});
 	return importPromise;
+};
+
+let importRequest: Promise<void> | null = null;
+
+export const ensureCorpusImported = () => {
+	if (importRequest) return importRequest;
+	if (getMetaValue('importedCorpus')) return Promise.resolve();
+	importRequest ??= withCheckoutLock(ensureCorpusImportedLocked).finally(() => { importRequest = null; });
+	return importRequest;
 };

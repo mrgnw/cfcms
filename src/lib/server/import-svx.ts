@@ -17,6 +17,7 @@ import {
 } from './db';
 import { contentBaseDirectory } from './paths';
 import { fastForwardSite } from './site-text';
+import { assertCheckoutWriteLock, withCheckoutLock } from './checkout-lock';
 
 const svxDirectory = resolve(contentBaseDirectory, 'src/posts');
 const metaKey = 'importedSvxBaseline';
@@ -36,6 +37,7 @@ const matchStored = (slug: string, stored: StoredPost[]) => {
 };
 
 const runBaseline = async () => {
+	assertCheckoutWriteLock();
 	if (getMetaValue(metaKey)) return;
 
 	const names = (await readdir(svxDirectory).catch(() => [] as string[])).filter((name) => name.endsWith('.svx')).sort();
@@ -95,12 +97,22 @@ const runBaseline = async () => {
 
 let baselinePromise: Promise<void> | null = null;
 
-export const ensureSvxBaseline = () => {
+export const ensureSvxBaselineLocked = () => {
+	assertCheckoutWriteLock();
 	baselinePromise ??= runBaseline().catch((caught) => {
 		baselinePromise = null;
 		throw caught;
 	});
 	return baselinePromise;
+};
+
+let baselineRequest: Promise<void> | null = null;
+
+export const ensureSvxBaseline = () => {
+	if (baselineRequest) return baselineRequest;
+	if (getMetaValue(metaKey)) return Promise.resolve();
+	baselineRequest ??= withCheckoutLock(ensureSvxBaselineLocked).finally(() => { baselineRequest = null; });
+	return baselineRequest;
 };
 
 const repairKey = 'repairedSiteBase';
@@ -124,10 +136,20 @@ const repairSiteBase = async () => {
 
 let repairPromise: Promise<void> | null = null;
 
-export const ensureSiteBaseRepaired = () => {
+export const ensureSiteBaseRepairedLocked = () => {
+	assertCheckoutWriteLock();
 	repairPromise ??= repairSiteBase().catch((caught) => {
 		repairPromise = null;
 		throw caught;
 	});
 	return repairPromise;
+};
+
+let repairRequest: Promise<void> | null = null;
+
+export const ensureSiteBaseRepaired = () => {
+	if (repairRequest) return repairRequest;
+	if (getMetaValue(repairKey)) return Promise.resolve();
+	repairRequest ??= withCheckoutLock(ensureSiteBaseRepairedLocked).finally(() => { repairRequest = null; });
+	return repairRequest;
 };

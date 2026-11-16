@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { getPostGitPath } from './content';
+import { assertCheckoutWriteLock } from './checkout-lock';
 import { contentBaseDirectory } from './paths';
 
 type GitResult = {
@@ -38,22 +38,6 @@ export const runGit = (args: string[]): Promise<GitResult> =>
 
 const compactMessage = (value: string) => value.replace(/\s+/g, ' ').trim().slice(0, 120);
 
-export const commitPost = async (postPath: string, action: 'create' | 'save' | 'delete') => {
-	const gitPath = getPostGitPath(postPath);
-	const add = await runGit(['add', '--', gitPath]);
-
-	if (!add.ok) return { ...add, committed: false, path: gitPath };
-
-	const diff = await runGit(['diff', '--cached', '--quiet', '--', gitPath]);
-
-	if (diff.status === 0) {
-		return { ok: true, status: 0, output: 'No changes to commit', committed: false, path: gitPath };
-	}
-
-	const commit = await runGit(['commit', '-m', compactMessage(`cms: ${action} ${postPath}`), '--', gitPath]);
-	return { ...commit, committed: commit.ok, path: gitPath };
-};
-
 const dropVanishedPaths = async (paths: string[]) => {
 	if (paths.length === 0) return paths;
 	const tracked = await runGit(['ls-files', '-z', '--', ...paths]);
@@ -63,6 +47,7 @@ const dropVanishedPaths = async (paths: string[]) => {
 };
 
 export const commitPaths = async (requestedPaths: string[], message: string) => {
+	assertCheckoutWriteLock();
 	const paths = await dropVanishedPaths(requestedPaths);
 	if (paths.length === 0) return { ok: true, status: 0, output: 'Nothing to commit', committed: false };
 	const add = await runGit(['add', '--', ...paths]);
@@ -73,7 +58,10 @@ export const commitPaths = async (requestedPaths: string[], message: string) => 
 	return { ...commit, committed: commit.ok };
 };
 
-export const pushContent = async () => runGit(['push', 'origin', 'main']);
+export const pushContent = async () => {
+	assertCheckoutWriteLock();
+	return runGit(['push', 'origin', 'main']);
+};
 
 export const getHeadCommit = async () => {
 	const result = await runGit(['rev-parse', 'HEAD']);
