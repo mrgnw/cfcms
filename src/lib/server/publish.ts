@@ -11,13 +11,16 @@ import { backupLockedCheckout } from './backup';
 import { withCheckoutLock } from './checkout-lock';
 import { getPostFilePath, getPostGitPath, listPosts, type Post } from './content';
 import {
-	clearStaged, getLastPublishedAt, getMetaValue, getPublishedPosts, getRevisionByHash,
-	getStagedRevisions, setExportedState, setMetaValue
+	clearStaged, getLastPublishedAt, getPublishedPosts, getRevisionByHash,
+	getStagedRevisions, setExportedState
 } from './db';
 import { recordPublishedState } from './deploy-state';
 import { commitPaths, getCurrentBranch, getHeadCommit, pushContent } from './git';
 import { contentBaseDirectory, svxDirectory } from './paths';
 import { snapshotPublishTree } from './publish-snapshot';
+import {
+	assertPendingPublishTip, getPendingPublishPush, reconcilePublishedPush, setPendingPublishPush
+} from './publish-push';
 import { syncSiteText } from './site-text';
 
 const svxGitDirectory = 'src/posts';
@@ -33,9 +36,7 @@ type CommandResult = {
 };
 
 const outputLimit = 20_000;
-const pendingPushKey = 'pendingPublishPush';
-
-export const hasPendingPublishPush = () => Boolean(getMetaValue(pendingPushKey));
+export { hasPendingPublishPush } from './publish-push';
 
 export class PublishConflictError extends Error {
 	readonly editedAfterStaging: string[];
@@ -169,9 +170,10 @@ const renderBoundary = async (posts: Post[]) => {
 };
 
 const pushPublishedCommit = async () => {
+	await assertPendingPublishTip();
 	const push = await pushContent();
 	if (push.ok) {
-		setMetaValue(pendingPushKey, '');
+		setPendingPublishPush(null);
 		await backupLockedCheckout().catch(() => undefined);
 	}
 	return push.ok ? push : {
@@ -194,13 +196,15 @@ export const runPublish = () => withCheckoutLock(async () => {
 		.map((post) => post.path);
 	const going = posts.filter((post) => isPending(statusOf(post)) && staged.has(post.path));
 	if (going.length === 0) {
-		const pendingPush = getMetaValue(pendingPushKey);
+		const pendingPush = getPendingPublishPush();
 		if (!pendingPush) {
 			if (editedAfterStaging.length) throw new PublishConflictError(editedAfterStaging);
 			throw new Error('Nothing staged for publish');
 		}
-		if (pendingPush !== await getHeadCommit()) throw new Error('Blog HEAD moved since the failed push; reconcile it before retrying');
-		const push = await pushPublishedCommit();
+		const alreadyPushed = await reconcilePublishedPush();
+		const push = alreadyPushed
+			? { ok: true, status: 0, output: 'The pending publish is already on origin/main; no commits were pushed.' }
+			: await pushPublishedCommit();
 		return {
 			ok: push.ok,
 			stagedCount: 0,
@@ -213,6 +217,7 @@ export const runPublish = () => withCheckoutLock(async () => {
 		};
 	}
 
+	await assertPendingPublishTip();
 	const liveSet = buildLiveSet(posts, published, staged);
 	const paths = [svxGitDirectory, iconGitDirectory, ...going.map((post) => getPostGitPath(post.path))];
 	const snapshot = await snapshotPublishTree(paths);
@@ -243,7 +248,7 @@ export const runPublish = () => withCheckoutLock(async () => {
 		if (!head) throw new Error('Cannot record the published commit: Git HEAD is unavailable');
 		const deployment = await recordPublishedState(liveSet, head);
 		clearStaged(going);
-		setMetaValue(pendingPushKey, head);
+		setPendingPublishPush(head);
 
 		const push = await pushPublishedCommit();
 
