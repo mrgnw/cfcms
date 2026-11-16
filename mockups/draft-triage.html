@@ -126,7 +126,7 @@
 
 <section class="variant wide">
 	<h2>Editor: one line under the date</h2>
-	<p>Size is a native select; the next step is a single line of text, up to 140 characters. Both save on change and never touch the post's frontmatter.</p>
+	<p>Size is a native select; the next step is a single line of text, up to 140 characters. Each saves on change and never touches the post's frontmatter.</p>
 	<div class="frame editor">
 		<h1>Gear</h1>
 		<div class="meta-line">2024-08-01 <span>✓ · pin · queue · delete</span></div>
@@ -144,6 +144,7 @@
 			<li>Two optional fields per post: a next step and a size, <span class="effort quick">Quick</span> or <span class="effort deep">Deeper</span>.</li>
 			<li>The manual queue order stays the plan. The filter only narrows it; dragging is off while filtered, so the order is never rewritten from a subset.</li>
 			<li>Stored in the CMS database beside the queue order. Nothing is written to the Markdown or published.</li>
+			<li>Each field saves on its own, over the value this session last saw. If another session changed it first, the editor says so and offers <em>Keep mine</em> or <em>Use theirs</em>; a failed save offers <em>Retry</em>.</li>
 		</ul>
 		<h3>Left out on purpose</h3>
 		<ul>
