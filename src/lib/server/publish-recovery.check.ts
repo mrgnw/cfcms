@@ -64,7 +64,13 @@ try {
 	writeFileSync(join(peer, 'post.md'), readFileSync(join(peer, 'post.md'), 'utf8').replace('Approved opening', 'A later remote edit'));
 	git(peer, 'commit', '-qam', 'edit after delivery');
 	git(peer, 'push', '-q', 'origin', 'main');
-	const laterRemote = git(peer, 'rev-parse', 'HEAD');
+	let laterRemote = git(peer, 'rev-parse', 'HEAD');
+	const laterTree = git(peer, 'rev-parse', 'HEAD^{tree}');
+	for (let followup = 0; followup < 270; followup += 1) {
+		laterRemote = git(peer, 'commit-tree', laterTree, '-p', laterRemote, '-m', `remote followup ${followup}`);
+	}
+	git(peer, 'update-ref', 'refs/heads/main', laterRemote);
+	git(peer, 'push', '-q', 'origin', 'main');
 	const index = readFileSync(join(blog, '.git/index'));
 	const content = readFileSync(join(blog, 'post.md'));
 	assert.equal((await reconcilePublication(pending)).ok, false, 'tip-only proof must not undo a later remote edit');
@@ -103,6 +109,15 @@ try {
 	assert.equal(getPendingPublishPush(), second);
 	assert.deepEqual(getStoredPost('post.md'), stored);
 	await assert.rejects(reconcilePublication(pending), /Pending publication changed/);
+	git(peer, 'fetch', '-q', blog, second);
+	const sideDelivery = git(peer, 'commit-tree', git(peer, 'rev-parse', `${second}^{tree}`), '-p', 'HEAD', '-m', 'publication on a side branch');
+	git(peer, 'merge', '--no-ff', '-s', 'ours', sideDelivery, '-m', 'merge without delivering the side branch content');
+	git(peer, 'push', '-q', 'origin', 'main');
+	const undeliveredMerge = git(peer, 'rev-parse', 'HEAD');
+	assert.equal((await reconcilePublication(second)).ok, false);
+	const sideBranch = await reconcilePublication(second, { commit: sideDelivery, remote: undeliveredMerge, confirmed: true });
+	assert.equal(sideBranch.ok, false, 'a matching side-branch snapshot merged without its content was never delivered on main');
+	assert.match(sideBranch.message, /first-parent/);
 	writeFileSync(join(blog, 'earlier-queued.txt'), 'Earlier queued content must be exported.\n');
 	git(blog, 'add', 'earlier-queued.txt');
 	git(blog, 'commit', '-qm', 'earlier queued content');
@@ -134,6 +149,18 @@ try {
 	assert.match(unavailable.message, /restore it from a clone or backup/);
 	assert.equal(getPendingPublishPush(), missing);
 	await assert.rejects(readPendingPublicationPatch(missing), /Restore any missing Git objects/);
+	setPendingPublishPush(queuedTip);
+	const mergeDelivery = git(peer, 'commit-tree', git(peer, 'rev-parse', `${queuedTip}^{tree}`),
+		'-p', 'HEAD', '-p', sideDelivery, '-m', 'complete delivery through a merge');
+	git(peer, 'reset', '--hard', mergeDelivery);
+	writeFileSync(join(peer, 'post.md'), 'A newer edit after the merged publication.\n');
+	git(peer, 'commit', '-qam', 'later edit after merged delivery');
+	git(peer, 'push', '-q', 'origin', 'main');
+	const afterMerge = git(peer, 'rev-parse', 'HEAD');
+	assert.equal((await reconcilePublication(queuedTip)).ok, false);
+	assert.equal((await reconcilePublication(queuedTip, { commit: mergeDelivery, remote: afterMerge, confirmed: true })).ok, true);
+	assert.equal(git(peer, 'show', 'HEAD:post.md'), 'A newer edit after the merged publication.');
+	assert.deepEqual(getStoredPost('post.md'), stored);
 	console.log('publish-recovery.check: ok');
 } finally {
 	rmSync(root, { recursive: true, force: true });
