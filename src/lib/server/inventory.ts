@@ -1,4 +1,4 @@
-import { error, isHttpError } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { getDeployStatus } from '#lib/deploy-status.js';
@@ -14,15 +14,46 @@ const detailByteLimit = 1024 * 1024;
 const versionLimit = 10;
 const metadataByteLimit = 4096;
 
+const requiredColumns = {
+	posts: ['id', 'path', 'head_rev', 'published_hash', 'published_title', 'published_slug',
+		'published_commit', 'published_at', 'staged', 'editing_order'],
+	revisions: ['path', 'rev', 'hash', 'writer', 'saved_at', 'frontmatter', 'body'],
+	versions: ['path', 'writer', 'session_id', 'base_hash', 'updated_at', 'frontmatter', 'body']
+};
+
+const checkSchema = (database: DatabaseSync) => {
+	for (const [table, required] of Object.entries(requiredColumns)) {
+		const columns = database.prepare('SELECT name FROM pragma_table_info(?) LIMIT 64')
+			.all(table) as { name: string }[];
+		const names = new Set(columns.map((column) => column.name));
+		if (required.some((column) => !names.has(column))) {
+			throw error(503, 'Inventory database schema is not initialized or supported');
+		}
+	}
+};
+
+const handleStorageError = (caught: unknown): never => {
+	if (caught instanceof Error && 'code' in caught && caught.code === 'ERR_SQLITE_ERROR' &&
+		'errcode' in caught && typeof caught.errcode === 'number') {
+		const primaryCode = caught.errcode & 0xff;
+		if (primaryCode === 5 || primaryCode === 6) throw error(503, 'Inventory database is busy; retry later');
+		if (primaryCode === 14) throw error(503, 'Inventory database could not be opened');
+		if (primaryCode === 3 || primaryCode === 8) {
+			throw error(503, 'Inventory database cannot be read in read-only mode');
+		}
+	}
+	throw caught;
+};
+
 const readInventory = <T>(read: (database: DatabaseSync) => T): T => {
 	let database: DatabaseSync | undefined;
 	try {
 		database = new DatabaseSync(databasePath, { readOnly: true, timeout: 100 });
 		database.exec('PRAGMA query_only = ON; BEGIN');
+		checkSchema(database);
 		return read(database);
 	} catch (caught) {
-		if (isHttpError(caught)) throw caught;
-		throw error(503, 'Inventory requires an available, initialized CMS database');
+		return handleStorageError(caught);
 	} finally {
 		database?.close();
 	}

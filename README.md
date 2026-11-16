@@ -138,7 +138,7 @@ Posts are stored in SQLite, not in the blog repository. The blog repository only
 | Staged posts | `content/*.md` in the blog checkout, written by Publish |
 | Drafts written by an assistant | `content/*.llm.md`, read from disk and imported as reference |
 
-The database is created on the first request at `BLOG_CMS_DB` (default `.data/cms.db`). On first run it imports the existing `content/*.md` files into it. `.data/` is ignored by git, so the database is never committed to this repository.
+The database is created on the first editor request at `BLOG_CMS_DB` (default `.data/cms.db`). On first run it imports the existing `content/*.md` files into it. `.data/` is ignored by git, so the database is never committed to this repository.
 
 Autosave appends a revision. Each post keeps its latest 200 revisions, plus older named checkpoints, the revision that was published and any revision a pending version is based on. Other older autosaves are pruned.
 
@@ -161,6 +161,18 @@ sqlite3 /tmp/cfcms-inspect.db "SELECT rev, writer, saved_at, length(body) FROM r
 
 The schema is created in `src/lib/server/db.ts`, which also adds new columns to older databases on open, so an existing database upgrades in place.
 
+### Editorial inventory
+
+Agent tools can enumerate already stored posts through `GET /api/inventory?limit=50`. Pages contain `posts` and `nextCursor`, ordered by stable post ID. Pass `nextCursor` as `after` for the next page. The page limit is 1–100. Each request reads one SQLite snapshot; separate pages can observe intervening edits.
+
+Summaries include stable ID/path, publication state, the current `head` revision identity, and up to 10 pending `versions`. `hasVersions` reports whether pending versions exist. Writer and session labels are returned as stored; they do not establish human or assistant identity. A head written by `codex` remains a head, and versions labeled `claude`, `codex`, `llm`, or a device name are all included. An empty head with an assistant proposal is included.
+
+`GET /api/inventory/{id}` returns separate head and pending-version frontmatter/body, including content hashes. Detail reads allow at most 1 MiB of combined head/version text and 10 versions. Summaries omit bodies, limit head frontmatter to 64 KiB, and bound each stored identity/publication metadata string to 4 KiB. Oversized fields become `null`; `oversized.frontmatter`, `oversized.metadata`, and `oversized.versions` identify omitted metadata or additional versions. Unknown publication flags/status remain `null`. Oversized posts keep their ID and do not interrupt pagination. Detail requests exceeding these limits return 413.
+
+These endpoints use a separate native read-only connection. They do not initialize or migrate the store, scan/import content, run backups, or call Git. Disk-only drafts wait for the editor's normal ingestion. Invalid arguments return 400; unknown valid IDs return 404. Missing/incompatible stores and recognized read/lock failures return specific 503 errors. Unexpected code, query, or corruption errors remain server errors. Lock waits are capped at 100 ms.
+
+Read-only applies to stored data, not every filesystem operation. SQLite can create an empty `-wal` and a `-shm` file after the last writer has closed, and can update shared-memory reader bookkeeping. Inventory reads do not append data transactions or checkpoint the store. Normal SQLite locking and WAL handling remain enabled so reads include committed WAL changes and stay consistent during concurrent writes. See [SQLite's read-only WAL behavior](https://www.sqlite.org/wal.html#read_only_databases). The API retains the editor's trusted-machine/network boundary and no-store response headers; it exposes unpublished text.
+
 ### Backups
 
 About once a day the CMS writes a compacted copy of the database (`VACUUM INTO`) to `.cms/cms-backup.db` in the blog checkout, commits it with the message `cms: db backup`, and pushes. That copy holds every draft and revision, so keep the blog repository private, or ignore `.cms/` in it, if drafts must not become public.
@@ -180,7 +192,11 @@ pnpm test
 pnpm build
 ```
 
-`pnpm test` runs every `src/**/*.check.ts` under `node --test`, then `pnpm check`. `scripts/check-hooks.ts` resolves `#lib` and `$app/env/private` so server modules load in plain node; server checks build a throwaway blog checkout and database under the system temp directory. CI runs the same two commands.
+`pnpm test` runs every `src/**/*.check.ts` under `node --test`, then `pnpm check`. `scripts/check-hooks.ts` resolves `#lib` and `$app/env/private` so server modules load in plain node; server checks build a throwaway blog checkout and database under the system temp directory. CI also checks inventory HTTP behavior against the production build:
+
+```sh
+pnpm test:inventory-http
+```
 
 ## Direction
 
