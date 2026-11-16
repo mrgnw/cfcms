@@ -32,6 +32,8 @@ const { createPost, getPost, listPosts, savePost } = await import('./content.ts'
 const { getPublishedPosts, getStagedPaths, setStaged, getStagedRevisions } = await import('./db.ts');
 const { runBackup } = await import('./backup.ts');
 const { CheckoutBusyError } = await import('./checkout-lock.ts');
+const { getPendingChanges } = await import('./pending.ts');
+const { hasPendingPublishPush } = await import('./publish.ts');
 const fm = (title: string) => `title: ${title}\ndate: 2026-01-01\npublish: true`;
 const publish = async () => {
 	const response = await POST();
@@ -53,6 +55,8 @@ try {
 	assert.equal(refused.status, 409);
 	assert.match(refused.data.message, /already running/);
 	await assert.rejects(runBackup(), CheckoutBusyError);
+	assert.ok((await getPendingChanges(await listPosts())).some((post) => post.path === first.path),
+		'the publish view can load while rendering holds the checkout lock');
 	const edit = await savePost(first.path, first.frontmatter, 'Edited while building.', first.contentHash, 'cms');
 	setStaged(first.path, true);
 	writeFileSync(join(blog, 'build.release'), '');
@@ -81,6 +85,9 @@ try {
 	assert.ok(!getPublishedPosts()[stale.path], 'stale approvals do not ship in a mixed batch');
 	assert.ok(!existsSync(join(blog, 'src/posts/stale.svx')));
 	assert.ok(getStagedRevisions().has(stale.path), 'a stale approval stays visible until restaging');
+	const staleChange = (await getPendingChanges(await listPosts())).find((post) => post.path === stale.path);
+	assert.equal(staleChange?.staged, false);
+	assert.equal(staleChange?.editedAfterStaging, true, 'the publish view explains why restaging is required');
 	assert.deepEqual(mixed.data.editedAfterStaging, [stale.path]);
 	const staleOnly = await publish();
 	assert.equal(staleOnly.status, 409);
@@ -135,6 +142,7 @@ try {
 	assert.ok(getPublishedPosts()[stale.path], 'a failed push preserves the committed published state');
 	assert.ok(!getStagedRevisions().has(stale.path), 'the committed approval is consumed');
 	assert.notEqual(git('rev-parse', 'HEAD'), git('rev-parse', 'origin/main'));
+	assert.equal(hasPendingPublishPush(), true, 'push retry remains available after reloading the view');
 	const committedBeforeRetry = git('rev-parse', 'HEAD');
 	rmSync(join(remote, 'hooks/pre-receive'));
 	const retried = await publish();
@@ -143,6 +151,7 @@ try {
 	assert.deepEqual(retried.data.results, [], 'retry does not rebuild');
 	assert.equal(git('show', `${committedBeforeRetry}:src/posts/stale.svx`).includes('Unapproved edit.'), true);
 	assert.equal(git('rev-parse', 'HEAD'), git('rev-parse', 'origin/main'));
+	assert.equal(hasPendingPublishPush(), false);
 
 	const live = await getPost(first.path);
 	const unpublish = await savePost(first.path, live.frontmatter.replace('publish: true', 'publish: false'), live.body, live.contentHash, 'cms');

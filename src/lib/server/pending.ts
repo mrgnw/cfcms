@@ -1,5 +1,6 @@
 import { listPosts } from '#lib/server/content.js';
-import { getPublishedPosts, getRevisionByHash, getStagedPaths, listVersions } from '#lib/server/db.js';
+import { getPublishedPosts, getRevisionByHash, getStagedRevisions, listVersions } from '#lib/server/db.js';
+import { CheckoutBusyError, withCheckoutLock } from '#lib/server/checkout-lock.js';
 import { syncSiteText } from '#lib/server/site-text.js';
 import { diffSegments, lineDiffCounts } from '#lib/segment-diff.js';
 import { isPending, statusOf } from '#lib/types.js';
@@ -10,10 +11,17 @@ export const hasSiteVersion = (path: string) => listVersions(path).some((version
 
 export const getPendingChanges = async (posts: Awaited<ReturnType<typeof listPosts>>) => {
 	// llm drafts are a writing tool; they never publish, so they never pend
-	await syncSiteText();
+	try {
+		posts = await withCheckoutLock(async () => {
+			await syncSiteText();
+			return listPosts();
+		});
+	} catch (caught) {
+		if (!(caught instanceof CheckoutBusyError)) throw caught;
+	}
 	const pending = posts.filter((post) => isPending(statusOf(post)) && !post.path.endsWith('.llm.md'));
 	const published = getPublishedPosts();
-	const staged = getStagedPaths();
+	const staged = getStagedRevisions();
 
 	return pending.map((post) => {
 		const publishedRevision = published[post.path]
@@ -28,7 +36,8 @@ export const getPendingChanges = async (posts: Awaited<ReturnType<typeof listPos
 			title: post.title,
 			date: post.date,
 			status: statusOf(post),
-			staged: staged.has(post.path),
+			staged: staged.get(post.path) === post.contentHash,
+			editedAfterStaging: staged.has(post.path) && staged.get(post.path) !== post.contentHash,
 			blocked: shipsHeadText(statusOf(post)) && hasSiteVersion(post.path),
 			words: post.body.split(/\s+/).filter(Boolean).length,
 			added: diff?.added ?? null,

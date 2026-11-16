@@ -64,6 +64,7 @@ export type PublishData = {
 	liveCount: number;
 	lastPublishedAt: string | null;
 	runAt: string;
+	editedAfterStaging?: string[];
 	push: { ok: boolean; status: number | null; output: string };
 	results: PublishResult[];
 };
@@ -80,6 +81,7 @@ export type PendingChange = {
 	date: string;
 	status: DeployStatus;
 	staged: boolean;
+	editedAfterStaging: boolean;
 	blocked: boolean;
 	words: number;
 	added: number | null;
