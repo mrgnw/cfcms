@@ -50,6 +50,17 @@ try {
 	assert.ok(!kept.includes(3), 'unnamed revisions past the cap are pruned');
 	assert.equal(kept[0], 203, 'newest first');
 
+	const { addToEditing, removeFromEditing, getTriage, setTriage } = await import('./db.ts');
+	addToEditing('draft.md');
+	setTriage('draft.md', { nextStep: 'Cut the intro', effort: 'quick' });
+	removeFromEditing('draft.md');
+	assert.deepEqual(getTriage().get('draft.md'), { nextStep: 'Cut the intro', effort: 'quick' }, 'triage outlives the queue');
+	setTriage('draft.md', { nextStep: null, effort: 'deep' });
+	assert.deepEqual(getTriage().get('draft.md'), { nextStep: null, effort: 'deep' }, 'triage fields clear independently');
+	setTriage('draft.md', { nextStep: null, effort: null });
+	assert.ok(!getTriage().has('draft.md'), 'cleared triage is not listed');
+	assert.throws(() => setTriage('draft.md', { nextStep: 'x'.repeat(141), effort: null }), /too long/);
+
 	console.log('db.check: ok');
 } finally {
 	rmSync(root, { recursive: true, force: true });

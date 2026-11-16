@@ -12,9 +12,12 @@ const privateEnvModule =
 	'export const BLOG_CONTENT_BASE_DIR=process.env.BLOG_CONTENT_BASE_DIR;' +
 	'export const BLOG_BUILD_COMMAND=process.env.BLOG_BUILD_COMMAND;';
 
+const pathsModule = 'data:text/javascript,export const resolve=(path)=>path;';
+
 registerHooks({
 	resolve(specifier, context, nextResolve) {
 		if (specifier === '$app/env/private') return { url: privateEnvModule, shortCircuit: true };
+		if (specifier === '$app/paths') return { url: pathsModule, shortCircuit: true };
 		if (specifier.startsWith('#lib/')) specifier = new URL(specifier.slice('#lib/'.length), libDirectory).href;
 		if (specifier.endsWith('.js') && specifier.startsWith('file:')) {
 			const candidate = new URL(`${specifier.slice(0, -3)}.ts`);

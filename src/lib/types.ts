@@ -1,6 +1,13 @@
 import type { Segment } from '#lib/segment-diff.js';
 export type { Segment };
 
+export const efforts = ['quick', 'deep'] as const;
+export type Effort = (typeof efforts)[number];
+export const isEffort = (value: unknown): value is Effort => (efforts as readonly unknown[]).includes(value);
+export const effortLabels: Record<Effort, string> = { quick: 'Quick', deep: 'Deeper' };
+export type Triage = { nextStep: string | null; effort: Effort | null };
+export const nextStepLimit = 140;
+
 export type DeployStatus = 'draft' | 'ready' | 'live' | 'changed' | 'unpublish' | 'delete' | 'deleted';
 
 export type PostListItem = {
@@ -12,6 +19,8 @@ export type PostListItem = {
 	publish?: boolean;
 	pin?: boolean;
 	editingOrder?: number | null;
+	nextStep?: string | null;
+	effort?: Effort | null;
 	deleteRequested?: boolean;
 	slug: string;
 	excerpt?: string;

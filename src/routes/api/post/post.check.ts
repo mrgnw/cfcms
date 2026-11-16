@@ -45,6 +45,28 @@ try {
 	);
 
 	await assert.rejects(get('missing.md'), (caught: { status: number }) => caught.status === 404);
+
+	const { actions } = await import('../../../lib/server/actions.ts');
+	const triage = (fields: Record<string, string>) => {
+		const body = new FormData();
+		for (const [key, value] of Object.entries(fields)) body.set(key, value);
+		return actions.triage({ request: new Request('http://cms.test/?/triage', { method: 'POST', body }) } as never);
+	};
+	assert.deepEqual(await triage({ path: 'agent-draft.md', nextStep: '  Tighten   the ending ', effort: 'quick' }), {
+		triaged: 'agent-draft.md'
+	});
+	const triaged = (await listPosts()).find((item) => item.path === 'agent-draft.md');
+	assert.equal(triaged?.nextStep, 'Tighten the ending', 'next step is trimmed and collapsed');
+	assert.equal(triaged?.effort, 'quick');
+	const invalids: Record<string, string>[] = [
+		{ path: 'agent-draft.md', effort: 'someday' },
+		{ path: 'agent-draft.md', nextStep: 'x'.repeat(141) },
+		{ path: 'missing.md', effort: 'deep' },
+		{ effort: 'deep' }
+	];
+	for (const invalid of invalids) {
+		assert.equal(((await triage(invalid)) as { status?: number }).status, 400, JSON.stringify(invalid).slice(0, 60));
+	}
 } finally {
 	rmSync(root, { recursive: true, force: true });
 }

@@ -10,6 +10,7 @@ import {
 	appendRevision,
 	deletePostRows,
 	getEditingOrder,
+	getTriage,
 	getMetaValue,
 	getStoredPost,
 	listMetaKeys,
@@ -22,6 +23,7 @@ import {
 	type StoredPost
 } from './db';
 import { getDeployStatus, readDeployState, type DeployState, type DeployStatus } from './deploy-state';
+import type { Effort, Triage } from '#lib/types.js';
 import { ensureCorpusImported } from './import-corpus';
 import { ensureSiteBaseRepaired, ensureSvxBaseline } from './import-svx';
 import { contentBaseDirectory, contentDirectory } from './paths';
@@ -38,6 +40,8 @@ export type PostSummary = {
 	publish: boolean;
 	pin: boolean;
 	editingOrder: number | null;
+	nextStep: string | null;
+	effort: Effort | null;
 	deleteRequested: boolean;
 	slug: string;
 	excerpt: string;
@@ -100,7 +104,12 @@ const getExcerpt = (body: string) =>
 		.find((line) => line && !line.startsWith('#'))
 		?.slice(0, 160) ?? '';
 
-const postFromStored = (stored: StoredPost, deployState: DeployState, editingOrder: Map<string, number>): Post => {
+const postFromStored = (
+	stored: StoredPost,
+	deployState: DeployState,
+	editingOrder: Map<string, number>,
+	triage: Map<string, Triage>
+): Post => {
 	const { path, frontmatter, body } = stored;
 	const fallbackTitle = path.replace(/\.md$/, '').split('/').at(-1)?.replaceAll('-', ' ') ?? 'Untitled';
 	const publish = readBoolean(frontmatter, 'publish');
@@ -116,6 +125,8 @@ const postFromStored = (stored: StoredPost, deployState: DeployState, editingOrd
 		publish,
 		pin: readBoolean(frontmatter, 'pin') || readBoolean(frontmatter, 'pinned'),
 		editingOrder: editingOrder.get(path) ?? null,
+		nextStep: triage.get(path)?.nextStep ?? null,
+		effort: triage.get(path)?.effort ?? null,
 		deleteRequested,
 		slug: svxSlug(path, frontmatter),
 		excerpt: getExcerpt(body),
@@ -132,7 +143,8 @@ const postFromStored = (stored: StoredPost, deployState: DeployState, editingOrd
 const parseFilePost = async (
 	filePath: string,
 	deployState: DeployState,
-	editingOrder: Map<string, number>
+	editingOrder: Map<string, number>,
+	triage: Map<string, Triage>
 ): Promise<Post> => {
 	const raw = await readFile(filePath, 'utf8');
 	const { frontmatter, body } = splitRawPost(raw);
@@ -152,6 +164,8 @@ const parseFilePost = async (
 		publish,
 		pin: readBoolean(frontmatter, 'pin') || readBoolean(frontmatter, 'pinned'),
 		editingOrder: editingOrder.get(postPath) ?? null,
+		nextStep: triage.get(postPath)?.nextStep ?? null,
+		effort: triage.get(postPath)?.effort ?? null,
 		deleteRequested,
 		slug: svxSlug(postPath, frontmatter),
 		excerpt: getExcerpt(body),
@@ -274,11 +288,12 @@ export const listPosts = async () => {
 	await autoImportLlmDrafts(files);
 	const deployState = await readDeployState();
 	let order = getEditingOrder();
-	let posts = listStoredPosts().map((stored) => postFromStored(stored, deployState, order));
+	const triage = getTriage();
+	let posts = listStoredPosts().map((stored) => postFromStored(stored, deployState, order, triage));
 
 	const standaloneLlm = standaloneLlmFiles(await listLlmFiles(files), listStoredPosts().map((post) => post.path));
 	posts = posts.concat(
-		await Promise.all(standaloneLlm.map((file) => parseFilePost(getPostFilePath(file.path), deployState, order)))
+		await Promise.all(standaloneLlm.map((file) => parseFilePost(getPostFilePath(file.path), deployState, order, triage)))
 	);
 
 	const legacyEditPaths = posts.filter((post) => readBoolean(post.frontmatter, 'edit')).map((post) => post.path);
@@ -302,6 +317,8 @@ export const postsRev = (posts: PostSummary[]) =>
 					post.path,
 					post.contentHash,
 					post.editingOrder,
+					post.nextStep,
+					post.effort,
 					post.deployStatus,
 					post.deleteRequested,
 					post.pin
@@ -313,11 +330,11 @@ export const postsRev = (posts: PostSummary[]) =>
 
 export const getPost = async (postPath: string): Promise<Post> => {
 	if (postPath.endsWith('.llm.md')) {
-		return parseFilePost(getPostFilePath(postPath), await readDeployState(), getEditingOrder());
+		return parseFilePost(getPostFilePath(postPath), await readDeployState(), getEditingOrder(), getTriage());
 	}
 	const stored = getStoredPost(postPath);
 	if (!stored) throw new Error(`Unknown post: ${postPath}`);
-	return postFromStored(stored, await readDeployState(), getEditingOrder());
+	return postFromStored(stored, await readDeployState(), getEditingOrder(), getTriage());
 };
 
 const saveChains = new Map<string, Promise<unknown>>();
