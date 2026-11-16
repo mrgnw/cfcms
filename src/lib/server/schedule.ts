@@ -7,6 +7,8 @@ import {
 } from './db';
 import { pinMismatch, publishLocked } from './publish';
 import { getPendingPublishPush } from './publish-push';
+import { databasePath } from './paths';
+import { existsSync } from 'node:fs';
 
 export const scheduleTickMs = 60_000;
 // ponytail: fixed grace window; make it a setting if a writer needs late catch-up publishing.
@@ -129,7 +131,8 @@ const runDueLocked = async (now: Date) => {
 let ticking = false;
 
 export const runDueSchedule = async (now = new Date()) => {
-	if (ticking || !listActiveSchedules().some((schedule) => isDue(schedule, now))) return null;
+	// A missing store has no schedules; opening it here would create it before any request asks for one.
+	if (ticking || !existsSync(databasePath) || !listActiveSchedules().some((schedule) => isDue(schedule, now))) return null;
 	ticking = true;
 	try {
 		return await withCheckoutLock(() => runDueLocked(now));
