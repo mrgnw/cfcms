@@ -9,7 +9,7 @@ import { mkdir, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { runBackup } from './backup';
 import { getPostFilePath, getPostGitPath, listPosts, type Post } from './content';
-import { clearStaged, getPublishedPosts, getRevisionByHash, getStagedPaths, setExportedState } from './db';
+import { clearStaged, getPublishedPosts, getRevisionByHash, getStagedRevisions, setExportedState } from './db';
 import { recordPublishedState } from './deploy-state';
 import { commitPaths, getCurrentBranch, getHeadCommit, pushContent, runGit } from './git';
 import { contentBaseDirectory, svxDirectory } from './paths';
@@ -164,7 +164,8 @@ export const runPublish = async () => {
 	await syncSiteText();
 	const posts = await listPosts();
 	const published = getPublishedPosts();
-	const staged = getStagedPaths();
+	const approvals = getStagedRevisions();
+	const staged = new Set(posts.filter((post) => approvals.get(post.path) === post.contentHash).map((post) => post.path));
 	const going = posts.filter((post) => isPending(statusOf(post)) && staged.has(post.path));
 	if (going.length === 0) throw new Error('Nothing staged for publish');
 
@@ -195,7 +196,7 @@ export const runPublish = async () => {
 	for (const exported of exports) setExportedState(exported.path, exported.hash, exported.mtimeMs);
 	// The commit is what any later push deploys, so the recorded state follows the commit, not the push.
 	const deployment = await recordPublishedState(liveSet, await getHeadCommit());
-	clearStaged(going.map((post) => post.path));
+	clearStaged(going);
 
 	const push = await pushContent();
 	if (push.ok) runBackup().catch(() => undefined);
