@@ -466,6 +466,7 @@ export const ingestAssistantFile = (
 	stored: StoredPost,
 	file: Pick<AssistantDraftText, 'frontmatter' | 'body'> & { hash: string; mtimeMs: number }
 ) => {
+	if (file.hash === stored.llmHash) return;
 	const connection = db();
 	connection.exec('BEGIN IMMEDIATE');
 	try {

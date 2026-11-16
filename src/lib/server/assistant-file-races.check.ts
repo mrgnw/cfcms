@@ -6,6 +6,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mock } from 'node:test';
+import { DatabaseSync } from 'node:sqlite';
 
 const root = mkdtempSync(join(tmpdir(), 'cms-assistant-file-races-'));
 mkdirSync(join(root, 'content'));
@@ -42,6 +43,40 @@ const fileReference = (path: string) => listVersions(path).find((version) => ver
 
 try {
 	const fileOnly = await create('File only');
+	const unchanged = listVersions(fileOnly.post.path);
+	let writeTransactions = 0;
+	let fileStateWrites = 0;
+	let fileReads = 0;
+	const originalExec = DatabaseSync.prototype.exec;
+	const originalPrepare = DatabaseSync.prototype.prepare;
+	const readFile = fsPromises.readFile;
+	const execMock = mock.method(DatabaseSync.prototype, 'exec', function (this: DatabaseSync, sql: string) {
+		if (sql === 'BEGIN IMMEDIATE') writeTransactions += 1;
+		return originalExec.call(this, sql);
+	});
+	const prepareMock = mock.method(DatabaseSync.prototype, 'prepare', function (this: DatabaseSync, sql: string) {
+		if (sql.startsWith('UPDATE posts SET llm_hash')) fileStateWrites += 1;
+		return originalPrepare.call(this, sql);
+	});
+	const fileReadMock = mock.method(fsPromises, 'readFile', (...args: Parameters<typeof fsPromises.readFile>) => {
+		if (args[0] === fileOnly.file) fileReads += 1;
+		return readFile(...args);
+	});
+	syncBuiltinESMExports();
+	try {
+		await listPosts();
+		utimesSync(fileOnly.file, 2_000_000_001, 2_000_000_001);
+		await listPosts();
+	} finally {
+		execMock.mock.restore();
+		prepareMock.mock.restore();
+		fileReadMock.mock.restore();
+		syncBuiltinESMExports();
+	}
+	assert.equal(fileReads, 2, 'each scan still reads content, including an mtime-only change');
+	assert.equal(writeTransactions, 0, 'unchanged content needs no SQLite writer lock');
+	assert.equal(fileStateWrites, 0, 'unchanged content needs no file-state update');
+	assert.deepEqual(listVersions(fileOnly.post.path), unchanged);
 	const fileToken = getAssistantDraft(fileOnly.post.path)!.revision;
 	editFile(fileOnly.file, 'File-only update.');
 	await listPosts();
