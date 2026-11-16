@@ -13,7 +13,7 @@ Publishing renders, builds, commits and pushes the staged batch. Issue #9 asks f
 - The run publishes only if the staged batch equals the pins exactly. Any newer edit, restage, unstage or extra staged post fails the run before anything is written. Newer edits stay as drafts.
 - These cases mark the schedule failed with a visible reason and never retry automatically: interrupted by a restart, missed by more than 30 minutes while the CMS was offline, an earlier publish push still pending, build failure, push failure (commit kept; "Retry publish push" resends it).
 - A successful run records the commit and that it was pushed. Whether the site went live is not tracked (#5).
-- Publishing manually while a schedule is pending cancels the schedule first.
+- A manual publish that commits, from any client, cancels a pending schedule inside the same lock. Claims and missed marks match the due time the tick read, so a reschedule from another process wins.
 
 ## Consequences
 
