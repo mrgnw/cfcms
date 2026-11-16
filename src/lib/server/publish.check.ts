@@ -207,6 +207,7 @@ try {
 	assert.notEqual(git('rev-parse', 'HEAD'), git('rev-parse', 'origin/main'));
 	assert.equal(hasPendingPublishPush(), true, 'push retry remains available after reloading the view');
 	const committedBeforeRetry = git('rev-parse', 'HEAD');
+	assert.equal(git('rev-parse', 'refs/cfcms/pending-publication'), committedBeforeRetry);
 	const boundaryBeforePendingPurge = readFileSync(join(blog, 'content/fresh.md'));
 	const indexBeforePendingPurge = readFileSync(join(blog, '.git/index'));
 	await assert.rejects(purgePost(fresh.path), /publish push is pending/);

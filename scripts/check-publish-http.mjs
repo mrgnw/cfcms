@@ -122,6 +122,10 @@ try {
 	git('push', '-q', 'origin', 'main');
 	const rewritten = git('rev-parse', 'HEAD');
 	assert.notEqual(rewritten, captured);
+	assert.equal(git('rev-parse', 'refs/cfcms/pending-publication'), captured);
+	git('reflog', 'expire', '--expire=now', '--all');
+	git('gc', '--prune=now');
+	git('cat-file', '-e', `${captured}^{commit}`);
 	writeFileSync(join(blog, 'local-only.txt'), 'Do not push this local work.\n');
 	git('add', 'local-only.txt');
 	git('commit', '-qm', 'local work after manual push');

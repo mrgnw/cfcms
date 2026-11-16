@@ -93,6 +93,13 @@ export const pushContent = async (commit?: string) => {
 	return runGit(['push', 'origin', commit ? `${commit}:refs/heads/main` : 'main'], 30_000);
 };
 
+export const retainPushCommit = async (kind: 'publication' | 'backup', commit: string) => {
+	assertCheckoutWriteLock();
+	if (!/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(commit)) throw new Error('Invalid captured push commit');
+	const retained = await runGit(['update-ref', `refs/cfcms/pending-${kind}`, commit], 10_000);
+	if (!retained.ok) throw new Error(`Cannot retain the captured ${kind} for recovery: ${retained.output}`);
+};
+
 export const getHeadCommit = async () => {
 	const result = await runGit(['rev-parse', 'HEAD']);
 	return result.ok ? result.output.trim() : null;

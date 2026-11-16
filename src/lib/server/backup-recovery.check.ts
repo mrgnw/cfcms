@@ -43,6 +43,7 @@ try {
 	rejectPush();
 	await assert.rejects(runBackup(), /Backup push failed/);
 	const original = getBackupStatus().pendingCommit!;
+	assert.equal(git(blog, 'rev-parse', 'refs/cfcms/pending-backup'), original);
 	assert.match(getBackupStatus().error!, /Backup push failed/);
 	allowPush();
 	advanceRemote();
@@ -51,6 +52,9 @@ try {
 	git(blog, 'push', '-q', 'origin', 'main');
 	const rewritten = git(blog, 'rev-parse', 'HEAD');
 	assert.notEqual(rewritten, original);
+	git(blog, 'reflog', 'expire', '--expire=now', '--all');
+	git(blog, 'gc', '--prune=now');
+	git(blog, 'cat-file', '-e', `${original}^{commit}`);
 	writeFileSync(join(blog, 'local-only.txt'), 'Must stay local.\n');
 	git(blog, 'add', 'local-only.txt');
 	git(blog, 'commit', '-qm', 'unrelated local work');

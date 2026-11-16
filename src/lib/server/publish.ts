@@ -15,7 +15,7 @@ import {
 	getStagedRevisions, listStoredPosts, setExportedState
 } from './db';
 import { recordPublishedState } from './deploy-state';
-import { commitPaths, getCurrentBranch, getHeadCommit, pushContent } from './git';
+import { commitPaths, getCurrentBranch, getHeadCommit, pushContent, retainPushCommit } from './git';
 import { contentBaseDirectory, svxDirectory } from './paths';
 import { snapshotPublishTree } from './publish-snapshot';
 import {
@@ -170,6 +170,9 @@ const renderBoundary = async (posts: Post[]) => {
 };
 
 const pushPublishedCommit = async () => {
+	const pending = getPendingPublishPush();
+	if (!pending) throw new Error('The captured publish commit is unavailable');
+	await retainPushCommit('publication', pending);
 	const tip = await assertPendingPublishTip();
 	if (!tip) throw new Error('The captured publish commit is unavailable');
 	const push = await pushContent(tip);
