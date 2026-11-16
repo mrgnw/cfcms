@@ -26,13 +26,26 @@ export const getPublicationRecovery = () => {
 
 type SelectedDelivery = { commit: string; remote: string; confirmed: true };
 
+const assertPublishedHistory = async (delivery: string, remote: string) => {
+	if (delivery === remote) return;
+	const history = await runGit(['rev-list', '--first-parent', '--parents', `${delivery}..${remote}`], 10_000,
+		{ stdoutOnly: true });
+	if (!history.ok) throw new Error(`Cannot inspect published main history: ${history.stderr ?? history.output}`);
+	const output = history.output.trimEnd();
+	const oldest = output.split('\n').at(-1)?.split(' ');
+	if (history.truncated && !output.includes('\n') || !oldest || oldest[1] !== delivery) {
+		throw new Error('The selected commit is not on the published first-parent history of main. A side-branch content match cannot establish delivery.');
+	}
+};
+
 const verifySelectedDelivery = async (pending: string, delivery: string, remote: string) => {
 	if (!await isAncestor(delivery, remote)) throw new Error('The selected delivery commit is not in the fetched remote history.');
+	await assertPublishedHistory(delivery, remote);
 	if (await isAncestor(delivery, pending)) throw new Error('Select the rewritten publication commit, not an earlier commit from the captured history.');
 	const parents = await runGit(['rev-list', '--parents', '--max-count=1', delivery], 10_000);
 	const family = parents.output.trim().split(' ');
-	if (!parents.ok || family.length !== 2 || !family.every((commit) => commitPattern.test(commit))) {
-		throw new Error('Select the single-parent commit that completed delivery of the captured publication.');
+	if (!parents.ok || parents.truncated || family.length < 2 || !family.every((commit) => commitPattern.test(commit))) {
+		throw new Error('Select a commit with a readable first parent that completed delivery of the captured publication.');
 	}
 	const proof = await verifyRewrittenCommit(pending, delivery);
 	if (proof.equivalent && (await verifyRewrittenCommit(pending, family[1])).equivalent) {
