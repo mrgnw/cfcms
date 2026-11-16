@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { isBlankDraft, parseFrontmatter, serializeFrontmatter, setDeleteFlag } from './frontmatter.ts';
+import { isBlankDraft, parseFrontmatter, readBoolean, readFrontmatterValue, serializeFrontmatter, setDeleteFlag } from './frontmatter.ts';
 
 const raw = `title: 'Simple… where?'
 date: 2026-08-05
@@ -40,3 +40,8 @@ assert.ok(isBlankDraft(blankFm, '  \n'), 'defaults and whitespace are not conten
 assert.ok(!isBlankDraft(blankFm, 'hi'), 'a body is content');
 assert.ok(!isBlankDraft(blankFm.replace("''", 'Hello'), ''), 'a title is content');
 assert.ok(!isBlankDraft(blankFm.replace('[]', '[a]'), ''), 'a tag is content');
+
+assert.equal(readFrontmatterValue("title: 'First'\r\ntitle: Second", 'title'), 'First');
+assert.equal(readFrontmatterValue('subtitle: Other', 'title'), '');
+assert.equal(readBoolean('publish: "true"\r\ndeleted: false', 'publish'), true);
+assert.equal(readBoolean('publish: false', 'publish'), false);
