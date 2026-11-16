@@ -1,4 +1,5 @@
 import { runPublish } from '#lib/server/publish.js';
+import { CheckoutBusyError } from '#lib/server/checkout-lock.js';
 
 export const POST = async () => {
 	try {
@@ -8,7 +9,7 @@ export const POST = async () => {
 	} catch (caught) {
 		return Response.json(
 			{ ok: false, message: caught instanceof Error ? caught.message : 'Publish failed' },
-			{ status: 500 }
+			{ status: caught instanceof CheckoutBusyError ? 409 : 500 }
 		);
 	}
 };
