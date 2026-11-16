@@ -12,12 +12,13 @@ type GitResult = {
 
 const outputLimit = 20_000;
 
-export const runGit = (args: string[]): Promise<GitResult> =>
+export const runGit = (args: string[], timeoutMs?: number): Promise<GitResult> =>
 	new Promise((resolve) => {
 		let output = '';
 		const child = spawn('git', args, {
 			cwd: contentBaseDirectory,
-			env: process.env
+			env: process.env,
+			timeout: timeoutMs
 		});
 
 		const appendOutput = (chunk: Buffer) => {
@@ -28,7 +29,7 @@ export const runGit = (args: string[]): Promise<GitResult> =>
 		child.stderr.on('data', appendOutput);
 
 		child.on('close', (status) => {
-			resolve({ ok: status === 0, status, output });
+			resolve({ ok: status === 0, status, output: child.killed ? `${output}\nGit command timed out.` : output });
 		});
 
 		child.on('error', (caught) => {
