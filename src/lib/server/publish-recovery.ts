@@ -3,23 +3,28 @@ import { getMetaValue, setMetaValue } from './db';
 import { retainPushCommit, runGit } from './git';
 import { verifyRewrittenCommit } from './git-proof';
 import { getPendingPublishPush, getRemoteMain, isAncestor, setPendingPublishPush } from './publish-push';
+import { comparePublicationRemote, parsePublicationRemoteState } from './publish-remote';
 
 const commitPattern = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
 const reportKey = 'publishRecoveryMessage';
 
 export const getPublicationRecovery = () => {
 	const pending = getPendingPublishPush();
+	const comparison = parsePublicationRemoteState(getMetaValue('publishRecoveryCurrentRemote'));
 	return {
 		minimumGitVersion: '2.43.0',
 		pendingCommit: pending,
 		message: pending === getMetaValue('publishRecoveryPending') ? getMetaValue(reportKey) : null,
 		remoteCommit: pending && pending === getMetaValue('publishRecoveryPending') ? getMetaValue('publishRecoveryRemote') : null,
+		currentRemote: comparison?.capturedCommit === pending && comparison.remoteCommit === getMetaValue('publishRecoveryRemote') ? comparison : null,
+		currentRemoteError: pending === getMetaValue('publishRecoveryPending') ? getMetaValue('publishRecoveryCurrentRemoteError') : null,
 		lastDelivery: {
 			capturedCommit: getMetaValue('publishDeliveryCaptured'),
 			commit: getMetaValue('publishDeliveryCommit'),
 			remote: getMetaValue('publishDeliveryRemote'),
 			verifiedAt: getMetaValue('publishDeliveryVerifiedAt'),
-			authorConfirmed: getMetaValue('publishDeliveryAuthorConfirmed') === 'true'
+			authorConfirmed: getMetaValue('publishDeliveryAuthorConfirmed') === 'true',
+			currentRemote: parsePublicationRemoteState(getMetaValue('publishDeliveryCurrentRemote'))
 		}
 	};
 };
@@ -63,8 +68,20 @@ export const reconcilePublication = (expected: string, selected?: SelectedDelive
 	if (selected && (getMetaValue('publishRecoveryPending') !== pending || getMetaValue('publishRecoveryRemote') !== selected.remote)) {
 		throw new CheckoutBusyError('Verify current remote delivery before selecting a historical commit.');
 	}
+	const reviewed = parsePublicationRemoteState(getMetaValue('publishRecoveryCurrentRemote'));
+	if (selected && (reviewed?.capturedCommit !== pending || reviewed.remoteCommit !== selected.remote)) {
+		throw new CheckoutBusyError('Verify and review the current remote path comparison before confirming historical delivery.');
+	}
 	const remote = await getRemoteMain();
 	if (selected && selected.remote !== remote) throw new CheckoutBusyError('Remote main changed. Verify current delivery again before confirming a historical commit.');
+	let currentRemote = null;
+	let currentRemoteError = null;
+	try {
+		currentRemote = await comparePublicationRemote(pending, remote);
+	} catch (caught) {
+		currentRemoteError = (caught instanceof Error ? caught.message : 'Current remote path comparison failed').slice(0, 2000);
+	}
+	if (selected && !currentRemote) throw new CheckoutBusyError(`${currentRemoteError} Verify the complete current remote comparison before confirming historical delivery.`);
 	let proof = { equivalent: false, paths: [] as string[] };
 	let failure = '';
 	let deliveryCommit = selected?.commit ?? remote;
@@ -85,23 +102,30 @@ export const reconcilePublication = (expected: string, selected?: SelectedDelive
 		deliveryCommit: proof.equivalent ? deliveryCommit : null,
 		authorConfirmed: Boolean(selected),
 		paths: proof.paths,
+		currentRemote,
+		currentRemoteError,
 		verifiedAt: new Date().toISOString(),
 		message: proof.equivalent
-			? selected
-				? `Delivery at your selected commit ${deliveryCommit} verified. Later remote edits were preserved. No post content or checkout files were changed.`
-				: 'Remote delivery verified. No post content or checkout files were changed.'
+			? `Historical Git delivery at ${deliveryCommit} confirmed. ${currentRemote
+				? currentRemote.differences.length
+					? `${currentRemote.differences.length} captured paths differ at the verified remote tip; removals and reverts remain in place.`
+					: 'Captured paths match the verified Git remote snapshot.'
+				: 'The current remote path comparison is unavailable.'} This does not verify current deployment or live content. No post content or checkout files were changed.`
 			: `${failure ? `${failure}. ` : ''}Remote delivery is not verified. If a later remote edit replaced the delivered text, identify and explicitly confirm the rewritten publication commit on the Publish page. Matching content alone is not a delivery record. Otherwise, download the captured patch, review and apply it on a branch based on origin/main, resolve conflicts, and push the reviewed result without force. Then verify again. If the captured Git object is missing, restore it from a clone or backup first. Newer CMS edits remain saved.`,
 		patchUrl: `/api/publish/reconcile?patch=${pending}`
 	};
 	setMetaValue(reportKey, report.message);
 	setMetaValue('publishRecoveryPending', pending);
 	setMetaValue('publishRecoveryRemote', remote);
+	setMetaValue('publishRecoveryCurrentRemote', currentRemote ? JSON.stringify(currentRemote) : '');
+	setMetaValue('publishRecoveryCurrentRemoteError', currentRemoteError ?? '');
 	if (proof.equivalent) {
 		setMetaValue('publishDeliveryCaptured', pending);
 		setMetaValue('publishDeliveryCommit', deliveryCommit);
 		setMetaValue('publishDeliveryRemote', remote);
 		setMetaValue('publishDeliveryVerifiedAt', report.verifiedAt);
 		setMetaValue('publishDeliveryAuthorConfirmed', selected ? 'true' : 'false');
+		setMetaValue('publishDeliveryCurrentRemote', currentRemote ? JSON.stringify(currentRemote) : '');
 		setPendingPublishPush(null);
 	}
 	return report;

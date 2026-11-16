@@ -32,8 +32,8 @@ export const POST: RequestHandler = async ({ url, request }) => {
 	const remote = args.get('remote') ?? '';
 	if (delivery !== null && (!/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(delivery)
 		|| !/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(remote)
-		|| args.get('confirm') !== 'reviewed-delivery')) {
-		return Response.json({ ok: false, message: 'Confirm the full reviewed delivery commit and verified remote tip' }, { status: 400 });
+		|| args.get('confirm') !== 'reviewed-history-and-current-remote')) {
+		return Response.json({ ok: false, message: 'Review the historical delivery commit and current remote path comparison, then confirm both' }, { status: 400 });
 	}
 	if (!/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(expected)) {
 		return Response.json({ ok: false, message: 'The pending publication commit is required' }, { status: 400 });

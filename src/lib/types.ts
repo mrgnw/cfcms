@@ -69,6 +69,17 @@ export type PublishData = {
 	results: PublishResult[];
 };
 
+export type PublicationRemoteState = {
+	capturedCommit: string;
+	remoteCommit: string;
+	baseCommit: string;
+	differences: {
+		path: string;
+		kind: 'deleted' | 'modified' | 'restored' | 'type-changed';
+		matchesBefore: boolean;
+	}[];
+};
+
 export const stages = ['drafts', 'ready', 'live'] as const;
 export type Stage = (typeof stages)[number];
 export const isStage = (value: string): value is Stage => (stages as readonly string[]).includes(value);
