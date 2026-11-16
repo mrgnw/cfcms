@@ -22,6 +22,7 @@ import {
 	assertPendingPublishTip, getPendingPublishPush, reconcilePublishedPush, setPendingPublishPush
 } from './publish-push';
 import { syncSiteTextLocked } from './site-text';
+import { assertRecoveredPathsPreserved, finishPublicationReconciliation } from './publish-protection';
 
 const svxGitDirectory = 'src/posts';
 // The blog build vendors icons used by posts here on first use (remark-icons.js in the blog repo).
@@ -248,7 +249,10 @@ export const runPublish = () => withCheckoutLock(async () => {
 			};
 		}
 
-		const commit = await commitPaths(paths, 'cms: publish');
+		let reconciled: string | null = null;
+		const commit = await commitPaths(paths, 'cms: publish', async (commitPaths) => {
+			reconciled = await assertRecoveredPathsPreserved(commitPaths);
+		});
 		if (!commit.ok) throw new Error(`Publish commit failed: ${commit.output}`);
 		committed = true;
 		for (const exported of exports) setExportedState(exported.path, exported.hash, exported.mtimeMs);
@@ -257,6 +261,7 @@ export const runPublish = () => withCheckoutLock(async () => {
 		const deployment = await recordPublishedState(liveSet, head);
 		clearStaged(going);
 		setPendingPublishPush(head);
+		finishPublicationReconciliation(reconciled);
 
 		const push = await pushPublishedCommit();
 

@@ -4,6 +4,7 @@ import { retainPushCommit, runGit } from './git';
 import { verifyRewrittenCommit } from './git-proof';
 import { getPendingPublishPush, getRemoteMain, isAncestor, setPendingPublishPush } from './publish-push';
 import { comparePublicationRemote, parsePublicationRemoteState } from './publish-remote';
+import { getPublicationReconciliation, protectRecoveredPublication } from './publish-protection';
 
 const commitPattern = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
 const reportKey = 'publishRecoveryMessage';
@@ -13,6 +14,7 @@ export const getPublicationRecovery = () => {
 	const comparison = parsePublicationRemoteState(getMetaValue('publishRecoveryCurrentRemote'));
 	return {
 		minimumGitVersion: '2.43.0',
+		reconciliation: getPublicationReconciliation(),
 		pendingCommit: pending,
 		message: pending === getMetaValue('publishRecoveryPending') ? getMetaValue(reportKey) : null,
 		remoteCommit: pending && pending === getMetaValue('publishRecoveryPending') ? getMetaValue('publishRecoveryRemote') : null,
@@ -108,7 +110,7 @@ export const reconcilePublication = (expected: string, selected?: SelectedDelive
 		message: proof.equivalent
 			? `Historical Git delivery at ${deliveryCommit} confirmed. ${currentRemote
 				? currentRemote.differences.length
-					? `${currentRemote.differences.length} captured paths differ at the verified remote tip; removals and reverts remain in place.`
+					? `${currentRemote.differences.length} captured paths differ at the verified remote tip. CMS publication records remain unchanged; further publishing requires explicit reconciliation of these paths.`
 					: 'Captured paths match the verified Git remote snapshot.'
 				: 'The current remote path comparison is unavailable.'} This does not verify current deployment or live content. No post content or checkout files were changed.`
 			: `${failure ? `${failure}. ` : ''}Remote delivery is not verified. If a later remote edit replaced the delivered text, identify and explicitly confirm the rewritten publication commit on the Publish page. Matching content alone is not a delivery record. Otherwise, download the captured patch, review and apply it on a branch based on origin/main, resolve conflicts, and push the reviewed result without force. Then verify again. If the captured Git object is missing, restore it from a clone or backup first. Newer CMS edits remain saved.`,
@@ -120,6 +122,7 @@ export const reconcilePublication = (expected: string, selected?: SelectedDelive
 	setMetaValue('publishRecoveryCurrentRemote', currentRemote ? JSON.stringify(currentRemote) : '');
 	setMetaValue('publishRecoveryCurrentRemoteError', currentRemoteError ?? '');
 	if (proof.equivalent) {
+		if (currentRemote) protectRecoveredPublication(currentRemote);
 		setMetaValue('publishDeliveryCaptured', pending);
 		setMetaValue('publishDeliveryCommit', deliveryCommit);
 		setMetaValue('publishDeliveryRemote', remote);

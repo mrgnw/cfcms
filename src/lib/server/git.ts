@@ -75,12 +75,16 @@ const dropVanishedPaths = async (paths: string[]) => {
 	return paths.filter((path) => trackedPaths.has(path) || existsSync(resolve(contentBaseDirectory, path)));
 };
 
-export const commitPaths = async (requestedPaths: string[], message: string) => {
+export const commitPaths = async (requestedPaths: string[], message: string, beforeCommit?: (paths: string[]) => Promise<void>) => {
 	assertCheckoutWriteLock();
 	const paths = await dropVanishedPaths(requestedPaths);
-	if (paths.length === 0) return { ok: true, status: 0, output: 'Nothing to commit', committed: false };
+	if (paths.length === 0) {
+		await beforeCommit?.(paths);
+		return { ok: true, status: 0, output: 'Nothing to commit', committed: false };
+	}
 	const add = await runGit(['add', '--', ...paths]);
 	if (!add.ok) return { ...add, committed: false };
+	await beforeCommit?.(paths);
 	const diff = await runGit(['diff', '--cached', '--quiet', '--', ...paths]);
 	if (diff.status === 0) return { ok: true, status: 0, output: 'No changes to commit', committed: false };
 	const commit = await runGit(['commit', '-m', compactMessage(message), '--', ...paths]);

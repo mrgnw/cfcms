@@ -86,6 +86,14 @@ export type PublicationRecoveryPreview = {
 	remoteCommit: string | null;
 	currentRemote: PublicationRemoteState | null;
 	currentRemoteError: string | null;
+	reconciliation: PublicationReconciliation | null;
+};
+
+export type PublicationReconciliation = {
+	capturedCommit: string | null;
+	remoteCommit: string | null;
+	paths: string[];
+	error: string | null;
 };
 
 export const stages = ['drafts', 'ready', 'live'] as const;
