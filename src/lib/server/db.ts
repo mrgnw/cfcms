@@ -206,6 +206,11 @@ export const getPublishedPosts = (): Record<string, PublishedPostState> => {
 	);
 };
 
+// A row is kept while anything still describes the post; triage_rev alone is enough, so a cleared
+// post keeps counting up and open editors never mistake its next save for an old poll.
+const deleteOrphanRows = `DELETE FROM posts WHERE published_hash IS NULL AND editing_order IS NULL AND head_rev IS NULL
+	AND next_step IS NULL AND effort IS NULL AND triage_rev IS NULL`;
+
 export const recordPublished = (
 	posts: { path: string; title: string; slug: string; contentHash: string }[],
 	commit: string | null
@@ -228,10 +233,7 @@ export const recordPublished = (
 		upsert.run(post.path, post.contentHash, post.title, post.slug, commit, deployedAt);
 	}
 	db()
-		.prepare(
-			`DELETE FROM posts WHERE published_hash IS NULL AND editing_order IS NULL AND head_rev IS NULL
-			 AND next_step IS NULL AND effort IS NULL AND triage_rev IS NULL`
-		)
+		.prepare(deleteOrphanRows)
 		.run();
 	setMeta('lastPublishedAt', deployedAt);
 	db().exec('COMMIT');
@@ -259,10 +261,7 @@ export const removeFromEditing = (path: string) => {
 	db().exec('BEGIN');
 	db().prepare('UPDATE posts SET editing_order = NULL WHERE path = ?').run(path);
 	db()
-		.prepare(
-			`DELETE FROM posts WHERE published_hash IS NULL AND editing_order IS NULL AND head_rev IS NULL
-			 AND next_step IS NULL AND effort IS NULL`
-		)
+		.prepare(deleteOrphanRows)
 		.run();
 	db().exec('COMMIT');
 };
