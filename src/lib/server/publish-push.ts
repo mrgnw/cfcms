@@ -27,6 +27,7 @@ export const assertPendingPublishTip = async () => {
 	const pending = getPendingPublishPush();
 	if (!pending) return;
 	const head = await getHeadCommit();
+	if (head === pending) return;
 	if (!head || !await isAncestor(pending, head)) {
 		throw new Error('Blog HEAD no longer contains the pending publish; reconcile it before retrying');
 	}
