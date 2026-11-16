@@ -99,12 +99,12 @@
 		try {
 			const res = await fetch('/api/publish', { method: 'POST' });
 			const data = await res.json();
+			await refreshAll();
 			if (!res.ok) {
 				if (Array.isArray(data.results)) result = data;
 				throw new Error(data.message ?? 'Publish failed');
 			}
 			result = data;
-			await refreshAll();
 		} catch (caught) {
 			error = caught instanceof Error ? caught.message : String(caught);
 		} finally {

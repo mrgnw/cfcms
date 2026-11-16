@@ -94,6 +94,16 @@ export type PublicationReconciliation = {
 	remoteCommit: string | null;
 	paths: string[];
 	error: string | null;
+	review: PublicationOutputReview | null;
+};
+
+export type PublicationOutputReview = {
+	token: string;
+	remoteCommit: string;
+	candidateTree: string;
+	paths: string[];
+	patch: string;
+	approved: boolean;
 };
 
 export const stages = ['drafts', 'ready', 'live'] as const;

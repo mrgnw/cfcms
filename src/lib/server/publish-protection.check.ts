@@ -32,7 +32,7 @@ const { withCheckoutLock } = await import('./checkout-lock.ts');
 const { commitPaths } = await import('./git.ts');
 const { setMetaValue } = await import('./db.ts');
 const { assertRecoveredPathsPreserved, finishPublicationReconciliation,
-	getPublicationReconciliation, protectRecoveredPublication } = await import('./publish-protection.ts');
+	getPublicationReconciliation, protectRecoveredPublication, approveRecoveredOutput } = await import('./publish-protection.ts');
 
 try {
 	await withCheckoutLock(async () => protectRecoveredPublication({
@@ -70,6 +70,71 @@ try {
 	});
 	assert.equal(getPublicationReconciliation(), null);
 	assert.equal(git('show', 'HEAD:protected.md'), 'Remote author choice.');
+	await withCheckoutLock(async () => protectRecoveredPublication({
+		capturedCommit: captured, remoteCommit: remoteTip, baseCommit: base,
+		differences: [{ path: 'protected.md', kind: 'modified', matchesBefore: false }]
+	}));
+	writeFileSync(join(blog, 'protected.md'), 'Reviewed intentional rendering.\n');
+	await assert.rejects(withCheckoutLock(() => assertRecoveredPathsPreserved(['protected.md'])), /Reconciliation required/);
+	const firstReview = getPublicationReconciliation()!.review!;
+	assert.match(firstReview.patch, /-Remote author choice/);
+	assert.match(firstReview.patch, /\+Reviewed intentional rendering/);
+	assert.equal(firstReview.approved, false);
+	await assert.rejects(approveRecoveredOutput('0'.repeat(64), remoteTip), /stale/);
+	setMetaValue('pendingPublishPush', captured);
+	await assert.rejects(approveRecoveredOutput(firstReview.token, firstReview.remoteCommit), /publish push is pending/);
+	setMetaValue('pendingPublishPush', '');
+	const beforeApproval = readFileSync(join(blog, '.git/index'));
+	await approveRecoveredOutput(firstReview.token, firstReview.remoteCommit);
+	assert.deepEqual(readFileSync(join(blog, '.git/index')), beforeApproval);
+	assert.equal(getPublicationReconciliation()!.review!.approved, true);
+	assert.ok(getPublicationReconciliation(), 'approval never clears the guard');
+	writeFileSync(join(blog, 'protected.md'), 'Changed after reviewing.\n');
+	await assert.rejects(withCheckoutLock(() => assertRecoveredPathsPreserved(['protected.md'])), /Reconciliation required/);
+	const secondReview = getPublicationReconciliation()!.review!;
+	assert.notEqual(secondReview.token, firstReview.token);
+	assert.equal(secondReview.approved, false, 'changed output cannot reuse approval');
+	await assert.rejects(approveRecoveredOutput(firstReview.token, firstReview.remoteCommit), /stale/);
+	writeFileSync(join(blog, 'other.md'), 'Local commit after preview.\n');
+	git('add', 'other.md');
+	git('commit', '-qm', 'invalidate local review commit', '--', 'other.md');
+	await assert.rejects(approveRecoveredOutput(secondReview.token, secondReview.remoteCommit), /changed/);
+	await assert.rejects(withCheckoutLock(() => assertRecoveredPathsPreserved(['protected.md'])), /Reconciliation required/);
+	const remoteReview = getPublicationReconciliation()!.review!;
+	execFileSync('git', ['-C', remote, 'update-ref', 'refs/heads/main', base]);
+	await assert.rejects(approveRecoveredOutput(remoteReview.token, remoteReview.remoteCommit), /changed/);
+	assert.equal(getPublicationReconciliation()!.review, null);
+	assert.ok(getPublicationReconciliation(), 'stale remote never releases protection');
+	execFileSync('git', ['-C', remote, 'update-ref', 'refs/heads/main', remoteTip]);
+	await assert.rejects(withCheckoutLock(() => assertRecoveredPathsPreserved(['protected.md'])), /Reconciliation required/);
+	const thirdReview = getPublicationReconciliation()!.review!;
+	await approveRecoveredOutput(thirdReview.token, thirdReview.remoteCommit);
+	execFileSync('git', ['-C', remote, 'update-ref', 'refs/heads/main', base]);
+	await assert.rejects(withCheckoutLock(() => assertRecoveredPathsPreserved(['protected.md'])), /Reconciliation required/);
+	assert.equal(getPublicationReconciliation()!.review!.approved, false, 'remote changes after approval must be reviewed again');
+	execFileSync('git', ['-C', remote, 'update-ref', 'refs/heads/main', remoteTip]);
+	await assert.rejects(withCheckoutLock(() => assertRecoveredPathsPreserved(['protected.md'])), /Reconciliation required/);
+	const finalReview = getPublicationReconciliation()!.review!;
+	await approveRecoveredOutput(finalReview.token, finalReview.remoteCommit);
+	await withCheckoutLock(async () => {
+		let validated: string | null = null;
+		assert.equal((await commitPaths(['protected.md'], 'explicitly reviewed output', async (paths) => {
+			validated = await assertRecoveredPathsPreserved(paths);
+		})).ok, true);
+		finishPublicationReconciliation(validated);
+	});
+	assert.equal(getPublicationReconciliation(), null);
+	assert.equal(git('show', 'HEAD:protected.md'), 'Changed after reviewing.');
+	await withCheckoutLock(async () => protectRecoveredPublication({
+		capturedCommit: captured, remoteCommit: remoteTip, baseCommit: base,
+		differences: [{ path: 'protected.md', kind: 'modified', matchesBefore: false }]
+	}));
+	writeFileSync(join(blog, 'protected.md'), Buffer.from([0, 1, 2, 3]));
+	await assert.rejects(withCheckoutLock(() => assertRecoveredPathsPreserved(['protected.md'])), /too large, or binary/);
+	assert.equal(getPublicationReconciliation()!.review, null, 'binary output cannot be implicitly accepted');
+	writeFileSync(join(blog, 'protected.md'), 'Unreviewably large change.\n'.repeat(20_000));
+	await assert.rejects(withCheckoutLock(() => assertRecoveredPathsPreserved(['protected.md'])), /too large, or binary/);
+	assert.equal(getPublicationReconciliation()!.review, null, 'truncated patches cannot be approved');
 	setMetaValue('publishRecoveryReconciliation', 'invalid');
 	await assert.rejects(withCheckoutLock(() => assertRecoveredPathsPreserved(['other.md'])), /protection is invalid/);
 	console.log('publish-protection.check: ok');
