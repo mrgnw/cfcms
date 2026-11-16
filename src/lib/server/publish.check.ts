@@ -30,7 +30,9 @@ process.chdir(root);
 
 const { POST } = await import('../../routes/api/publish/+server.ts');
 const { createPost, getPost, listPosts, purgePost, savePost } = await import('./content.ts');
-const { getMetaValue, getPublishedPosts, getStagedPaths, setStaged, getStagedRevisions, listVersions } = await import('./db.ts');
+const {
+	getMetaValue, getPublishedPosts, getStagedPaths, setStaged, getStagedRevisions, listVersions, setTriageField
+} = await import('./db.ts');
 const { runBackup } = await import('./backup.ts');
 const { CheckoutBusyError, withCheckoutReadLock } = await import('./checkout-lock.ts');
 const { getPendingChanges } = await import('./pending.ts');
@@ -93,7 +95,10 @@ try {
 	assert.ok((await getPendingChanges(await listPosts())).some((post) => post.path === first.path),
 		'the publish view can load while rendering holds the checkout lock');
 	const edit = await savePost(first.path, first.frontmatter, 'Edited while building.', first.contentHash, 'cms');
-	await listPosts();
+	const triage = setTriageField(first.path, 'nextStep', 'Review after publishing', null);
+	const storedDuringBuild = (await listPosts()).find((post) => post.path === first.path);
+	assert.equal(storedDuringBuild?.nextStep, 'Review after publishing');
+	assert.equal(storedDuringBuild?.triageRev, triage.rev, 'the stored fallback preserves triage metadata from main');
 	assert.ok(!listVersions(first.path).some((version) => version.writer === 'ext'),
 		'listing posts during a build does not ingest transient boundary files as external edits');
 	setStaged(first.path, true);
