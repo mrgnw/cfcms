@@ -12,6 +12,7 @@ import { commitPaths, runGit } from './git';
 import { getPostFilePath, getPostGitPath, listContentFiles } from './content';
 import { backupLockedCheckout } from './backup';
 import { assertCheckoutWriteLock, withCheckoutLock } from './checkout-lock';
+import { assertNoPendingPublishMutation } from './publish-push';
 import { contentDirectory } from './paths';
 
 const demoPath = 'sync-demo.md';
@@ -38,6 +39,7 @@ const recoverPublishedFromFile = async (postPath: string, publishedHash: string)
 const runImport = async () => {
 	assertCheckoutWriteLock();
 	if (getMetaValue('importedCorpus')) return;
+	assertNoPendingPublishMutation('importing the corpus');
 
 	const report: string[] = ['# Corpus import report', '', `Ran: ${new Date().toISOString()}`, ''];
 

@@ -18,6 +18,7 @@ import {
 import { contentBaseDirectory } from './paths';
 import { fastForwardSite } from './site-text';
 import { assertCheckoutWriteLock, withCheckoutLock } from './checkout-lock';
+import { assertNoPendingPublishMutation } from './publish-push';
 
 const svxDirectory = resolve(contentBaseDirectory, 'src/posts');
 const metaKey = 'importedSvxBaseline';
@@ -39,6 +40,7 @@ const matchStored = (slug: string, stored: StoredPost[]) => {
 const runBaseline = async () => {
 	assertCheckoutWriteLock();
 	if (getMetaValue(metaKey)) return;
+	assertNoPendingPublishMutation('importing the site baseline');
 
 	const names = (await readdir(svxDirectory).catch(() => [] as string[])).filter((name) => name.endsWith('.svx')).sort();
 	if (names.length === 0) {
@@ -119,6 +121,7 @@ const repairKey = 'repairedSiteBase';
 
 const repairSiteBase = async () => {
 	if (getMetaValue(repairKey)) return;
+	assertNoPendingPublishMutation('repairing the site baseline');
 
 	const lines: string[] = ['', `## site base repair (${new Date().toISOString()})`, ''];
 	for (const post of listStoredPosts()) {

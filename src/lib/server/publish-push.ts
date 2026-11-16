@@ -1,6 +1,6 @@
 import { getMetaValue, setMetaValue } from './db';
 import { getHeadCommit, runGit } from './git';
-import { assertCheckoutWriteLock } from './checkout-lock';
+import { assertCheckoutWriteLock, CheckoutBusyError } from './checkout-lock';
 
 const pendingPushKey = 'pendingPublishPush';
 const backupPath = '.cms/cms-backup.db';
@@ -9,6 +9,12 @@ const descendantLimit = 100;
 export const getPendingPublishPush = () => getMetaValue(pendingPushKey);
 export const hasPendingPublishPush = () => Boolean(getPendingPublishPush());
 export const setPendingPublishPush = (commit: string | null) => setMetaValue(pendingPushKey, commit ?? '');
+
+export const assertNoPendingPublishMutation = (operation: string) => {
+	if (hasPendingPublishPush()) {
+		throw new CheckoutBusyError(`A publish push is pending. Retry the publish push before ${operation}.`);
+	}
+};
 
 const isAncestor = async (ancestor: string, descendant: string) => {
 	const result = await runGit(['merge-base', '--is-ancestor', ancestor, descendant]);

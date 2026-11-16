@@ -32,6 +32,7 @@ import {
 	assertCheckoutReadLock, CheckoutBusyError, withCheckoutLock, withCheckoutReadLock
 } from './checkout-lock';
 import { commitPaths } from './git';
+import { assertNoPendingPublishMutation } from './publish-push';
 import { contentBaseDirectory, contentDirectory } from './paths';
 import { decideSave, normalizeNewlines, type SaveDecision } from '#lib/save-rules.js';
 
@@ -484,6 +485,7 @@ export const listLlmDrafts = async () => {
 };
 
 export const purgePost = (postPath: string) => withCheckoutLock(async () => {
+	assertNoPendingPublishMutation('purging posts');
 	let hadFile = true;
 	try {
 		await unlink(getPostFilePath(postPath));
