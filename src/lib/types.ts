@@ -147,3 +147,20 @@ export const countPosts = (posts: PostListItem[]): PostCounts => {
 		deleted: posts.length - active.length
 	};
 };
+
+export type SchedulePin = { path: string; hash: string; title: string };
+export type ScheduleState = 'pending' | 'running' | 'published' | 'failed' | 'cancelled';
+export type PublishSchedule = {
+	id: number;
+	dueAt: string;
+	timeZone: string;
+	pins: SchedulePin[];
+	state: ScheduleState;
+	createdAt: string;
+	startedAt: string | null;
+	finishedAt: string | null;
+	commit: string | null;
+	pushed: boolean | null;
+	error: string | null;
+	output: string | null;
+};

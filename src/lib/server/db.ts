@@ -4,7 +4,9 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { contentBaseDirectory, databasePath } from './paths';
 import { randomPostId } from '#lib/post-id.js';
-import { isEffort, nextStepLimit, type Triage, type TriageField } from '#lib/types.js';
+import {
+	isEffort, nextStepLimit, type PublishSchedule, type SchedulePin, type ScheduleState, type Triage, type TriageField
+} from '#lib/types.js';
 import { hashPostContent } from '#lib/post-text.js';
 import { randomUUID } from 'node:crypto';
 
@@ -738,23 +740,6 @@ export const listRevisions = (path: string): RevisionEntry[] =>
 export const labelRevision = (path: string, rev: number, label: string | null) => {
 	const result = db().prepare('UPDATE revisions SET label = ? WHERE path = ? AND rev = ?').run(label, path, rev);
 	return result.changes > 0;
-};
-
-export type SchedulePin = { path: string; hash: string; title: string };
-export type ScheduleState = 'pending' | 'running' | 'published' | 'failed' | 'cancelled';
-export type PublishSchedule = {
-	id: number;
-	dueAt: string;
-	timeZone: string;
-	pins: SchedulePin[];
-	state: ScheduleState;
-	createdAt: string;
-	startedAt: string | null;
-	finishedAt: string | null;
-	commit: string | null;
-	pushed: boolean | null;
-	error: string | null;
-	output: string | null;
 };
 
 type ScheduleRow = {
