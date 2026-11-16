@@ -83,6 +83,9 @@ const db = () => {
 	for (const [name, type] of newColumns) {
 		if (!postColumns.has(name)) instance.exec(`ALTER TABLE posts ADD COLUMN ${name} ${type}`);
 	}
+	instance.exec(
+		'UPDATE posts SET triage_rev = 1 WHERE triage_rev IS NULL AND (next_step IS NOT NULL OR effort IS NOT NULL)'
+	);
 	instance.exec('CREATE UNIQUE INDEX IF NOT EXISTS posts_by_id ON posts(id)');
 	const revisionColumns = instance.prepare(`SELECT name FROM pragma_table_info('revisions')`).all() as { name: string }[];
 	if (!revisionColumns.some((row) => row.name === 'label')) instance.exec('ALTER TABLE revisions ADD COLUMN label TEXT');
