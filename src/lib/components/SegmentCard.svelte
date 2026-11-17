@@ -69,5 +69,7 @@
 		padding: 4px 8px;
 	}
 
+	.seg-acts :global(button.icon) { align-items: center; display: inline-flex; justify-content: center; min-block-size: 24px; min-inline-size: 28px; padding: 4px; }
+	.seg-acts :global(button.icon:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.seg-acts :global(button.primary) { background: var(--accent); border-color: var(--accent); color: #fff; }
 </style>

@@ -186,17 +186,34 @@
 					note={unplaced.has(index) ? "can't place, the text around it changed" : null}
 				>
 					{#if !unplaced.has(index)}
-						<button class="primary" onclick={() => applySegment(segment, index)}>
-							{segment.kind === 'added' ? 'accept' : segment.kind === 'modified' ? 'take theirs' : segment.kind === 'removed' ? 'remove it' : 'insert theirs'}
-						</button>
+						{#if segment.kind === 'conflict'}
+							<button
+								class="primary icon"
+								aria-label="Insert theirs"
+								title="Insert theirs"
+								onclick={() => applySegment(segment, index)}
+							>
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+							</button>
+						{:else}
+							<button class="primary" onclick={() => applySegment(segment, index)}>
+								{segment.kind === 'added' ? 'accept' : segment.kind === 'modified' ? 'take theirs' : 'remove it'}
+							</button>
+						{/if}
 					{:else if segment.kind !== 'removed'}
 						<button class="primary" onclick={() => copySegment(segment.theirs, index)}>
 							{copiedKey === `seg:${index}` ? 'copied' : 'copy theirs'}
 						</button>
 					{/if}
-					<button onclick={() => resolve(index)}>
-						{segment.kind === 'removed' ? 'keep it' : segment.kind === 'modified' || segment.kind === 'conflict' ? 'keep mine' : 'skip'}
-					</button>
+					{#if segment.kind === 'conflict'}
+						<button class="icon" aria-label="Keep mine, discard theirs" title="Keep mine, discard theirs" onclick={() => resolve(index)}>
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"></path></svg>
+						</button>
+					{:else}
+						<button onclick={() => resolve(index)}>
+							{segment.kind === 'removed' ? 'keep it' : segment.kind === 'modified' ? 'keep mine' : 'skip'}
+						</button>
+					{/if}
 				</SegmentCard>
 			{/if}
 		{/each}
