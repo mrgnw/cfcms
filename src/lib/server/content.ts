@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readdir, readFile, stat, unlink } from 'node:fs/promises';
-import { relative, resolve, sep } from 'node:path';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { parseFrontmatter, parseYamlScalar, readBoolean, readFrontmatterValue } from '#lib/frontmatter.js';
 import { canonicalBody, hashPostContent, splitRawPost } from '#lib/post-text.js';
 import { slugify, svxSlug } from '#lib/svx.js';
@@ -70,6 +70,8 @@ const isMarkdownFile = (filePath: string) => filePath.endsWith('.md');
 const normalizePostPath = (postPath: string) => postPath.replaceAll('\\', '/');
 
 export const getPostFilePath = (postPath: string) => {
+	if (isAbsolute(postPath)) throw new Error('Post path must be relative to the content directory');
+
 	const resolved = resolve(contentDirectory, postPath);
 
 	if (resolved !== contentDirectory && !resolved.startsWith(`${contentDirectory}${sep}`)) {

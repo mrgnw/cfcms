@@ -161,7 +161,7 @@ try {
 	assert.equal(listVersions(racePost.path).find((version) => version.writer === 'llm-file')?.body, 'A later file edit.');
 	assert.equal(getStoredPost(racePost.path)!.body, racePost.body);
 
-	for (const bad of ['../outside.md', 'a/../../outside.md', '../content-evil/x.md', join(root, 'outside.md'), 'notes.txt', 'notes.md.txt', 'notes']) {
+	for (const bad of ['../outside.md', 'a/../../outside.md', '../content-evil/x.md', join(root, 'outside.md'), join(root, 'content', 'inside.md'), 'notes.txt', 'notes.md.txt', 'notes']) {
 		assert.throws(() => getPostFilePath(bad), `getPostFilePath must reject ${bad}`);
 	}
 	assert.equal(getPostFilePath('sub/ok.md').endsWith(join('content', 'sub', 'ok.md')), true, 'a nested .md inside content is allowed');
