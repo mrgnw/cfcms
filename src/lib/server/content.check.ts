@@ -166,17 +166,29 @@ try {
 	}
 	assert.equal(getPostFilePath('sub/ok.md').endsWith(join('content', 'sub', 'ok.md')), true, 'a nested .md inside content is allowed');
 
-	const edited = await createPost(draftFm('Edited on disk'), 'App text.', 'mac');
-	const editedFile = join(root, 'content', edited.path);
-	writeFileSync(editedFile, `---\n${draftFm('Edited on disk')}\n---\n\nDisk text.\n`);
+	const editedFile = join(root, 'content', 'edited.md');
+	const editedPost = (text: string) => `---\n${draftFm('Edited on disk')}\n---\n\n${text}\n`;
+	writeFileSync(editedFile, editedPost('Original text.'));
+	utimesSync(editedFile, 2_100_000_000, 2_100_000_000);
+	await listPosts();
+	const exported = getStoredPost('edited.md')!;
+	assert.equal(exported.exportedHash, exported.hash, 'the first scan records the file as exported');
+	assert.deepEqual(listVersions('edited.md'), [], 'an unedited file adds no version');
+
+	writeFileSync(editedFile, editedPost('Original text.'));
 	utimesSync(editedFile, 2_100_000_001, 2_100_000_001);
 	await listPosts();
+	assert.deepEqual(listVersions('edited.md'), [], 'touching a file without changing its text adds no version');
+
+	writeFileSync(editedFile, editedPost('Disk text.'));
+	utimesSync(editedFile, 2_100_000_002, 2_100_000_002);
+	await listPosts();
 	assert.deepEqual(
-		listVersions(edited.path).map((version) => [version.writer, version.body]),
-		[['ext', 'Disk text.']],
-		'an edited file becomes an ext version'
+		listVersions('edited.md').map((version) => [version.writer, version.body, version.baseHash]),
+		[['ext', 'Disk text.', exported.hash]],
+		'an edit to an exported file becomes an ext version based on the export'
 	);
-	assert.equal((await getPost(edited.path)).body, 'App text.', 'the ext edit does not move the head');
+	assert.equal((await getPost('edited.md')).body, 'Original text.', 'the ext edit does not move the head');
 
 	const newFile = join(root, 'content', 'from-disk.md');
 	writeFileSync(newFile, `---\n${draftFm('From disk')}\n---\n\nNew on disk.\n`);
@@ -216,7 +228,7 @@ try {
 
 	const stableRev = postsRev(await listPosts());
 	assert.equal(postsRev(await listPosts()), stableRev, 'postsRev is stable when nothing changed');
-	const revPost = await getPost(edited.path);
+	const revPost = await getPost('edited.md');
 	await savePost(revPost.path, revPost.frontmatter, 'App text, saved again.', revPost.contentHash, 'mac');
 	assert.notEqual(postsRev(await listPosts()), stableRev, 'postsRev changes after a save');
 	const listed = await listPosts();
