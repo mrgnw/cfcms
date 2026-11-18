@@ -1,7 +1,7 @@
 // node --import ./scripts/check-hooks.ts src/lib/server/content.check.ts
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
 import { mock } from 'node:test';
@@ -23,7 +23,8 @@ process.env.BLOG_CMS_DB = join(root, 'cms.db');
 // import reports land in cwd/.data, not next to BLOG_CMS_DB
 process.chdir(root);
 
-const { createPost, getPost, importLlmDraft, listLlmDrafts, listPosts, purgePost, savePost } = await import('./content.ts');
+const { createPost, getPost, getPostFilePath, importAllLlmDrafts, importLlmDraft, listLlmDrafts, listPosts, postsRev, purgePost, savePost } =
+	await import('./content.ts');
 const { changeAssistantDraft, getAssistantDraft, listVersions, upsertVersion, getStoredPost } = await import('./db.ts');
 const { setDeleteFlag } = await import('../frontmatter.ts');
 
@@ -159,6 +160,68 @@ try {
 	assert.equal(getAssistantDraft(racePost.path)!.revision, beforeFileEdit.revision);
 	assert.equal(listVersions(racePost.path).find((version) => version.writer === 'llm-file')?.body, 'A later file edit.');
 	assert.equal(getStoredPost(racePost.path)!.body, racePost.body);
+
+	for (const bad of ['../outside.md', 'a/../../outside.md', '../content-evil/x.md', join(root, 'outside.md'), 'notes.txt', 'notes.md.txt', 'notes']) {
+		assert.throws(() => getPostFilePath(bad), `getPostFilePath must reject ${bad}`);
+	}
+	assert.equal(getPostFilePath('sub/ok.md').endsWith(join('content', 'sub', 'ok.md')), true, 'a nested .md inside content is allowed');
+
+	const edited = await createPost(draftFm('Edited on disk'), 'App text.', 'mac');
+	const editedFile = join(root, 'content', edited.path);
+	writeFileSync(editedFile, `---\n${draftFm('Edited on disk')}\n---\n\nDisk text.\n`);
+	utimesSync(editedFile, 2_100_000_001, 2_100_000_001);
+	await listPosts();
+	assert.deepEqual(
+		listVersions(edited.path).map((version) => [version.writer, version.body]),
+		[['ext', 'Disk text.']],
+		'an edited file becomes an ext version'
+	);
+	assert.equal((await getPost(edited.path)).body, 'App text.', 'the ext edit does not move the head');
+
+	const newFile = join(root, 'content', 'from-disk.md');
+	writeFileSync(newFile, `---\n${draftFm('From disk')}\n---\n\nNew on disk.\n`);
+	assert.equal(getStoredPost('from-disk.md'), null);
+	assert.equal((await listPosts()).some((post) => post.path === 'from-disk.md'), true, 'a new file is listed');
+	assert.equal(getStoredPost('from-disk.md')!.body, 'New on disk.', 'and imported as a post');
+
+	const llmPost = await createPost(draftFm('Llm case'), 'Human text.', 'mac');
+	const llmCaseFile = join(root, 'content/llm-case.llm.md');
+	writeFileSync(llmCaseFile, '---\ntitle: Llm case\n---\n\nFirst suggestion.\n');
+	utimesSync(llmCaseFile, 2_100_000_002, 2_100_000_002);
+	await listPosts();
+	assert.deepEqual(
+		listVersions(llmPost.path).map((version) => [version.writer, version.body]),
+		[['llm', 'First suggestion.']],
+		'a new .llm.md becomes an llm version'
+	);
+	writeFileSync(llmCaseFile, '---\ntitle: Llm case\n---\n\nSecond suggestion.\n');
+	utimesSync(llmCaseFile, 2_100_000_003, 2_100_000_003);
+	await listPosts();
+	assert.deepEqual(
+		listVersions(llmPost.path).map((version) => [version.writer, version.body]),
+		[['llm', 'Second suggestion.']],
+		'a changed .llm.md replaces the llm version'
+	);
+	assert.equal(getStoredPost(llmPost.path)!.body, 'Human text.', 'the llm file never changes the post body');
+
+	unlinkSync(join(root, 'content', 'idea.llm.md'));
+	for (const name of ['bulk-a', 'bulk-b']) {
+		writeFileSync(join(root, 'content', `${name}.llm.md`), `---\ntitle: ${name}\n---\n\n${name} text.\n`);
+	}
+	assert.equal(await importAllLlmDrafts(), 2, 'the bulk import creates one post per standalone draft');
+	const bulkVersions = ['bulk-a.md', 'bulk-b.md'].map((path) => listVersions(path));
+	assert.deepEqual(bulkVersions.map((versions) => versions.map((version) => version.writer)), [['llm'], ['llm']]);
+	assert.equal(await importAllLlmDrafts(), 0, 'a second bulk import creates nothing');
+	assert.deepEqual(['bulk-a.md', 'bulk-b.md'].map((path) => listVersions(path)), bulkVersions, 'and changes no version');
+
+	const stableRev = postsRev(await listPosts());
+	assert.equal(postsRev(await listPosts()), stableRev, 'postsRev is stable when nothing changed');
+	const revPost = await getPost(edited.path);
+	await savePost(revPost.path, revPost.frontmatter, 'App text, saved again.', revPost.contentHash, 'mac');
+	assert.notEqual(postsRev(await listPosts()), stableRev, 'postsRev changes after a save');
+	const listed = await listPosts();
+	const rehashed = listed.map((post, index) => (index === 0 ? { ...post, contentHash: `${post.contentHash}x` } : post));
+	assert.notEqual(postsRev(rehashed), postsRev(listed), 'postsRev depends on each post content hash');
 
 	console.log('content.check: ok');
 } finally {
