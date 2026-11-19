@@ -6,6 +6,7 @@
 	import { plugins } from '#lib/aragonite/plugins.js';
 	import '@fontsource/ibm-plex-mono/400.css';
 	import '@fontsource/ibm-plex-mono/500.css';
+	import '@voithos-labs/aragonite/styles/editor-theme.css';
 
 	type Props = {
 		value: string;
