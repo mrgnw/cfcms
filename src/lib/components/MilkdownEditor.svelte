@@ -10,6 +10,7 @@
 	import '@fontsource/ibm-plex-mono/400.css';
 	import '@fontsource/ibm-plex-mono/500.css';
 	import '@fontsource/ibm-plex-mono/600.css';
+	import { Selection } from '@milkdown/kit/prose/state';
 	import type { EditorView } from '@milkdown/kit/prose/view';
 	import '@milkdown/crepe/theme/common/style.css';
 	import '@milkdown/crepe/theme/frame.css';
@@ -48,6 +49,13 @@
 		await crepe.create();
 		crepe.editor.action((ctx) => (view = ctx.get(editorViewCtx)));
 	});
+
+	function focusFromBlank(e: PointerEvent) {
+		if (!view || (e.target as Element).closest('.ProseMirror')) return;
+		e.preventDefault();
+		view.dispatch(view.state.tr.setSelection(Selection.atEnd(view.state.doc)));
+		view.focus();
+	}
 
 	const acceptsDrag = (e: DragEvent) =>
 		Array.from(e.dataTransfer?.types ?? []).includes('application/x-ref-md');
@@ -107,13 +115,15 @@
 	bind:this={host}
 	role="group"
 	aria-label="Post body editor"
+	onpointerdown={focusFromBlank}
 	ondragover={onDragOver}
 	ondrop={onDrop}
 ></div>
 
 <style>
 	.milkdown-host {
-		min-height: 60vh;
+		flex: 1;
+		cursor: text;
 	}
 
 	.milkdown-host :global(.milkdown) {

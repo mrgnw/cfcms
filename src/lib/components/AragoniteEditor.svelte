@@ -50,6 +50,12 @@
 		onChange?.(next);
 	}
 
+	function focusFromBlank(e: PointerEvent) {
+		if (e.target !== e.currentTarget) return;
+		e.preventDefault();
+		editor?.placeCaretAtPoint(e.clientX, e.clientY);
+	}
+
 	const acceptsDrag = (e: DragEvent) =>
 		Array.from(e.dataTransfer?.types ?? []).includes('application/x-ref-md');
 
@@ -70,28 +76,36 @@
 	}
 </script>
 
-<div
-	class="aragonite-host"
-	role="group"
-	aria-label="Post body editor"
-	ondragovercapture={onDragOver}
-	ondropcapture={onDrop}
->
-	<Editor
-		bind:this={editor}
-		source={doc.text}
-		{theme}
-		presentationMode={mode}
-		{plugins}
-		scrollMode="host"
-	/>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="aragonite-area" onpointerdown={focusFromBlank}>
+	<div
+		class="aragonite-host"
+		role="group"
+		aria-label="Post body editor"
+		ondragovercapture={onDragOver}
+		ondropcapture={onDrop}
+	>
+		<Editor
+			bind:this={editor}
+			source={doc.text}
+			{theme}
+			presentationMode={mode}
+			{plugins}
+			scrollMode="host"
+		/>
+	</div>
 </div>
 
 <style>
 	/* Host-chrome tokens from the CMS palette (Aragonite consumer guide, "Theme tokens"). No
 	   aragonite-editor-theme wrapper, so these reach the editor directly. */
+	.aragonite-area {
+		flex: 1;
+		cursor: text;
+	}
+
 	.aragonite-host {
-		min-height: 60vh;
+		cursor: auto;
 		max-width: 68ch;
 		margin-inline: auto;
 		--font-editor: var(--font-display);
