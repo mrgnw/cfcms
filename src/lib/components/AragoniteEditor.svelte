@@ -71,14 +71,15 @@
 	}
 </script>
 
-<div class="aragonite-area" {@attach focusOnBlankTap((x, y) => editor?.placeCaretAtPoint(x, y))}>
-	<div
-		class="aragonite-host"
-		role="group"
-		aria-label="Post body editor"
-		ondragovercapture={onDragOver}
-		ondropcapture={onDrop}
-	>
+<div
+	class="aragonite-area"
+	role="group"
+	aria-label="Post body editor"
+	ondragovercapture={onDragOver}
+	ondropcapture={onDrop}
+	{@attach focusOnBlankTap((x, y) => editor?.placeCaretAtPoint(x, y))}
+>
+	<div class="aragonite-host">
 		<Editor
 			bind:this={editor}
 			source={doc.text}
