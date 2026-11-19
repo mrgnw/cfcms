@@ -1299,7 +1299,15 @@
 		padding: 7px 8px;
 	}
 
+	.draft {
+		display: flex;
+		flex-direction: column;
+	}
+
 	.editor-body {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
 		min-height: 62vh;
 	}
 
