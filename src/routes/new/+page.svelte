@@ -46,13 +46,21 @@
 	aria-label="Back to post list"
 >Posts</a>
 
-<PostEditor
-	post={post}
-	onSaved={onSaved}
-	onCreated={onCreated}
-/>
+<div class="editor-page">
+	<PostEditor
+		post={post}
+		onSaved={onSaved}
+		onCreated={onCreated}
+	/>
+</div>
 
 <style>
+	.editor-page {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+	}
+
 	.mobile-back {
 		display: none;
 	}

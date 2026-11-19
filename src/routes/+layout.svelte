@@ -15,6 +15,7 @@
 	const ui: UiState = $state({ sidebarOpen: data.sidebarOpen });
 	setUiState(ui);
 
+	let fillsWorkbench = $derived(page.route.id === '/new' || page.route.id === '/[[stage=stage]]/posts/[slug]');
 	let counts = $derived(countPosts(data.posts));
 
 	if (browser) {
@@ -38,7 +39,7 @@
 		bind:open={ui.sidebarOpen}
 	/>
 
-	<section class="workbench" aria-label="Editor">
+	<section class="workbench" class:fill={fillsWorkbench} aria-label="Editor">
 		{@render children()}
 	</section>
 </main>
@@ -127,6 +128,11 @@
 		min-width: 0;
 		padding: 28px 40px;
 		overflow-y: auto;
+	}
+
+	.workbench.fill {
+		display: flex;
+		flex-direction: column;
 	}
 
 	@media (max-width: 720px) {
