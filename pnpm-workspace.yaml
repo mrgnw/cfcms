@@ -1,2 +1,4 @@
 allowBuilds:
   esbuild: true
+patchedDependencies:
+  '@voithos-labs/aragonite@0.11.5': patches/@voithos-labs__aragonite@0.11.5.patch

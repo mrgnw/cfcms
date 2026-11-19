@@ -1,0 +1,77 @@
+diff --git a/dist/components/blocks/table/cell-keydown-plan.js b/dist/components/blocks/table/cell-keydown-plan.js
+index c08ed3e0ac442e78feca069cfa7ead26788ad0a3..ac22ad6c8435bf2ac45527355d482a174c27fd39 100644
+--- a/dist/components/blocks/table/cell-keydown-plan.js
++++ b/dist/components/blocks/table/cell-keydown-plan.js
+@@ -12,7 +12,7 @@ export function cellKeydownPlan(e, s) {
+     if (isSelectAllChord(e)) {
+         return {
+             kind: 'select-all-step',
+-            step: s.selectAllCount === 0 ? 'native' : 'document'
++            step: 'document'
+         };
+     }
+     if (caretEdgeKey(e))
+diff --git a/dist/prebuilt/chunks/Editor-CgvINyc6.js b/dist/prebuilt/chunks/Editor-CgvINyc6.js
+index ccdc1e3e9392e3c8a664d061b36fd5d9be1d9555..07ec2dac72aba6d58d3d3f27cd29b89be2c196bc 100644
+--- a/dist/prebuilt/chunks/Editor-CgvINyc6.js
++++ b/dist/prebuilt/chunks/Editor-CgvINyc6.js
+@@ -11903,7 +11903,7 @@ function cellKeydownPlan(e, s) {
+ 	};
+ 	if (isSelectAllChord(e)) return {
+ 		kind: "select-all-step",
+-		step: s.selectAllCount === 0 ? "native" : "document"
++		step: "document"
+ 	};
+ 	if (caretEdgeKey(e)) return { kind: "native" };
+ 	const atStart = s.offset === null || s.offset <= s.contentStart && s.collapsed;
+diff --git a/dist/prebuilt/chunks/code-renderer-By1FQNwE.js b/dist/prebuilt/chunks/code-renderer-By1FQNwE.js
+index d990100e1a3b860fac49a5381002217a783e0b62..beab17bb977796d27cf9595c3e71234325586ea5 100644
+--- a/dist/prebuilt/chunks/code-renderer-By1FQNwE.js
++++ b/dist/prebuilt/chunks/code-renderer-By1FQNwE.js
+@@ -5390,12 +5390,8 @@ async function handleCrossBlockEntry(ctx, e) {
+ 	const { selection, caretWriter: writer, getDoc } = ctx;
+ 	if (isSelectAllChord(e)) {
+ 		e.preventDefault();
+-		const first = selection.selectAllCount === 0;
+-		selection.batch(() => {
+-			if (first) selectInBlock(selection, writer, () => applySurfaceContentRange(writer, el));
+-			selection.incrementSelectAllCount();
+-		});
+-		if (!first) selectWholeDocument(selection, writer, getDoc(), ctx.getBlockElByPath);
++		selection.incrementSelectAllCount();
++		selectWholeDocument(selection, writer, getDoc(), ctx.getBlockElByPath);
+ 		return true;
+ 	}
+ 	return false;
+diff --git a/dist/selection/cross-block/keydown.js b/dist/selection/cross-block/keydown.js
+index 3d2b86c95798aafc6e476a16c795a82eebc68475..67c12ddb4f1b14818df4e3de3543d4b984641f36 100644
+--- a/dist/selection/cross-block/keydown.js
++++ b/dist/selection/cross-block/keydown.js
+@@ -10,9 +10,7 @@ import { commandOverRange, dispatchKeyCommand } from '../../schema/block-command
+ import { chordsBoundTo, commandForKey } from '../../schema/commands';
+ import { rangeIndentCommands } from '../../schema/range-indent-forms';
+ import { collapseCrossBlock, extendFocusToDocEdge, extendByPage, moveByPage, extendRangeByArrow, extendToLineEdge, selectWholeDocument } from '../keyboard-extend';
+-import { applySurfaceContentRange } from '../native-bridge';
+ import { readNativeSelection } from '../../browser/selection-read';
+-import { selectInBlock } from '../place-caret';
+ export function createCrossBlockKeydown(ctx) {
+     return {
+         handleKeyDown: (e) => handleKeyDown(ctx, e),
+@@ -123,15 +121,8 @@ async function handleCrossBlockEntry(ctx, e) {
+     const { selection, caretWriter: writer, getDoc } = ctx;
+     if (isSelectAllChord(e)) {
+         e.preventDefault();
+-        // Ended before the count moves, since ending a selected widget restarts the run.
+-        const first = selection.selectAllCount === 0;
+-        selection.batch(() => {
+-            if (first)
+-                selectInBlock(selection, writer, () => applySurfaceContentRange(writer, el));
+-            selection.incrementSelectAllCount();
+-        });
+-        if (!first)
+-            selectWholeDocument(selection, writer, getDoc(), ctx.getBlockElByPath);
++        selection.incrementSelectAllCount();
++        selectWholeDocument(selection, writer, getDoc(), ctx.getBlockElByPath);
+         return true;
+     }
+     return false;

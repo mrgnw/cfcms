@@ -1,4 +1,4 @@
-// node --import ./scripts/check-hooks.ts <file>: lets plain node load src/lib/server modules
+// node --import ./scripts/check-hooks.ts <file>: lets plain node load src/lib/server and Aragonite modules
 // by resolving the SvelteKit aliases they use and the extensionless relative imports.
 import { existsSync } from 'node:fs';
 import { registerHooks } from 'node:module';
@@ -26,8 +26,10 @@ registerHooks({
 
 		const isPath = specifier.startsWith('.') || specifier.startsWith('file:');
 		if (isPath && !/\.\w+$/.test(specifier)) {
-			const candidate = new URL(`${specifier}.ts`, context.parentURL);
-			if (existsSync(fileURLToPath(candidate))) specifier = candidate.href;
+			const suffixes = context.conditions.includes('import') ? ['.ts', '.js', '/index.js'] : ['.ts'];
+			const candidates = suffixes.map((suffix) => new URL(`${specifier}${suffix}`, context.parentURL));
+			const found = candidates.find((candidate) => existsSync(fileURLToPath(candidate)));
+			if (found) specifier = found.href;
 		}
 		return nextResolve(specifier, context);
 	}
