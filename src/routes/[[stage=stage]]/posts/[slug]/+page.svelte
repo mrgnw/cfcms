@@ -41,6 +41,9 @@
 
 <style>
 	.post-enter {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
 		animation: enter 180ms ease-out;
 	}
 

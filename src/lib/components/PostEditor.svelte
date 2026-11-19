@@ -918,6 +918,12 @@
 		color: var(--accent-ink);
 	}
 
+	.workspace {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+	}
+
 	.workspace.split {
 		display: grid;
 		grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
@@ -968,6 +974,7 @@
 	@media (max-width: 960px) {
 		.workspace.split {
 			grid-template-columns: 1fr;
+			grid-template-rows: auto 1fr;
 		}
 	}
 
@@ -1105,7 +1112,7 @@
 	.frontmatter {
 		display: grid;
 		gap: 8px;
-		margin: 0 auto 28px;
+		margin: 0 auto;
 		max-width: 68ch;
 		width: 100%;
 	}
@@ -1302,13 +1309,14 @@
 	.draft {
 		display: flex;
 		flex-direction: column;
+		flex: 1;
 	}
 
 	.editor-body {
 		display: flex;
 		flex-direction: column;
 		flex: 1;
-		min-height: 62vh;
+		min-height: 16rem;
 	}
 
 </style>

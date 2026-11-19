@@ -4,6 +4,7 @@
 	import { replaceAll, insert, insertPos } from '@milkdown/kit/utils';
 	import { editorViewCtx } from '@milkdown/kit/core';
 	import { codeBlockConfig } from '@milkdown/kit/component/code-block';
+	import { focusOnBlankTap } from '#lib/blank-tap.js';
 	import { languages, theme } from '#lib/code/twinkleplop.js';
 	import { fenceMeta } from '#lib/code/fence-meta.js';
 	import '$blog/styles/code-theme.css';
@@ -50,9 +51,11 @@
 		crepe.editor.action((ctx) => (view = ctx.get(editorViewCtx)));
 	});
 
-	function focusFromBlank(e: PointerEvent) {
-		if (!view || (e.target as Element).closest('.ProseMirror')) return;
-		e.preventDefault();
+	const isBlank = (target: EventTarget | null, area: HTMLElement) =>
+		target === area || (target instanceof Element && target.classList.contains('milkdown'));
+
+	function focusAtEnd() {
+		if (!view) return;
 		view.dispatch(view.state.tr.setSelection(Selection.atEnd(view.state.doc)));
 		view.focus();
 	}
@@ -113,9 +116,9 @@
 <div
 	class="milkdown-host"
 	bind:this={host}
+	{@attach focusOnBlankTap(focusAtEnd, isBlank)}
 	role="group"
 	aria-label="Post body editor"
-	onpointerdown={focusFromBlank}
 	ondragover={onDragOver}
 	ondrop={onDrop}
 ></div>
@@ -123,6 +126,7 @@
 <style>
 	.milkdown-host {
 		flex: 1;
+		padding-top: 28px;
 		cursor: text;
 	}
 

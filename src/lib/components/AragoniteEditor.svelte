@@ -2,6 +2,7 @@
 	import { onMount, untrack } from 'svelte';
 	import type { EditorInstance, PresentationMode } from '@voithos-labs/aragonite';
 	import { Editor } from '@voithos-labs/aragonite/svelte';
+	import { focusOnBlankTap } from '#lib/blank-tap.js';
 	import { plugins } from '#lib/aragonite/plugins.js';
 	import '@fontsource/ibm-plex-mono/400.css';
 	import '@fontsource/ibm-plex-mono/500.css';
@@ -50,12 +51,6 @@
 		onChange?.(next);
 	}
 
-	function focusFromBlank(e: PointerEvent) {
-		if (e.target !== e.currentTarget) return;
-		e.preventDefault();
-		editor?.placeCaretAtPoint(e.clientX, e.clientY);
-	}
-
 	const acceptsDrag = (e: DragEvent) =>
 		Array.from(e.dataTransfer?.types ?? []).includes('application/x-ref-md');
 
@@ -76,8 +71,7 @@
 	}
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="aragonite-area" onpointerdown={focusFromBlank}>
+<div class="aragonite-area" {@attach focusOnBlankTap((x, y) => editor?.placeCaretAtPoint(x, y))}>
 	<div
 		class="aragonite-host"
 		role="group"
@@ -101,6 +95,7 @@
 	   aragonite-editor-theme wrapper, so these reach the editor directly. */
 	.aragonite-area {
 		flex: 1;
+		padding-top: 28px;
 		cursor: text;
 	}
 
