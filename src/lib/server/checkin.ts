@@ -167,11 +167,15 @@ const offlineColumnChanges = (base: PostRow, offline: PostRow) =>
 const mergeColumns = (base: PostRow, offline: PostRow, mini: PostRow, actions: CheckinAction[], uncarried: string[]) => {
 	const set: Record<string, SqlValue> = {};
 	for (const column of offlineColumnChanges(base, offline)) {
+		if (column === 'triage_rev') continue;
 		if (offline[column] === mini[column]) continue;
 		if (miniOnlyColumns.has(column)) uncarried.push(`${mini.path}: ${column} changed offline; publish state stays the mini's`);
 		else if (mini[column] === base[column]) set[column] = offline[column];
 		else uncarried.push(`${mini.path}: ${column} changed on both sides; kept the mini's ${JSON.stringify(mini[column])}, ` +
 			`offline had ${JSON.stringify(offline[column])}`);
+	}
+	if ('next_step' in set || 'effort' in set) {
+		set.triage_rev = Math.max(Number(mini.triage_rev ?? 0), Number(offline.triage_rev ?? 0)) + 1;
 	}
 	if (Object.keys(set).length) actions.push({ kind: 'columns', path: String(mini.path), set });
 };

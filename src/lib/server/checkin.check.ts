@@ -208,7 +208,7 @@ try {
 	const columnsMini = new DatabaseSync(join(root, 'columns-mini.db'));
 	const setPost = (db: DatabaseSync, path: string, assignments: string) => db.prepare(`UPDATE posts SET ${assignments} WHERE path = ?`).run(path);
 	setPost(columnsOffline, 'untouched.md', "next_step = 'offline step', effort = 'small', triage_rev = 1");
-	setPost(columnsMini, 'untouched.md', "next_step = 'mini step', triage_rev = 1");
+	setPost(columnsMini, 'untouched.md', "next_step = 'mini step', triage_rev = 2");
 	setPost(columnsOffline, 'both.md', 'editing_order = 5');
 	setPost(columnsOffline, 'offline-only.md', "published_slug = 'from-the-plane'");
 	setPost(columnsOffline, 'round-trip.md', "next_step = 'for a post the mini deleted'");
@@ -229,6 +229,8 @@ try {
 		.get(path) as { next_step: string | null; effort: string | null; editing_order: number | null; published_slug: string | null };
 	assert.equal(post('untouched.md').next_step, 'mini step', 'a column changed on both sides keeps the mini value');
 	assert.equal(post('untouched.md').effort, 'small', 'a column changed only offline is carried');
+	assert.equal(columnsMini.prepare("SELECT triage_rev FROM posts WHERE path = 'untouched.md'").get()?.triage_rev, 3,
+		'merged triage has a revision newer than both sides');
 	assert.equal(post('both.md').editing_order, 5);
 	assert.equal(post('offline-only.md').published_slug, null, 'publish state is never carried');
 	columnsOffline.close();
