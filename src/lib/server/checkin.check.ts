@@ -246,6 +246,8 @@ try {
 	const headlessOffline = new DatabaseSync(join(root, 'headless-offline.db'));
 	const headlessMini = new DatabaseSync(join(root, 'headless-mini.db'));
 	setPost(headlessOffline, 'queued.md', "next_step = 'outline it', triage_rev = 1");
+	save(headlessOffline, 'queued.md', 'first draft');
+	setPost(headlessOffline, 'queued.md', "id = 'q7ebas'");
 	headlessOffline.prepare("INSERT INTO posts (path, next_step, triage_rev) VALUES ('idea.md', 'just an idea', 1)").run();
 	headlessOffline.prepare("INSERT INTO posts (path, next_step, triage_rev) VALUES ('taken.md', 'offline note', 1)").run();
 	headlessMini.prepare("INSERT INTO posts (path, next_step, triage_rev) VALUES ('taken.md', 'mini note', 1)").run();
@@ -261,6 +263,7 @@ try {
 	const nextStep = (path: string) => (headlessMini.prepare('SELECT next_step FROM posts WHERE path = ?').get(path) as
 		{ next_step: string | null } | undefined)?.next_step;
 	assert.equal(nextStep('queued.md'), 'outline it', 'metadata of a post without a head is merged');
+	assert.equal(head(headlessMini, 'queued.md').body, 'first draft', 'a first draft attaches to its queued post');
 	assert.equal(nextStep('idea.md'), 'just an idea', 'a new row without a head is inserted');
 	assert.equal(nextStep('taken.md'), 'mini note');
 	assert.ok(headlessMini.prepare("SELECT 1 FROM posts WHERE path = 'dropped.md'").get());
