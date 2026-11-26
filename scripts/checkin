@@ -3,6 +3,7 @@
 // Dry run by default. Merges <dir>/.data/cms.db into the mini's database (BLOG_CMS_DB, default .data/cms.db),
 // using <dir>/.data/checkout-base.db as the common ancestor.
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, renameSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -49,6 +50,7 @@ const dbs = {
 	mini: new DatabaseSync(miniPath, { readOnly: !apply, timeout: 5_000 })
 };
 
+const checkoutId = createHash('sha256').update(readFileSync(basePath)).digest('hex');
 const stamp = new Date().toISOString().replaceAll(':', '');
 const backupPath = `${miniPath}.pre-checkin-${stamp}.db`;
 const backup = () => {
@@ -60,7 +62,7 @@ const backup = () => {
 console.log(`offline ${offlinePath}\nmini    ${miniPath}\nbase    ${basePath}\n`);
 let plan;
 try {
-	plan = runCheckin(dbs, { apply, backup });
+	plan = runCheckin(dbs, { apply, checkoutId, backup });
 } catch (caught) {
 	fail(caught instanceof Error ? caught.message : String(caught));
 }
