@@ -2,17 +2,16 @@ import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { createPost, getPost, importAllLlmDrafts, importLlmDraft, purgePost, savePost } from '#lib/server/content.js';
 import {
-	addToEditing,
 	claimWriter,
 	deleteVersion,
 	getRevision,
 	labelRevision,
 	listVersions,
-	removeFromEditing,
 	setStaged,
 	setTriageField,
 	upsertVersion
 } from '#lib/server/db.js';
+import * as queue from '#lib/server/queue.js';
 import { CheckoutBusyError } from '#lib/server/checkout-lock.js';
 import { hasSiteVersion, shipsHeadText } from '#lib/server/pending.js';
 import { isBlankDraft, setDeleteFlag } from '#lib/frontmatter.js';
@@ -20,6 +19,15 @@ import { isValidWriter, normalizeNewlines } from '#lib/save-rules.js';
 import { isEffort, isTriageField, nextStepLimit, statusOf } from '#lib/types.js';
 
 const maxRevisionLabel = 60;
+
+const queueResult = async <T>(work: () => T | Promise<T>) => {
+	try {
+		return await work();
+	} catch (caught) {
+		if (caught instanceof queue.QueueInputError) return fail(caught.status, { message: caught.message });
+		throw caught;
+	}
+};
 
 export const actions = {
 	create: async ({ request }) => {
@@ -175,25 +183,20 @@ export const actions = {
 		return { unstaged: path };
 	},
 	queueAdd: async ({ request }) => {
-		const form = await request.formData();
-		const path = String(form.get('path') ?? '');
+		const path = String((await request.formData()).get('path') ?? '');
 
-		if (!path) return fail(400, { message: 'Post path is required' });
-
-		const post = await getPost(path).catch(() => null);
-		if (!post) return fail(400, { message: `Unknown post: ${path}` });
-
-		addToEditing(path);
-		return { queued: path };
+		return queueResult(async () => {
+			await queue.queueAdd(path);
+			return { queued: path };
+		});
 	},
 	queueRemove: async ({ request }) => {
-		const form = await request.formData();
-		const path = String(form.get('path') ?? '');
+		const path = String((await request.formData()).get('path') ?? '');
 
-		if (!path) return fail(400, { message: 'Post path is required' });
-
-		removeFromEditing(path);
-		return { unqueued: path };
+		return queueResult(() => {
+			queue.queueRemove(path);
+			return { unqueued: path };
+		});
 	},
 	triage: async ({ request }) => {
 		const form = await request.formData();
