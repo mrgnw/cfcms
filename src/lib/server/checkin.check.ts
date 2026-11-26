@@ -27,7 +27,7 @@ const head = (db: DatabaseSync, path: string) => db.prepare(`
 
 try {
 	const { appendRevision, vacuumInto } = await import('./db.ts');
-	const { applyCheckin, formatPlan, planCheckin } = await import('./checkin.ts');
+	const { formatPlan, runCheckin } = await import('./checkin.ts');
 	for (const path of ['offline-only.md', 'both.md', 'untouched.md']) {
 		appendRevision(path, 'title: T', 'base text', hashPostContent('title: T', 'base text'), 'mini');
 	}
@@ -48,11 +48,20 @@ try {
 	save(mini, 'clash.md', 'mini clash', 'c7a4hx');
 
 	const dbs = { base, offline, mini };
-	const plan = planCheckin(dbs);
+	let backedUp = false;
+	const plan = runCheckin(dbs, {
+		apply: true,
+		backup: () => {
+			const daemon = new DatabaseSync(join(root, 'mini.db'));
+			assert.throws(() => daemon.exec('BEGIN IMMEDIATE'), /locked/, 'the mini is write-locked from plan to commit');
+			daemon.close();
+			backedUp = true;
+		}
+	});
+	assert.ok(backedUp);
 	assert.deepEqual(plan.actions.map((action) => `${action.kind} ${action.path}`).sort(), [
 		'conflict both.md', 'create clash-2.md', 'create new.md', 'fast-forward offline-only.md'
 	], formatPlan(plan));
-	applyCheckin(dbs, plan);
 
 	const forwarded = head(mini, 'offline-only.md');
 	assert.equal(forwarded.body, 'offline draft 2', 'offline-only change becomes the head');
@@ -78,14 +87,15 @@ try {
 	assert.notEqual(moved.id, 'c7a4hx', 'a colliding id is replaced');
 	assert.equal(head(mini, 'untouched.md').head_rev, 1);
 
-	const again = planCheckin(dbs);
+	const again = runCheckin(dbs, { apply: false });
 	assert.deepEqual(again.actions, [],
 		`a second run finds nothing new: ${formatPlan(again)}`);
 
 	copyFileSync(join(root, 'mini.db'), join(root, 'newer.db'));
 	const newer = new DatabaseSync(join(root, 'newer.db'));
 	newer.exec('ALTER TABLE posts ADD COLUMN pinned INTEGER');
-	assert.throws(() => planCheckin({ base, offline, mini: newer }), /Schema mismatch in posts/);
+	assert.throws(() => runCheckin({ base, offline, mini: newer }, { apply: true }), /Schema mismatch in posts/);
+	assert.equal(newer.isTransaction, false, 'a failed check-in releases the lock');
 	for (const db of [base, offline, mini, newer]) db.close();
 } finally {
 	rmSync(root, { recursive: true, force: true });

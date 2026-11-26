@@ -102,7 +102,7 @@ const hasVersionText = (dbs: CheckinDatabases, id: string, path: string) => {
 const revisionCount = (db: DatabaseSync, path: string, afterRev: number) =>
 	(db.prepare('SELECT count(*) AS count FROM revisions WHERE path = ? AND rev > ?').get(path, afterRev) as { count: number }).count;
 
-export const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
+const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 	assertSameSchema(dbs);
 	const base = headsById(dbs.base);
 	const offline = headsById(dbs.offline);
@@ -266,18 +266,33 @@ const version = (dbs: CheckinDatabases, action: Extract<CheckinAction, { kind: '
 	});
 };
 
-export const applyCheckin = (dbs: CheckinDatabases, plan: CheckinPlan) => {
-	dbs.mini.exec('BEGIN IMMEDIATE');
+const applyPlan = (dbs: CheckinDatabases, plan: CheckinPlan) => {
+	for (const action of plan.actions) {
+		if (action.kind === 'fast-forward') fastForward(dbs, action);
+		if (action.kind === 'conflict') conflict(dbs, action);
+		if (action.kind === 'create') create(dbs, action);
+		if (action.kind === 'version') version(dbs, action);
+	}
+};
+
+export type CheckinOptions = { apply: boolean; backup?: () => void };
+
+// Plans and applies under one write lock on the mini, so nothing can land between the two.
+// backup runs once the lock is held and before the first write; a second connection can still read.
+export const runCheckin = (dbs: CheckinDatabases, options: CheckinOptions): CheckinPlan => {
+	dbs.mini.exec(options.apply ? 'BEGIN IMMEDIATE' : 'BEGIN');
 	try {
-		for (const action of plan.actions) {
-			if (action.kind === 'fast-forward') fastForward(dbs, action);
-			if (action.kind === 'conflict') conflict(dbs, action);
-			if (action.kind === 'create') create(dbs, action);
-			if (action.kind === 'version') version(dbs, action);
+		const plan = planCheckin(dbs);
+		if (!options.apply) {
+			dbs.mini.exec('ROLLBACK');
+			return plan;
 		}
+		options.backup?.();
+		applyPlan(dbs, plan);
 		dbs.mini.exec('COMMIT');
+		return plan;
 	} catch (caught) {
-		dbs.mini.exec('ROLLBACK');
+		if (dbs.mini.isTransaction) dbs.mini.exec('ROLLBACK');
 		throw caught;
 	}
 };
