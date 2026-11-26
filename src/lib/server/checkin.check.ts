@@ -28,7 +28,7 @@ const head = (db: DatabaseSync, path: string) => db.prepare(`
 try {
 	const { appendRevision, vacuumInto } = await import('./db.ts');
 	const { formatPlan, runCheckin } = await import('./checkin.ts');
-	for (const path of ['offline-only.md', 'both.md', 'untouched.md', 'round-trip.md']) {
+	for (const path of ['offline-only.md', 'both.md', 'untouched.md', 'round-trip.md', 'gone.md']) {
 		appendRevision(path, 'title: T', 'base text', hashPostContent('title: T', 'base text'), 'mini');
 	}
 	vacuumInto(join(root, 'offline.db'));
@@ -47,6 +47,14 @@ try {
 	save(offline, 'round-trip.md', 'a detour');
 	save(offline, 'round-trip.md', 'base text');
 	save(offline, 'twin-a.md', 'same words', 'tw7nab');
+	const pend = (db: DatabaseSync, path: string, writer: string, body: string) => db.prepare(`
+		INSERT INTO versions (path, writer, session_id, base_hash, frontmatter, body, updated_at, revision)
+		VALUES (?, ?, 'tab2', ?, 'title: T', ?, '2026-11-26', ?)
+	`).run(path, writer, head(db, path).hash, body, `${path}-${writer}`);
+	pend(offline, 'clash.md', 'air2', 'second tab on the clashing post');
+	pend(offline, 'gone.md', 'air2', 'second tab on a post the mini deleted');
+	for (const table of ['versions', 'revisions', 'posts']) mini.prepare(`DELETE FROM ${table} WHERE path = ?`).run('gone.md');
+	save(mini, 'gone.md', 'a new mini post reusing the path', 'g7n3wp');
 	save(mini, 'both.md', 'mini edit');
 	save(mini, 'twin-b.md', 'same words', 'tw7nbc');
 	save(mini, 'clash.md', 'mini clash', 'c7a4hx');
@@ -67,8 +75,9 @@ try {
 	assert.ok(backedUp);
 	assert.deepEqual(plan.actions.map((action) => `${action.kind} ${action.path}`).sort(), [
 		'conflict both.md', 'create clash-2.md', 'create new.md', 'create twin-a.md', 'fast-forward offline-only.md',
-		'fast-forward round-trip.md'
+		'fast-forward round-trip.md', 'version clash-2.md'
 	], formatPlan(plan));
+	assert.ok(plan.skipped.some((note) => note.startsWith('gone.md (air2)')), formatPlan(plan));
 
 	const forwarded = head(mini, 'offline-only.md');
 	assert.equal(forwarded.body, 'offline draft 2', 'offline-only change becomes the head');
@@ -92,6 +101,11 @@ try {
 	const moved = head(mini, 'clash-2.md');
 	assert.equal(moved.body, 'offline clash');
 	assert.notEqual(moved.id, 'c7a4hx', 'a colliding id is replaced');
+	const versionsOf = (path: string) => (mini.prepare('SELECT body FROM versions WHERE path = ?').all(path) as { body: string }[])
+		.map((row) => row.body);
+	assert.deepEqual(versionsOf('clash-2.md'), ['second tab on the clashing post'], 'versions follow a remapped post');
+	assert.deepEqual(versionsOf('clash.md'), []);
+	assert.deepEqual(versionsOf('gone.md'), [], 'a version never attaches to another post at the same path');
 	assert.equal(head(mini, 'untouched.md').head_rev, 1);
 
 	const roundTrip = head(mini, 'round-trip.md');
