@@ -1,4 +1,4 @@
-import { getPost, getPostFilePath, savePost, UnknownPostError } from '#lib/server/content.js';
+import { canonicalPostPath, getPost, savePost, UnknownPostError } from '#lib/server/content.js';
 import { addToEditing, removeFromEditing, reorderEditing } from '#lib/server/db.js';
 import { setDeleteFlag } from '#lib/frontmatter.js';
 
@@ -17,11 +17,13 @@ export class QueueInputError extends Error {
 const checkedPath = (path: string) => {
 	if (!path) throw new QueueInputError(400, 'Post path is required');
 	if (path.length > maxPostPathLength) throw new QueueInputError(400, 'Post path is too long');
+	let canonical: string;
 	try {
-		getPostFilePath(path);
+		canonical = canonicalPostPath(path);
 	} catch (caught) {
 		throw new QueueInputError(400, caught instanceof Error ? caught.message : 'Invalid post path');
 	}
+	if (canonical !== path) throw new QueueInputError(400, `Post path must be ${canonical}`);
 	return path;
 };
 

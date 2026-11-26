@@ -85,6 +85,8 @@ export const getPostFilePath = (postPath: string) => {
 	return resolved;
 };
 
+export const canonicalPostPath = (postPath: string) => normalizePostPath(relative(contentDirectory, getPostFilePath(postPath)));
+
 export const getPostGitPath = (postPath: string) => normalizePostPath(relative(contentBaseDirectory, getPostFilePath(postPath)));
 
 const readTags = (frontmatter: string) => {
