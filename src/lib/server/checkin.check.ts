@@ -44,6 +44,7 @@ try {
 	save(offline, 'offline-only.md', 'offline draft 2');
 	save(offline, 'both.md', 'offline edit');
 	save(offline, 'new.md', 'written on the plane', 'p34n7x');
+	offline.prepare("UPDATE posts SET staged = 1, staged_hash = (SELECT hash FROM revisions WHERE path = 'new.md' AND rev = 1) WHERE path = 'new.md'").run();
 	save(offline, 'clash.md', 'offline clash', 'c7a4hx');
 	save(offline, 'round-trip.md', 'a detour');
 	save(offline, 'round-trip.md', 'base text');
@@ -111,6 +112,7 @@ try {
 
 	assert.equal(head(mini, 'new.md').id, 'p34n7x', 'a post created offline keeps its id');
 	assert.equal(head(mini, 'new.md').body, 'written on the plane');
+	assert.equal(mini.prepare("SELECT staged FROM posts WHERE path = 'new.md'").get()?.staged, 1, 'staging of a new post is carried');
 	assert.equal(head(mini, 'clash.md').body, 'mini clash');
 	const moved = head(mini, 'clash-2.md');
 	assert.equal(moved.body, 'offline clash');
