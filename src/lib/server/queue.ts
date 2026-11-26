@@ -6,8 +6,11 @@ export const maxPostPathLength = 300;
 export const maxQueueLength = 500;
 
 export class QueueInputError extends Error {
-	constructor(readonly status: 400 | 409, message: string) {
+	status: 400 | 409;
+
+	constructor(status: 400 | 409, message: string) {
 		super(message);
+		this.status = status;
 	}
 }
 
