@@ -158,13 +158,16 @@ try {
 	save(fastOffline, 'both.md', 'edited on the plane');
 	save(fastOffline, 'fresh.md', 'new on the plane', 'fr3shx');
 	fastOffline.prepare("UPDATE posts SET next_step = 'tighten intro', triage_rev = 1 WHERE path = 'untouched.md'").run();
+	fastOffline.prepare("UPDATE posts SET exported_hash = 'offline-file', exported_mtime_ms = 42, llm_hash = 'offline-llm' WHERE path = 'untouched.md'").run();
 	const fast = { base, offline: fastOffline, mini: fastMini };
 	const preview = runCheckin(fast, { apply: false, checkoutId: 'checkout-2' });
 	assert.equal(preview.fastPath, true, formatPlan(preview));
 	runCheckin(fast, { apply: true, checkoutId: 'checkout-2' });
-	const dump = (db: DatabaseSync) => ['posts ORDER BY path', 'revisions ORDER BY path, rev', 'versions ORDER BY path, writer']
-		.map((query) => JSON.stringify(db.prepare(`SELECT * FROM ${query}`).all()));
-	assert.deepEqual(dump(fastMini), dump(fastOffline), 'an unchanged mini takes the offline content whole');
+	assert.equal(fastMini.prepare("SELECT exported_hash FROM posts WHERE path = 'untouched.md'").get()?.exported_hash, null,
+		'fast path keeps the mini file cache');
+	assert.equal(fastMini.prepare("SELECT llm_hash FROM posts WHERE path = 'untouched.md'").get()?.llm_hash, null,
+		'fast path keeps the mini assistant file cache');
+	assert.equal(head(fastMini, 'fresh.md').body, 'new on the plane');
 	assert.equal((fastMini.prepare("SELECT value FROM meta WHERE key = 'lastBackupAt'").get() as { value: string }).value, 'mini',
 		'the mini keeps its own meta');
 	assert.throws(() => runCheckin(fast, { apply: true, checkoutId: 'checkout-2' }), /already checked in/);

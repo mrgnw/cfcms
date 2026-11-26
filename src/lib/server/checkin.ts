@@ -131,10 +131,17 @@ const preservesBase = (offline: DatabaseSync, base: DatabaseSync) => contentTabl
 	});
 });
 
+const fileStateColumns = ['exported_hash', 'exported_mtime_ms', 'llm_hash', 'llm_mtime_ms', 'llm_version_revision'];
+
 const replaceContent = (dbs: CheckinDatabases) => {
+	const livePosts = new Map(contentRows(dbs.mini, 'posts', 'path').map((row) => [row.path, row]));
 	for (const [table, order] of contentTables) {
 		dbs.mini.exec(`DELETE FROM ${table}`);
 		for (const row of contentRows(dbs.offline, table, order)) {
+			if (table === 'posts') {
+				const live = livePosts.get(row.path);
+				for (const column of fileStateColumns) row[column] = live && live.id === row.id ? live[column] : null;
+			}
 			const columns = Object.keys(row);
 			dbs.mini.prepare(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`)
 				.run(...columns.map((column) => row[column]));
