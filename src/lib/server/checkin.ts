@@ -338,7 +338,7 @@ const conflict = (dbs: CheckinDatabases, action: Extract<CheckinAction, { kind: 
 };
 
 const clearedOnInsert = ['published_hash', 'published_title', 'published_slug', 'published_commit', 'published_at',
-	'exported_hash', 'exported_mtime_ms', 'llm_hash', 'llm_mtime_ms', 'llm_version_revision', 'staged', 'staged_hash'];
+	'exported_hash', 'exported_mtime_ms', 'llm_hash', 'llm_mtime_ms', 'llm_version_revision'];
 
 const insertPost = (mini: DatabaseSync, row: PostRow) => {
 	const post: PostRow = { ...row };
