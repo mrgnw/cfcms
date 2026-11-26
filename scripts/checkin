@@ -29,7 +29,13 @@ if (existsSync(miniBasePath) && !readFileSync(miniBasePath).equals(readFileSync(
 	fail(`${basePath} and ${miniBasePath} differ; this copy was not checked out from this database`);
 }
 
-const openBy = (path) => spawnSync('lsof', ['-t', '--', path], { encoding: 'utf8' }).stdout.trim();
+const openBy = (path) => {
+	const result = spawnSync('lsof', ['-t', '--', path], { encoding: 'utf8' });
+	if (result.error || (result.status !== 0 && result.status !== 1) || result.stderr.trim()) {
+		fail(`could not check whether ${path} is open: ${result.error?.message || result.stderr.trim() || `lsof exited ${result.status}`}`);
+	}
+	return result.stdout.trim();
+};
 if (apply) {
 	for (const path of [miniPath, offlinePath]) {
 		const pids = openBy(path);
