@@ -220,7 +220,9 @@ scripts/checkin "$DRIVE/cfcms" --apply
 pitchfork start blog-cms
 ```
 
-A post edited only offline takes the offline revisions as its head. A post edited on both sides keeps the server's head and gets the offline text as a pending `offline` version to reconcile in the editor. Posts created offline are added with their id, or a new one if it collides. `--apply` refuses to run while either database is open, and writes a `VACUUM INTO` backup next to the database first. Triage, queue order and deletions made offline are not merged.
+If nothing changed on the server since checkout, the offline posts, revisions and versions replace the server's whole. Otherwise posts are merged by id. A post edited only offline takes the offline revisions as its head. A post edited on both sides keeps the server's head and gets the offline text as a pending `offline` version to reconcile in the editor. Posts created offline are added with their id, or a new one if it collides. In a merge, triage, queue order and deletions made offline are not carried over.
+
+`--apply` refuses to run while either database is open. It holds the server database's write lock from planning to commit, writes a `VACUUM INTO` backup next to it first, and records the checkout so the same copy cannot be applied twice.
 
 ## Checks
 
