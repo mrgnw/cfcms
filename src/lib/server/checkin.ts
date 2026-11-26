@@ -102,12 +102,6 @@ const headText = (db: DatabaseSync, id: string) => db.prepare(`
 	JOIN revisions ON revisions.path = posts.path AND revisions.rev = posts.head_rev WHERE posts.id = ?
 `).get(id) as { hash: string; frontmatter: string; body: string };
 
-const hasVersionText = (dbs: CheckinDatabases, id: string, path: string) => {
-	const offline = headText(dbs.offline, id);
-	return Boolean(dbs.mini.prepare('SELECT 1 FROM versions WHERE path = ? AND frontmatter = ? AND body = ?')
-		.get(path, offline.frontmatter, offline.body));
-};
-
 const revisionCount = (db: DatabaseSync, path: string, afterRev: number) =>
 	(db.prepare('SELECT count(*) AS count FROM revisions WHERE path = ? AND rev > ?').get(path, afterRev) as { count: number }).count;
 
@@ -151,10 +145,6 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 				kind: 'fast-forward', id: head.id, path: current.path, fromRev: ancestor.headRev,
 				revisions: revisionCount(dbs.offline, head.path, ancestor.headRev)
 			});
-		} else if (current.hash === head.hash) {
-			skipped.push(`${current.path}: same text on both sides`);
-		} else if (hasVersionText(dbs, head.id, current.path)) {
-			skipped.push(`${current.path}: offline head is already a pending version`);
 		} else {
 			actions.push({ kind: 'conflict', id: head.id, path: current.path, writer: freeWriter(takenWriters, current.path, 'offline') });
 		}

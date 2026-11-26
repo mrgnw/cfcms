@@ -28,7 +28,7 @@ const head = (db: DatabaseSync, path: string) => db.prepare(`
 try {
 	const { appendRevision, vacuumInto } = await import('./db.ts');
 	const { formatPlan, runCheckin } = await import('./checkin.ts');
-	for (const path of ['offline-only.md', 'both.md', 'untouched.md', 'round-trip.md', 'gone.md']) {
+	for (const path of ['offline-only.md', 'both.md', 'untouched.md', 'round-trip.md', 'gone.md', 'same-both.md', 'already-pending.md', 'offline-back.md', 'mini-back.md']) {
 		appendRevision(path, 'title: T', 'base text', hashPostContent('title: T', 'base text'), 'mini');
 	}
 	vacuumInto(join(root, 'offline.db'));
@@ -56,6 +56,17 @@ try {
 	for (const table of ['versions', 'revisions', 'posts']) mini.prepare(`DELETE FROM ${table} WHERE path = ?`).run('gone.md');
 	save(mini, 'gone.md', 'a new mini post reusing the path', 'g7n3wp');
 	save(mini, 'both.md', 'mini edit');
+	save(offline, 'same-both.md', 'identical edit');
+	save(mini, 'same-both.md', 'identical edit');
+	save(offline, 'already-pending.md', 'offline words');
+	save(mini, 'already-pending.md', 'mini words');
+	pend(mini, 'already-pending.md', 'offline', 'offline words');
+	save(offline, 'offline-back.md', 'offline detour');
+	save(offline, 'offline-back.md', 'base text');
+	save(mini, 'offline-back.md', 'mini edit');
+	save(offline, 'mini-back.md', 'offline edit');
+	save(mini, 'mini-back.md', 'mini detour');
+	save(mini, 'mini-back.md', 'base text');
 	save(mini, 'twin-b.md', 'same words', 'tw7nbc');
 	save(mini, 'clash.md', 'mini clash', 'c7a4hx');
 
@@ -74,7 +85,7 @@ try {
 	});
 	assert.ok(backedUp);
 	assert.deepEqual(plan.actions.map((action) => `${action.kind} ${action.path}`).sort(), [
-		'conflict both.md', 'create clash-2.md', 'create new.md', 'create twin-a.md', 'fast-forward offline-only.md',
+		'conflict already-pending.md', 'conflict both.md', 'conflict mini-back.md', 'conflict offline-back.md', 'conflict same-both.md', 'create clash-2.md', 'create new.md', 'create twin-a.md', 'fast-forward offline-only.md',
 		'fast-forward round-trip.md', 'version clash-2.md'
 	], formatPlan(plan));
 	assert.ok(plan.skipped.some((note) => note.startsWith('gone.md (air2)')), formatPlan(plan));
@@ -107,6 +118,17 @@ try {
 	assert.deepEqual(versionsOf('clash.md'), []);
 	assert.deepEqual(versionsOf('gone.md'), [], 'a version never attaches to another post at the same path');
 	assert.equal(head(mini, 'untouched.md').head_rev, 1);
+
+	const pendingOf = (path: string) => mini.prepare('SELECT writer, body FROM versions WHERE path = ? ORDER BY writer').all(path)
+		.map((row) => `${row.writer}: ${row.body}`);
+	assert.deepEqual(pendingOf('same-both.md'), ['offline: identical edit'], 'same text on both sides still becomes a version');
+	assert.deepEqual(pendingOf('already-pending.md'), ['offline: offline words', 'offline2: offline words'],
+		'an existing version with the same text is not taken as the check-in');
+	assert.deepEqual(pendingOf('offline-back.md'), ['offline: base text'], 'offline returning to the base text is still a change');
+	assert.deepEqual(pendingOf('mini-back.md'), ['offline: offline edit'], 'the mini returning to the base text is still a change');
+	for (const path of ['same-both.md', 'already-pending.md', 'offline-back.md', 'mini-back.md']) {
+		assert.equal(head(mini, path).head_rev, path === 'mini-back.md' ? 3 : 2, `${path} keeps the mini head`);
+	}
 
 	const roundTrip = head(mini, 'round-trip.md');
 	assert.equal(roundTrip.head_rev, 3, 'edits that return to the base text still bring their history');
