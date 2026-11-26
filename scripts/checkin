@@ -72,7 +72,7 @@ if (!apply) {
 	console.log('\ndry run: nothing written. Re-run with --apply to merge.');
 	process.exit(0);
 }
-console.log(`\nbackup  ${backupPath}\napplied ${plan.actions.length} action(s)`);
+console.log(`\nbackup  ${backupPath}\n${plan.fastPath ? 'replaced the mini content with the offline copy' : `applied ${plan.actions.length} action(s)`}`);
 if (existsSync(miniBasePath)) {
 	renameSync(miniBasePath, resolve(dirname(miniPath), `checkout-base.checked-in-${stamp}.db`));
 	console.log('checked in: the next scripts/checkout can run');

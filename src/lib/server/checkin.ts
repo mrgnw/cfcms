@@ -14,7 +14,9 @@ export type CheckinAction =
 	| { kind: 'create'; id: string; path: string; offlineId: string; offlinePath: string; revisions: number }
 	| { kind: 'version'; id: string; path: string; writer: string; offlinePath: string; offlineWriter: string };
 
-export type CheckinPlan = { actions: CheckinAction[]; skipped: string[] };
+// fastPath: the mini has not changed since checkout, so the offline content replaces it and the
+// actions are only a report of what that brings.
+export type CheckinPlan = { fastPath: boolean; actions: CheckinAction[]; skipped: string[] };
 
 const mergedTables = ['posts', 'revisions', 'versions', 'meta'];
 const versionWriterLimit = 10;
@@ -105,6 +107,26 @@ const headText = (db: DatabaseSync, id: string) => db.prepare(`
 const revisionCount = (db: DatabaseSync, path: string, afterRev: number) =>
 	(db.prepare('SELECT count(*) AS count FROM revisions WHERE path = ? AND rev > ?').get(path, afterRev) as { count: number }).count;
 
+const contentTables = [['posts', 'path'], ['revisions', 'path, rev'], ['versions', 'path, writer']] as const;
+
+const contentRows = (db: DatabaseSync, table: string, order: string) =>
+	db.prepare(`SELECT * FROM ${table} ORDER BY ${order}`).all() as Record<string, string | number | null>[];
+
+// ponytail: compares whole tables in memory; fine for one writer's blog (a few MB), stream it if that grows
+const unchangedSince = (db: DatabaseSync, base: DatabaseSync) => contentTables.every(([table, order]) =>
+	JSON.stringify(contentRows(db, table, order)) === JSON.stringify(contentRows(base, table, order)));
+
+const replaceContent = (dbs: CheckinDatabases) => {
+	for (const [table, order] of contentTables) {
+		dbs.mini.exec(`DELETE FROM ${table}`);
+		for (const row of contentRows(dbs.offline, table, order)) {
+			const columns = Object.keys(row);
+			dbs.mini.prepare(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`)
+				.run(...columns.map((column) => row[column]));
+		}
+	}
+};
+
 const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 	assertSameSchema(dbs);
 	const base = headsById(dbs.base);
@@ -171,7 +193,7 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 	for (const [id, ancestor] of base) {
 		if (!offline.has(id)) skipped.push(`${ancestor.path}: deleted offline, left as is on the mini`);
 	}
-	return { actions, skipped };
+	return { fastPath: unchangedSince(dbs.mini, dbs.base), actions, skipped };
 };
 
 const describe = (action: CheckinAction) => {
@@ -190,6 +212,9 @@ const describe = (action: CheckinAction) => {
 export const formatPlan = (plan: CheckinPlan) => {
 	const lines = plan.actions.map(describe);
 	if (!lines.length) lines.push('nothing to merge');
+	if (plan.fastPath) {
+		lines.unshift('fast path: the mini has not changed since checkout, so the offline posts, revisions and versions replace it');
+	}
 	for (const note of plan.skipped) lines.push(`skip          ${note}`);
 	return lines.join('\n');
 };
@@ -299,7 +324,8 @@ export const runCheckin = (dbs: CheckinDatabases, options: CheckinOptions): Chec
 			return plan;
 		}
 		options.backup?.();
-		applyPlan(dbs, plan);
+		if (plan.fastPath) replaceContent(dbs);
+		else applyPlan(dbs, plan);
 		dbs.mini.prepare('INSERT INTO meta (key, value) VALUES (?, ?)')
 			.run(checkinKey(options.checkoutId), `${new Date().toISOString()}, ${plan.actions.length} action(s)`);
 		dbs.mini.exec('COMMIT');

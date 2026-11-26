@@ -142,6 +142,30 @@ try {
 	assert.throws(() => runCheckin(dbs, { apply: false, checkoutId }), /already checked in/);
 	assert.equal(head(mini, 'new.md').body, 'written on the plane');
 
+	assert.equal(plan.fastPath, false, 'a mini changed since checkout is merged, not replaced');
+
+	vacuumInto(join(root, 'fast-offline.db'));
+	vacuumInto(join(root, 'fast-mini.db'));
+	const fastOffline = new DatabaseSync(join(root, 'fast-offline.db'));
+	const fastMini = new DatabaseSync(join(root, 'fast-mini.db'));
+	fastMini.prepare("INSERT INTO meta (key, value) VALUES ('lastBackupAt', 'mini')").run();
+	save(fastOffline, 'both.md', 'edited on the plane');
+	save(fastOffline, 'fresh.md', 'new on the plane', 'fr3shx');
+	fastOffline.prepare("UPDATE posts SET next_step = 'tighten intro', triage_rev = 1 WHERE path = 'untouched.md'").run();
+	for (const table of ['revisions', 'posts']) fastOffline.prepare(`DELETE FROM ${table} WHERE path = ?`).run('gone.md');
+	const fast = { base, offline: fastOffline, mini: fastMini };
+	const preview = runCheckin(fast, { apply: false, checkoutId: 'checkout-2' });
+	assert.equal(preview.fastPath, true, formatPlan(preview));
+	runCheckin(fast, { apply: true, checkoutId: 'checkout-2' });
+	const dump = (db: DatabaseSync) => ['posts ORDER BY path', 'revisions ORDER BY path, rev', 'versions ORDER BY path, writer']
+		.map((query) => JSON.stringify(db.prepare(`SELECT * FROM ${query}`).all()));
+	assert.deepEqual(dump(fastMini), dump(fastOffline), 'an unchanged mini takes the offline content whole');
+	assert.equal((fastMini.prepare("SELECT value FROM meta WHERE key = 'lastBackupAt'").get() as { value: string }).value, 'mini',
+		'the mini keeps its own meta');
+	assert.throws(() => runCheckin(fast, { apply: true, checkoutId: 'checkout-2' }), /already checked in/);
+	fastOffline.close();
+	fastMini.close();
+
 	copyFileSync(join(root, 'mini.db'), join(root, 'newer.db'));
 	const newer = new DatabaseSync(join(root, 'newer.db'));
 	newer.exec('ALTER TABLE posts ADD COLUMN pinned INTEGER');
