@@ -294,7 +294,7 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 		const current = miniRows.get(key);
 		const path = String(row.path);
 		if (created.has(String(row.id))) {
-			if ([...miniOnlyColumns].some((column) => row[column] !== null)) {
+			if (!promotedPaths.has(path) && [...miniOnlyColumns].some((column) => row[column] !== (ancestor?.[column] ?? null))) {
 				uncarried.push(`${path}: publish state changed offline; publish state stays the mini's`);
 			}
 			continue;

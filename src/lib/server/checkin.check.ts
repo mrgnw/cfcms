@@ -26,7 +26,7 @@ const head = (db: DatabaseSync, path: string) => db.prepare(`
 `).get(path) as { id: string; head_rev: number; body: string; hash: string };
 
 try {
-	const { addToEditing, appendRevision, vacuumInto } = await import('./db.ts');
+	const { addToEditing, appendRevision, recordPublished, vacuumInto } = await import('./db.ts');
 	const { formatPlan, runCheckin } = await import('./checkin.ts');
 	for (const path of ['offline-only.md', 'both.md', 'untouched.md', 'round-trip.md', 'gone.md', 'same-both.md', 'already-pending.md', 'offline-back.md', 'mini-back.md']) {
 		appendRevision(path, 'title: T', 'base text', hashPostContent('title: T', 'base text'), 'mini');
@@ -265,6 +265,7 @@ try {
 
 	addToEditing('queued.md');
 	addToEditing('dropped.md');
+	recordPublished([{ path: 'queued.md', title: 'Q', slug: 'queued', contentHash: 'q-live' }], 'c0ffee');
 	vacuumInto(join(root, 'headless-offline.db'));
 	vacuumInto(join(root, 'headless-mini.db'));
 	const headlessOffline = new DatabaseSync(join(root, 'headless-offline.db'));
@@ -288,6 +289,8 @@ try {
 		{ next_step: string | null } | undefined)?.next_step;
 	assert.equal(nextStep('queued.md'), 'outline it', 'metadata of a post without a head is merged');
 	assert.equal(head(headlessMini, 'queued.md').body, 'first draft', 'a first draft attaches to its queued post');
+	assert.equal(headlessMini.prepare("SELECT published_slug FROM posts WHERE path = 'queued.md'").get()?.published_slug, 'queued',
+		'a promoted post keeps its live publish state');
 	assert.equal(nextStep('idea.md'), 'just an idea', 'a new row without a head is inserted');
 	assert.equal(nextStep('taken.md'), 'mini note');
 	assert.ok(headlessMini.prepare("SELECT 1 FROM posts WHERE path = 'dropped.md'").get());
