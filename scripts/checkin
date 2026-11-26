@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, renameSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { applyCheckin, formatPlan, planCheckin } from '../src/lib/server/checkin.ts';
+import { formatPlan, runCheckin } from '../src/lib/server/checkin.ts';
 
 const fail = (message) => {
 	console.error(`checkin: ${message}`);
@@ -49,27 +49,28 @@ const dbs = {
 	mini: new DatabaseSync(miniPath, { readOnly: !apply, timeout: 5_000 })
 };
 
+const stamp = new Date().toISOString().replaceAll(':', '');
+const backupPath = `${miniPath}.pre-checkin-${stamp}.db`;
+const backup = () => {
+	const reader = new DatabaseSync(miniPath, { readOnly: true, timeout: 5_000 });
+	reader.exec(`VACUUM INTO '${backupPath.replaceAll("'", "''")}'`);
+	reader.close();
+};
+
+console.log(`offline ${offlinePath}\nmini    ${miniPath}\nbase    ${basePath}\n`);
 let plan;
 try {
-	plan = planCheckin(dbs);
+	plan = runCheckin(dbs, { apply, backup });
 } catch (caught) {
 	fail(caught instanceof Error ? caught.message : String(caught));
 }
-console.log(`offline ${offlinePath}\nmini    ${miniPath}\nbase    ${basePath}\n`);
 console.log(formatPlan(plan));
 
 if (!apply) {
 	console.log('\ndry run: nothing written. Re-run with --apply to merge.');
 	process.exit(0);
 }
-const stamp = new Date().toISOString().replaceAll(':', '');
-if (plan.actions.length) {
-	const backup = `${miniPath}.pre-checkin-${stamp}.db`;
-	dbs.mini.exec(`VACUUM INTO '${backup.replaceAll("'", "''")}'`);
-	console.log(`\nbackup  ${backup}`);
-	applyCheckin(dbs, plan);
-	console.log(`applied ${plan.actions.length} action(s)`);
-}
+console.log(`\nbackup  ${backupPath}\napplied ${plan.actions.length} action(s)`);
 if (existsSync(miniBasePath)) {
 	renameSync(miniBasePath, resolve(dirname(miniPath), `checkout-base.checked-in-${stamp}.db`));
 	console.log('checked in: the next scripts/checkout can run');
