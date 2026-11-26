@@ -1,0 +1,45 @@
+#!/bin/sh
+# scripts/checkout <destination> [blog checkout]
+# Copies cfcms and the blog to <destination>/cfcms and <destination>/blog for editing offline.
+# scripts/checkin <destination>/cfcms merges the edits back.
+set -eu
+die() { echo "checkout: $*" >&2; exit 1; }
+[ $# -ge 1 ] && [ $# -le 2 ] || die 'usage: scripts/checkout <destination> [blog checkout]'
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+DB="${BLOG_CMS_DB:-$REPO/.data/cms.db}"
+BASE="$(dirname "$DB")/checkout-base.db"
+BLOG="$(cd "${2:-${BLOG_CONTENT_BASE_DIR:-$REPO/../blog}}" && pwd)"
+mkdir -p "$1"
+DEST="$(cd "$1" && pwd)"
+
+[ -f "$DB" ] || die "no database at $DB"
+[ ! -e "$BASE" ] || die "$BASE exists: an earlier copy is not checked in. Run scripts/checkin, or delete it to abandon that copy."
+[ ! -e "$DEST/cfcms/.data/cms.db" ] || die "$DEST/cfcms/.data/cms.db exists: check that copy in before replacing it"
+
+rsync -a --exclude /.data/ --exclude /.claude/worktrees/ --exclude /build/ "$REPO/" "$DEST/cfcms/"
+rsync -a --exclude node_modules/ "$BLOG/" "$DEST/blog/"
+git -C "$DEST/blog" remote set-url --push origin DISABLED-offline-copy
+
+mkdir -p "$DEST/cfcms/.data"
+sqlite3 -readonly "$DB" "VACUUM INTO '$BASE'"
+cp "$BASE" "$DEST/cfcms/.data/checkout-base.db"
+cp "$BASE" "$DEST/cfcms/.data/cms.db"
+
+cat > "$DEST/cfcms/offline.sh" <<'START'
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")"
+case "$(node --version)" in
+	v2[4-9]*|v[3-9]*) ;;
+	*) echo "cfcms needs Node 24 or newer, found $(node --version)" >&2; exit 1 ;;
+esac
+export BLOG_CONTENT_BASE_DIR="$(cd .. && pwd)/blog"
+export BLOG_CMS_DB="$PWD/.data/cms.db"
+export HOST=127.0.0.1
+export PORT="${PORT:-5273}"
+echo "cfcms offline copy: http://127.0.0.1:$PORT"
+exec node node_modules/vite/bin/vite.js dev
+START
+chmod +x "$DEST/cfcms/offline.sh"
+echo "offline copy ready: $DEST/cfcms/offline.sh"
