@@ -1,7 +1,9 @@
 import { listPosts, postsRev } from '#lib/server/content.js';
 import { getLastPublishedAt } from '#lib/server/db.js';
+import { postsDependency } from '#lib/types.js';
 
-export const load = async ({ cookies }) => {
+export const load = async ({ cookies, depends }) => {
+	depends(postsDependency);
 	const posts = await listPosts();
 
 	return {

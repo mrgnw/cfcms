@@ -137,6 +137,19 @@ export const statusOf = (post: Pick<PostListItem, 'deployStatus'>) => post.deplo
 
 export const isEditing = (post: Pick<PostListItem, 'editingOrder'>) => post.editingOrder != null;
 
+export const postsDependency = 'app:posts';
+
+export const editingQueue = <T extends Pick<PostListItem, 'editingOrder'>>(posts: T[]) =>
+	posts.filter(isEditing).sort((a, b) => (a.editingOrder ?? 0) - (b.editingOrder ?? 0));
+
+export function inStage(post: PostListItem, stage: PostFilter) {
+	const status = statusOf(post);
+	if (stage === 'ready') return isPending(status);
+	if (stage === 'drafts') return status === 'draft';
+	if (stage === 'live') return status === 'live';
+	return true;
+}
+
 export const countPosts = (posts: PostListItem[]): PostCounts => {
 	const active = posts.filter((post) => !post.deleteRequested);
 	return {
