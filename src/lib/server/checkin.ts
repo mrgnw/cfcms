@@ -12,6 +12,7 @@ export type CheckinAction =
 	| { kind: 'fast-forward'; id: string; path: string; fromRev: number; revisions: number }
 	| { kind: 'conflict'; id: string; path: string; writer: string }
 	| { kind: 'create'; id: string; path: string; offlineId: string; offlinePath: string; revisions: number }
+	| { kind: 'promote'; id: string; path: string; offlineId: string; offlinePath: string; revisions: number }
 	| { kind: 'version'; id: string; path: string; writer: string; offlinePath: string; offlineWriter: string }
 	| { kind: 'columns'; path: string; set: Record<string, SqlValue> }
 	| { kind: 'row'; path: string };
@@ -189,7 +190,7 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 	assertDescendsFrom('mini', dbs.mini, mini, base);
 
 	const takenPaths = new Set((dbs.mini.prepare('SELECT path FROM posts').all() as { path: string }[]).map((row) => row.path));
-	const takenIds = new Set([...mini.keys()]);
+	const takenIds = new Set((dbs.mini.prepare('SELECT id FROM posts WHERE id IS NOT NULL').all() as { id: string }[]).map((row) => row.id));
 	const takenWriters = new Set((dbs.mini.prepare('SELECT path, writer FROM versions').all() as {
 		path: string; writer: string;
 	}[]).map((row) => `${row.path}\n${row.writer}`));
@@ -200,10 +201,23 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 	const knownRevisions = new Set([dbs.base, dbs.mini].flatMap((db) =>
 		(db.prepare('SELECT revision FROM versions').all() as { revision: string }[]).map((row) => row.revision)));
 	const pendingAt = dbs.offline.prepare('SELECT revision FROM versions WHERE path = ?');
+	const baseByPath = new Map(contentRows(dbs.base, 'posts', 'path').map((row) => [row.path, row]));
+	const miniByPath = new Map(contentRows(dbs.mini, 'posts', 'path').map((row) => [row.path, row]));
 
 	for (const head of offline.values()) {
 		const ancestor = base.get(head.id);
 		const current = mini.get(head.id);
+		const baseRow = baseByPath.get(head.path);
+		const miniRow = miniByPath.get(head.path);
+		if (!ancestor && baseRow && baseRow.id === null && baseRow.head_rev === null && miniRow && miniRow.id === null && miniRow.head_rev === null) {
+			const id = freeId(takenIds, head.id);
+			takenIds.add(id);
+			miniPostFor.set(head.id, { id, path: head.path });
+			actions.push({ kind: 'promote', id, path: head.path, offlineId: head.id, offlinePath: head.path, revisions: revisionCount(dbs.offline, head.path, 0) });
+			const offlineRow = dbs.offline.prepare('SELECT * FROM posts WHERE path = ?').get(head.path) as PostRow;
+			mergeColumns(baseRow, offlineRow, miniRow, actions, uncarried);
+			continue;
+		}
 		if (ancestor && !changedSince(head, ancestor)) {
 			if (current) {
 				miniPostFor.set(head.id, { id: current.id, path: current.path });
@@ -253,7 +267,8 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 	}
 	const baseRows = postsByKey(dbs.base);
 	const miniRows = postsByKey(dbs.mini);
-	const created = new Set(actions.flatMap((action) => (action.kind === 'create' ? [action.offlineId] : [])));
+	const created = new Set(actions.flatMap((action) => (action.kind === 'create' || action.kind === 'promote' ? [action.offlineId] : [])));
+	const promotedPaths = new Set(actions.flatMap((action) => action.kind === 'promote' ? [action.path] : []));
 	const offlineRows = postsByKey(dbs.offline);
 	for (const [key, row] of offlineRows) {
 		const ancestor = baseRows.get(key);
@@ -278,7 +293,7 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 		}
 	}
 	for (const [key, ancestor] of baseRows) {
-		if (ancestor.head_rev === null && !offlineRows.has(key) && miniRows.has(key)) {
+		if (ancestor.head_rev === null && !offlineRows.has(key) && miniRows.has(key) && !promotedPaths.has(String(ancestor.path))) {
 			uncarried.push(`${ancestor.path}: row without a head deleted offline, left as is on the mini`);
 		}
 	}
@@ -298,6 +313,7 @@ const describe = (action: CheckinAction) => {
 			const reid = action.id === action.offlineId ? '' : `, id ${action.offlineId} -> ${action.id}`;
 			return `create        ${action.offlinePath}${renamed} (id ${action.id}${reid}, ${action.revisions} revision(s))`;
 		}
+		case 'promote': return `draft         ${action.path}: attach ${action.revisions} offline revision(s) to the queued post`;
 		case 'row': return `row           ${action.path}: offline row without a head (queue or triage only)`;
 		case 'columns': return `columns       ${action.path}: ${Object.keys(action.set).join(', ')} from offline`;
 		case 'version': return `version       ${action.path}: offline pending version "${action.offlineWriter}" kept as "${action.writer}"`;
@@ -367,12 +383,16 @@ const insertPost = (mini: DatabaseSync, row: PostRow) => {
 		.run(...columns.map((column) => post[column]));
 };
 
-const create = (dbs: CheckinDatabases, action: Extract<CheckinAction, { kind: 'create' }>) => {
+const create = (dbs: CheckinDatabases, action: Extract<CheckinAction, { kind: 'create' | 'promote' }>) => {
 	const row = dbs.offline.prepare('SELECT * FROM posts WHERE path = ?').get(action.offlinePath) as Record<string, unknown>;
-	const { next } = dbs.mini.prepare('SELECT COALESCE(MAX(editing_order), -1) + 1 AS next FROM posts').get() as { next: number };
-	const post: PostRow = { ...(row as PostRow), path: action.path, id: action.id };
-	if (row.editing_order !== null) post.editing_order = next;
-	insertPost(dbs.mini, post);
+	if (action.kind === 'promote') {
+		dbs.mini.prepare('UPDATE posts SET id = ?, head_rev = ? WHERE path = ?').run(action.id, row.head_rev as number, action.path);
+	} else {
+		const { next } = dbs.mini.prepare('SELECT COALESCE(MAX(editing_order), -1) + 1 AS next FROM posts').get() as { next: number };
+		const post: PostRow = { ...(row as PostRow), path: action.path, id: action.id };
+		if (row.editing_order !== null) post.editing_order = next;
+		insertPost(dbs.mini, post);
+	}
 
 	const revisions = dbs.offline.prepare('SELECT rev, hash, frontmatter, body, writer, saved_at, label FROM revisions WHERE path = ? ORDER BY rev')
 		.all(action.offlinePath) as (RevisionRow & { rev: number })[];
@@ -403,7 +423,7 @@ const applyPlan = (dbs: CheckinDatabases, plan: CheckinPlan) => {
 	for (const action of plan.actions) {
 		if (action.kind === 'fast-forward') fastForward(dbs, action);
 		if (action.kind === 'conflict') conflict(dbs, action);
-		if (action.kind === 'create') create(dbs, action);
+		if (action.kind === 'create' || action.kind === 'promote') create(dbs, action);
 		if (action.kind === 'version') version(dbs, action);
 		if (action.kind === 'columns') setColumns(dbs.mini, action);
 		if (action.kind === 'row') insertPost(dbs.mini, dbs.offline.prepare('SELECT * FROM posts WHERE path = ?').get(action.path) as PostRow);
