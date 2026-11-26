@@ -12,7 +12,7 @@ export type CheckinAction =
 	| { kind: 'fast-forward'; id: string; path: string; fromRev: number; revisions: number }
 	| { kind: 'conflict'; id: string; path: string; writer: string }
 	| { kind: 'create'; id: string; path: string; offlineId: string; offlinePath: string; revisions: number }
-	| { kind: 'version'; path: string; writer: string; offlinePath: string; offlineWriter: string };
+	| { kind: 'version'; id: string; path: string; writer: string; offlinePath: string; offlineWriter: string };
 
 export type CheckinPlan = { actions: CheckinAction[]; skipped: string[] };
 
@@ -124,24 +124,28 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 	const takenWriters = new Set((dbs.mini.prepare('SELECT path, writer FROM versions').all() as {
 		path: string; writer: string;
 	}[]).map((row) => `${row.path}\n${row.writer}`));
-	const miniPathFor = new Map<string, string>();
+	// every offline post id -> the mini post it lands on; all references (revisions, versions) go through it
+	const miniPostFor = new Map<string, { id: string; path: string }>();
 	const actions: CheckinAction[] = [];
 	const skipped: string[] = [];
 
 	for (const head of offline.values()) {
 		const ancestor = base.get(head.id);
 		const current = mini.get(head.id);
-		if (ancestor && !changedSince(head, ancestor)) continue;
+		if (ancestor && !changedSince(head, ancestor)) {
+			if (current) miniPostFor.set(head.id, { id: current.id, path: current.path });
+			continue;
+		}
 
 		if (!ancestor || !current) {
 			const id = freeId(takenIds, head.id);
 			takenIds.add(id);
 			const path = freePath(takenPaths, head.path);
-			miniPathFor.set(head.path, path);
+			miniPostFor.set(head.id, { id, path });
 			actions.push({ kind: 'create', id, path, offlineId: head.id, offlinePath: head.path, revisions: revisionCount(dbs.offline, head.path, 0) });
 			continue;
 		}
-		miniPathFor.set(head.path, current.path);
+		miniPostFor.set(head.id, { id: current.id, path: current.path });
 		if (!changedSince(current, ancestor)) {
 			actions.push({
 				kind: 'fast-forward', id: head.id, path: current.path, fromRev: ancestor.headRev,
@@ -158,17 +162,21 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 
 	const knownRevisions = new Set([dbs.base, dbs.mini].flatMap((db) =>
 		(db.prepare('SELECT revision FROM versions').all() as { revision: string }[]).map((row) => row.revision)));
-	const offlineVersions = dbs.offline.prepare('SELECT path, writer, revision FROM versions ORDER BY path, writer').all() as {
-		path: string; writer: string; revision: string;
-	}[];
+	const offlineVersions = dbs.offline.prepare(`
+		SELECT versions.path, versions.writer, versions.revision, posts.id FROM versions
+		LEFT JOIN posts ON posts.path = versions.path ORDER BY versions.path, versions.writer
+	`).all() as { path: string; writer: string; revision: string; id: string | null }[];
 	for (const version of offlineVersions) {
 		if (knownRevisions.has(version.revision)) continue;
-		const path = miniPathFor.get(version.path) ?? (takenPaths.has(version.path) ? version.path : null);
-		if (!path) {
+		const target = version.id ? miniPostFor.get(version.id) : undefined;
+		if (!target) {
 			skipped.push(`${version.path} (${version.writer}): pending version for a post the mini does not have`);
 			continue;
 		}
-		actions.push({ kind: 'version', path, writer: freeWriter(takenWriters, path, version.writer), offlinePath: version.path, offlineWriter: version.writer });
+		actions.push({
+			kind: 'version', id: target.id, path: target.path, writer: freeWriter(takenWriters, target.path, version.writer),
+			offlinePath: version.path, offlineWriter: version.writer
+		});
 	}
 	for (const [id, ancestor] of base) {
 		if (!offline.has(id)) skipped.push(`${ancestor.path}: deleted offline, left as is on the mini`);
