@@ -345,12 +345,23 @@ export const postsRev = (posts: PostSummary[]) =>
 		.digest('hex')
 		.slice(0, 16);
 
+export class UnknownPostError extends Error {
+	constructor(postPath: string) {
+		super(`Unknown post: ${postPath}`);
+	}
+}
+
 export const getPost = async (postPath: string): Promise<Post> => {
 	if (postPath.endsWith('.llm.md')) {
-		return parseFilePost(getPostFilePath(postPath), await readDeployState(), getEditingOrder(), getTriage());
+		try {
+			return await parseFilePost(getPostFilePath(postPath), await readDeployState(), getEditingOrder(), getTriage());
+		} catch (caught) {
+			if ((caught as NodeJS.ErrnoException).code === 'ENOENT') throw new UnknownPostError(postPath);
+			throw caught;
+		}
 	}
 	const stored = getStoredPost(postPath);
-	if (!stored) throw new Error(`Unknown post: ${postPath}`);
+	if (!stored) throw new UnknownPostError(postPath);
 	return postFromStored(stored, await readDeployState(), getEditingOrder(), getTriage());
 };
 
