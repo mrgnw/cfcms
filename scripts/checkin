@@ -1,5 +1,5 @@
 #!/usr/bin/env -S node --disable-warning=ExperimentalWarning
-// scripts/checkin <offline cfcms dir> [--apply]
+// scripts/checkin <offline cfcms dir> [--apply [--accept-skips]]
 // Dry run by default. Merges <dir>/.data/cms.db into the mini's database (BLOG_CMS_DB, default .data/cms.db),
 // using <dir>/.data/checkout-base.db as the common ancestor.
 import { spawnSync } from 'node:child_process';
@@ -16,8 +16,9 @@ const fail = (message) => {
 
 const args = process.argv.slice(2);
 const apply = args.includes('--apply');
-const [offlineDir, ...extra] = args.filter((arg) => arg !== '--apply');
-if (!offlineDir || extra.length) fail('usage: scripts/checkin <offline cfcms dir> [--apply]');
+const acceptSkips = args.includes('--accept-skips');
+const [offlineDir, ...extra] = args.filter((arg) => arg !== '--apply' && arg !== '--accept-skips');
+if (!offlineDir || extra.length || (acceptSkips && !apply)) fail('usage: scripts/checkin <offline cfcms dir> [--apply [--accept-skips]]');
 
 const repo = resolve(import.meta.dirname, '..');
 const miniPath = resolve(process.env.BLOG_CMS_DB ?? resolve(repo, '.data/cms.db'));
@@ -62,14 +63,15 @@ const backup = () => {
 console.log(`offline ${offlinePath}\nmini    ${miniPath}\nbase    ${basePath}\n`);
 let plan;
 try {
-	plan = runCheckin(dbs, { apply, checkoutId, backup });
+	plan = runCheckin(dbs, { apply, checkoutId, acceptSkips, backup });
 } catch (caught) {
 	fail(caught instanceof Error ? caught.message : String(caught));
 }
 console.log(formatPlan(plan));
 
 if (!apply) {
-	console.log('\ndry run: nothing written. Re-run with --apply to merge.');
+	const refusal = plan.uncarried.length ? ` It will refuse while changes are not carried, unless you add --accept-skips.` : '';
+	console.log(`\ndry run: nothing written. Re-run with --apply to merge.${refusal}`);
 	process.exit(0);
 }
 console.log(`\nbackup  ${backupPath}\n${plan.fastPath ? 'replaced the mini content with the offline copy' : `applied ${plan.actions.length} action(s)`}`);

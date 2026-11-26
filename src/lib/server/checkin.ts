@@ -15,8 +15,8 @@ export type CheckinAction =
 	| { kind: 'version'; id: string; path: string; writer: string; offlinePath: string; offlineWriter: string };
 
 // fastPath: the mini has not changed since checkout, so the offline content replaces it and the
-// actions are only a report of what that brings.
-export type CheckinPlan = { fastPath: boolean; actions: CheckinAction[]; skipped: string[] };
+// actions are only a report of what that brings. uncarried: offline changes a merge would drop.
+export type CheckinPlan = { fastPath: boolean; actions: CheckinAction[]; uncarried: string[] };
 
 const mergedTables = ['posts', 'revisions', 'versions', 'meta'];
 const versionWriterLimit = 10;
@@ -153,7 +153,7 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 	// every offline post id -> the mini post it lands on; all references (revisions, versions) go through it
 	const miniPostFor = new Map<string, { id: string; path: string }>();
 	const actions: CheckinAction[] = [];
-	const skipped: string[] = [];
+	const uncarried: string[] = [];
 	const knownRevisions = new Set([dbs.base, dbs.mini].flatMap((db) =>
 		(db.prepare('SELECT revision FROM versions').all() as { revision: string }[]).map((row) => row.revision)));
 	const pendingAt = dbs.offline.prepare('SELECT revision FROM versions WHERE path = ?');
@@ -197,7 +197,7 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 		if (knownRevisions.has(version.revision)) continue;
 		const target = version.id ? miniPostFor.get(version.id) : undefined;
 		if (!target) {
-			skipped.push(`${version.path} (${version.writer}): pending version for a post the mini does not have`);
+			uncarried.push(`${version.path} (${version.writer}): pending version for a post the mini does not have`);
 			continue;
 		}
 		actions.push({
@@ -206,9 +206,10 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 		});
 	}
 	for (const [id, ancestor] of base) {
-		if (!offline.has(id)) skipped.push(`${ancestor.path}: deleted offline, left as is on the mini`);
+		if (!offline.has(id) && mini.has(id)) uncarried.push(`${ancestor.path}: deleted offline, left as is on the mini`);
 	}
-	return { fastPath: unchangedSince(dbs.mini, dbs.base) && preservesBase(dbs.offline, dbs.base), actions, skipped };
+	const fastPath = unchangedSince(dbs.mini, dbs.base) && preservesBase(dbs.offline, dbs.base);
+	return { fastPath, actions, uncarried: fastPath ? [] : uncarried };
 };
 
 const describe = (action: CheckinAction) => {
@@ -230,7 +231,7 @@ export const formatPlan = (plan: CheckinPlan) => {
 	if (plan.fastPath) {
 		lines.unshift('fast path: the mini has not changed since checkout, so the offline posts, revisions and versions replace it');
 	}
-	for (const note of plan.skipped) lines.push(`skip          ${note}`);
+	for (const note of plan.uncarried) lines.push(`not carried   ${note}`);
 	return lines.join('\n');
 };
 
@@ -317,7 +318,8 @@ const applyPlan = (dbs: CheckinDatabases, plan: CheckinPlan) => {
 };
 
 // checkoutId names one checkout (the scripts use the sha256 of checkout-base.db); applying it twice is refused.
-export type CheckinOptions = { apply: boolean; checkoutId: string; backup?: () => void };
+// acceptSkips: apply even though the uncarried offline changes are dropped.
+export type CheckinOptions = { apply: boolean; checkoutId: string; acceptSkips?: boolean; backup?: () => void };
 
 const checkinKey = (checkoutId: string) => `checkin:${checkoutId}`;
 
@@ -339,11 +341,15 @@ export const runCheckin = (dbs: CheckinDatabases, options: CheckinOptions): Chec
 			dbs.mini.exec('ROLLBACK');
 			return plan;
 		}
+		if (plan.uncarried.length && !options.acceptSkips) {
+			throw new Error(`${formatPlan(plan)}\n\nrefused: ${plan.uncarried.length} offline change(s) would not be carried. ` +
+				'Carry them by hand and re-run, or re-run with --accept-skips to drop them.');
+		}
 		options.backup?.();
 		if (plan.fastPath) replaceContent(dbs);
 		else applyPlan(dbs, plan);
 		dbs.mini.prepare('INSERT INTO meta (key, value) VALUES (?, ?)')
-			.run(checkinKey(options.checkoutId), `${new Date().toISOString()}, ${plan.actions.length} action(s)`);
+			.run(checkinKey(options.checkoutId), `${new Date().toISOString()}, ${plan.actions.length} action(s), ${plan.uncarried.length} accepted skip(s)`);
 		dbs.mini.exec('COMMIT');
 		return plan;
 	} catch (caught) {
