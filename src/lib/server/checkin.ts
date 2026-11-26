@@ -160,6 +160,14 @@ const postKey = (row: PostRow) => (row.id === null ? `path:${row.path}` : `id:${
 const postsByKey = (db: DatabaseSync) =>
 	new Map((db.prepare('SELECT * FROM posts').all() as PostRow[]).map((row) => [postKey(row), row]));
 
+const samePublishState = (base: DatabaseSync, offline: DatabaseSync) => {
+	const baseByPath = new Map(contentRows(base, 'posts', 'path').map((row) => [row.path, row]));
+	return contentRows(offline, 'posts', 'path').every((row) => {
+		const ancestor = baseByPath.get(row.path);
+		return [...miniOnlyColumns].every((column) => row[column] === (ancestor?.[column] ?? null));
+	});
+};
+
 const offlineColumnChanges = (base: PostRow, offline: PostRow) =>
 	Object.keys(base).filter((column) => !unmergedColumns.has(column) && offline[column] !== base[column]);
 
@@ -300,7 +308,7 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 	for (const [id, ancestor] of base) {
 		if (!offline.has(id) && mini.has(id)) uncarried.push(`${ancestor.path}: deleted offline, left as is on the mini`);
 	}
-	const fastPath = unchangedSince(dbs.mini, dbs.base) && preservesBase(dbs.offline, dbs.base);
+	const fastPath = unchangedSince(dbs.mini, dbs.base) && preservesBase(dbs.offline, dbs.base) && samePublishState(dbs.base, dbs.offline);
 	return { fastPath, actions, uncarried: fastPath ? [] : uncarried };
 };
 
