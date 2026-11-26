@@ -205,6 +205,16 @@ try {
 	prunedOffline.close();
 	prunedMini.close();
 
+	vacuumInto(join(root, 'published-offline.db'));
+	vacuumInto(join(root, 'published-mini.db'));
+	const publishedOffline = new DatabaseSync(join(root, 'published-offline.db'));
+	const publishedMini = new DatabaseSync(join(root, 'published-mini.db'));
+	publishedOffline.prepare("UPDATE posts SET published_slug = 'offline-publish' WHERE path = 'both.md'").run();
+	assert.throws(() => runCheckin({ base, offline: publishedOffline, mini: publishedMini }, { apply: true, checkoutId: 'publish' }),
+		/published_slug changed offline/, 'fast path must not replace live publish state');
+	publishedOffline.close();
+	publishedMini.close();
+
 	vacuumInto(join(root, 'columns-offline.db'));
 	vacuumInto(join(root, 'columns-mini.db'));
 	const columnsOffline = new DatabaseSync(join(root, 'columns-offline.db'));
