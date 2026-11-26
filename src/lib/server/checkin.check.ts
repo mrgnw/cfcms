@@ -197,6 +197,35 @@ try {
 	prunedOffline.close();
 	prunedMini.close();
 
+	vacuumInto(join(root, 'columns-offline.db'));
+	vacuumInto(join(root, 'columns-mini.db'));
+	const columnsOffline = new DatabaseSync(join(root, 'columns-offline.db'));
+	const columnsMini = new DatabaseSync(join(root, 'columns-mini.db'));
+	const setPost = (db: DatabaseSync, path: string, assignments: string) => db.prepare(`UPDATE posts SET ${assignments} WHERE path = ?`).run(path);
+	setPost(columnsOffline, 'untouched.md', "next_step = 'offline step', effort = 'small', triage_rev = 1");
+	setPost(columnsMini, 'untouched.md', "next_step = 'mini step', triage_rev = 1");
+	setPost(columnsOffline, 'both.md', 'editing_order = 5');
+	setPost(columnsOffline, 'offline-only.md', "published_slug = 'from-the-plane'");
+	setPost(columnsOffline, 'round-trip.md', "next_step = 'for a post the mini deleted'");
+	for (const table of ['revisions', 'posts']) columnsMini.prepare(`DELETE FROM ${table} WHERE path = ?`).run('round-trip.md');
+	const columns = { base, offline: columnsOffline, mini: columnsMini };
+	assert.throws(() => runCheckin(columns, { apply: true, checkoutId: 'checkout-5' }), /refused: 3 offline change/,
+		'post metadata the merge cannot carry blocks the apply');
+	const columnsPlan = runCheckin(columns, { apply: true, checkoutId: 'checkout-5', acceptSkips: true });
+	assert.deepEqual(columnsPlan.uncarried.map((note) => note.split(';')[0]).sort(), [
+		'offline-only.md: published_slug changed offline',
+		'round-trip.md: changed offline, deleted on the mini',
+		'untouched.md: next_step changed on both sides'
+	], formatPlan(columnsPlan));
+	const post = (path: string) => columnsMini.prepare('SELECT next_step, effort, editing_order, published_slug FROM posts WHERE path = ?')
+		.get(path) as { next_step: string | null; effort: string | null; editing_order: number | null; published_slug: string | null };
+	assert.equal(post('untouched.md').next_step, 'mini step', 'a column changed on both sides keeps the mini value');
+	assert.equal(post('untouched.md').effort, 'small', 'a column changed only offline is carried');
+	assert.equal(post('both.md').editing_order, 5);
+	assert.equal(post('offline-only.md').published_slug, null, 'publish state is never carried');
+	columnsOffline.close();
+	columnsMini.close();
+
 	copyFileSync(join(root, 'mini.db'), join(root, 'newer.db'));
 	const newer = new DatabaseSync(join(root, 'newer.db'));
 	newer.exec('ALTER TABLE posts ADD COLUMN pinned INTEGER');

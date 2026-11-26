@@ -12,7 +12,11 @@ export type CheckinAction =
 	| { kind: 'fast-forward'; id: string; path: string; fromRev: number; revisions: number }
 	| { kind: 'conflict'; id: string; path: string; writer: string }
 	| { kind: 'create'; id: string; path: string; offlineId: string; offlinePath: string; revisions: number }
-	| { kind: 'version'; id: string; path: string; writer: string; offlinePath: string; offlineWriter: string };
+	| { kind: 'version'; id: string; path: string; writer: string; offlinePath: string; offlineWriter: string }
+	| { kind: 'columns'; path: string; set: Record<string, SqlValue> };
+
+type SqlValue = string | number | null;
+type PostRow = Record<string, SqlValue>;
 
 // fastPath: the mini has not changed since checkout, so the offline content replaces it and the
 // actions are only a report of what that brings. uncarried: offline changes a merge would drop.
@@ -137,6 +141,33 @@ const replaceContent = (dbs: CheckinDatabases) => {
 	}
 };
 
+// merged by the revision logic, or per-machine caches of the blog checkout's files (recomputed from disk)
+const unmergedColumns = new Set(['path', 'id', 'head_rev', 'exported_hash', 'exported_mtime_ms', 'llm_hash', 'llm_mtime_ms',
+	'llm_version_revision']);
+// publish state belongs to the machine that publishes; an offline change to it is reported, never carried
+const miniOnlyColumns = new Set(['published_hash', 'published_title', 'published_slug', 'published_commit', 'published_at']);
+
+const postKey = (row: PostRow) => (row.id === null ? `path:${row.path}` : `id:${row.id}`);
+const postsByKey = (db: DatabaseSync) =>
+	new Map((db.prepare('SELECT * FROM posts').all() as PostRow[]).map((row) => [postKey(row), row]));
+
+const offlineColumnChanges = (base: PostRow, offline: PostRow) =>
+	Object.keys(base).filter((column) => !unmergedColumns.has(column) && offline[column] !== base[column]);
+
+// Three-way merge of a post's own columns (triage, queue order, staging): take the offline value
+// where the mini still has the base value, and report the column when both sides changed it.
+const mergeColumns = (base: PostRow, offline: PostRow, mini: PostRow, actions: CheckinAction[], uncarried: string[]) => {
+	const set: Record<string, SqlValue> = {};
+	for (const column of offlineColumnChanges(base, offline)) {
+		if (offline[column] === mini[column]) continue;
+		if (miniOnlyColumns.has(column)) uncarried.push(`${mini.path}: ${column} changed offline; publish state stays the mini's`);
+		else if (mini[column] === base[column]) set[column] = offline[column];
+		else uncarried.push(`${mini.path}: ${column} changed on both sides; kept the mini's ${JSON.stringify(mini[column])}, ` +
+			`offline had ${JSON.stringify(offline[column])}`);
+	}
+	if (Object.keys(set).length) actions.push({ kind: 'columns', path: String(mini.path), set });
+};
+
 const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 	assertSameSchema(dbs);
 	const base = headsById(dbs.base);
@@ -205,6 +236,16 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 			offlinePath: version.path, offlineWriter: version.writer
 		});
 	}
+	const baseRows = postsByKey(dbs.base);
+	const miniRows = postsByKey(dbs.mini);
+	const created = new Set(actions.flatMap((action) => (action.kind === 'create' ? [action.offlineId] : [])));
+	for (const [key, row] of postsByKey(dbs.offline)) {
+		const ancestor = baseRows.get(key);
+		const current = miniRows.get(key);
+		if (row.head_rev === null || !ancestor || created.has(String(row.id))) continue;
+		if (current) mergeColumns(ancestor, row, current, actions, uncarried);
+		else if (offlineColumnChanges(ancestor, row).length) uncarried.push(`${row.path}: changed offline, deleted on the mini`);
+	}
 	for (const [id, ancestor] of base) {
 		if (!offline.has(id) && mini.has(id)) uncarried.push(`${ancestor.path}: deleted offline, left as is on the mini`);
 	}
@@ -221,6 +262,7 @@ const describe = (action: CheckinAction) => {
 			const reid = action.id === action.offlineId ? '' : `, id ${action.offlineId} -> ${action.id}`;
 			return `create        ${action.offlinePath}${renamed} (id ${action.id}${reid}, ${action.revisions} revision(s))`;
 		}
+		case 'columns': return `columns       ${action.path}: ${Object.keys(action.set).join(', ')} from offline`;
 		case 'version': return `version       ${action.path}: offline pending version "${action.offlineWriter}" kept as "${action.writer}"`;
 	}
 };
@@ -308,12 +350,19 @@ const version = (dbs: CheckinDatabases, action: Extract<CheckinAction, { kind: '
 	});
 };
 
+const setColumns = (mini: DatabaseSync, action: Extract<CheckinAction, { kind: 'columns' }>) => {
+	const columns = Object.keys(action.set);
+	mini.prepare(`UPDATE posts SET ${columns.map((column) => `${column} = ?`).join(', ')} WHERE path = ?`)
+		.run(...columns.map((column) => action.set[column]), action.path);
+};
+
 const applyPlan = (dbs: CheckinDatabases, plan: CheckinPlan) => {
 	for (const action of plan.actions) {
 		if (action.kind === 'fast-forward') fastForward(dbs, action);
 		if (action.kind === 'conflict') conflict(dbs, action);
 		if (action.kind === 'create') create(dbs, action);
 		if (action.kind === 'version') version(dbs, action);
+		if (action.kind === 'columns') setColumns(dbs.mini, action);
 	}
 };
 
