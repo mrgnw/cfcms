@@ -86,10 +86,9 @@ try {
 	});
 	assert.ok(backedUp);
 	assert.deepEqual(plan.actions.map((action) => `${action.kind} ${action.path}`).sort(), [
-		'conflict already-pending.md', 'conflict both.md', 'conflict mini-back.md', 'conflict offline-back.md', 'conflict same-both.md', 'create clash-2.md', 'create new.md', 'create twin-a.md', 'fast-forward offline-only.md',
-		'fast-forward round-trip.md', 'version clash-2.md'
+		'conflict already-pending.md', 'conflict both.md', 'conflict mini-back.md', 'conflict offline-back.md', 'conflict same-both.md', 'create clash-2.md', 'create gone-2.md', 'create new.md', 'create twin-a.md', 'fast-forward offline-only.md',
+		'fast-forward round-trip.md', 'version clash-2.md', 'version gone-2.md'
 	], formatPlan(plan));
-	assert.ok(plan.skipped.some((note) => note.startsWith('gone.md (air2)')), formatPlan(plan));
 
 	const forwarded = head(mini, 'offline-only.md');
 	assert.equal(forwarded.body, 'offline draft 2', 'offline-only change becomes the head');
@@ -118,6 +117,7 @@ try {
 	assert.deepEqual(versionsOf('clash-2.md'), ['second tab on the clashing post'], 'versions follow a remapped post');
 	assert.deepEqual(versionsOf('clash.md'), []);
 	assert.deepEqual(versionsOf('gone.md'), [], 'a version never attaches to another post at the same path');
+	assert.deepEqual(versionsOf('gone-2.md'), ['second tab on a post the mini deleted']);
 	assert.equal(head(mini, 'untouched.md').head_rev, 2);
 
 	const pendingOf = (path: string) => mini.prepare('SELECT writer, body FROM versions WHERE path = ? ORDER BY writer').all(path)
