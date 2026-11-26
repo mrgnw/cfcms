@@ -1,0 +1,65 @@
+#!/usr/bin/env -S node --disable-warning=ExperimentalWarning
+// scripts/checkin <offline cfcms dir> [--apply]
+// Dry run by default. Merges <dir>/.data/cms.db into the mini's database (BLOG_CMS_DB, default .data/cms.db),
+// using <dir>/.data/checkout-base.db as the common ancestor.
+import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { applyCheckin, formatPlan, planCheckin } from '../src/lib/server/checkin.ts';
+
+const fail = (message) => {
+	console.error(`checkin: ${message}`);
+	process.exit(1);
+};
+
+const args = process.argv.slice(2);
+const apply = args.includes('--apply');
+const [offlineDir, ...extra] = args.filter((arg) => arg !== '--apply');
+if (!offlineDir || extra.length) fail('usage: scripts/checkin <offline cfcms dir> [--apply]');
+
+const repo = resolve(import.meta.dirname, '..');
+const miniPath = resolve(process.env.BLOG_CMS_DB ?? resolve(repo, '.data/cms.db'));
+const offlinePath = resolve(offlineDir, '.data/cms.db');
+const basePath = resolve(offlineDir, '.data/checkout-base.db');
+const miniBasePath = resolve(dirname(miniPath), 'checkout-base.db');
+
+for (const path of [miniPath, offlinePath, basePath]) if (!existsSync(path)) fail(`missing ${path}`);
+if (existsSync(miniBasePath) && !readFileSync(miniBasePath).equals(readFileSync(basePath))) {
+	fail(`${basePath} and ${miniBasePath} differ; this copy was not checked out from this database`);
+}
+
+const openBy = (path) => spawnSync('lsof', ['-t', '--', path], { encoding: 'utf8' }).stdout.trim();
+if (apply) {
+	for (const path of [miniPath, offlinePath]) {
+		const pids = openBy(path);
+		if (pids) fail(`${path} is open by pid ${pids.split('\n').join(', ')}. Stop it first: pitchfork stop blog-cms`);
+	}
+}
+
+const dbs = {
+	base: new DatabaseSync(basePath, { readOnly: true }),
+	offline: new DatabaseSync(offlinePath, { readOnly: true }),
+	mini: new DatabaseSync(miniPath, { readOnly: !apply, timeout: 5_000 })
+};
+
+let plan;
+try {
+	plan = planCheckin(dbs);
+} catch (caught) {
+	fail(caught instanceof Error ? caught.message : String(caught));
+}
+console.log(`offline ${offlinePath}\nmini    ${miniPath}\nbase    ${basePath}\n`);
+console.log(formatPlan(plan));
+
+if (!apply) {
+	console.log('\ndry run: nothing written. Re-run with --apply to merge.');
+	process.exit(0);
+}
+if (!plan.actions.length) process.exit(0);
+
+const backup = `${miniPath}.pre-checkin-${new Date().toISOString().replaceAll(':', '')}.db`;
+dbs.mini.exec(`VACUUM INTO '${backup.replaceAll("'", "''")}'`);
+console.log(`\nbackup  ${backup}`);
+applyCheckin(dbs, plan);
+console.log(`applied ${plan.actions.length} action(s)`);
