@@ -184,6 +184,44 @@ rm -f .data/cms.db-wal .data/cms.db-shm
 cp "$BLOG/.cms/cms-backup.db" .data/cms.db
 ```
 
+## Offline copy
+
+To write without the network, copy cfcms, its database and the blog to a drive, edit there, then merge the edits back. Run these from the cfcms checkout on the machine that serves the editor.
+
+```sh
+DRIVE=/Volumes/wd
+```
+
+Before travel, make the copy. It writes `$DRIVE/cfcms` (with a fresh database snapshot), `$DRIVE/blog` (without `node_modules`, push disabled) and a start script. The same snapshot is kept as `.data/checkout-base.db` on both sides; check-in uses it as the common ancestor:
+
+```sh
+scripts/checkout "$DRIVE"
+```
+
+On the laptop, start the copy with `$DRIVE/cfcms/offline.sh`. Do not publish from it.
+
+Back home, stop the daemon and preview the merge. The dry run writes nothing:
+
+```sh
+pitchfork stop blog-cms
+```
+
+```sh
+scripts/checkin "$DRIVE/cfcms"
+```
+
+Apply it, then restart:
+
+```sh
+scripts/checkin "$DRIVE/cfcms" --apply
+```
+
+```sh
+pitchfork start blog-cms
+```
+
+A post edited only offline takes the offline revisions as its head. A post edited on both sides keeps the server's head and gets the offline text as a pending `offline` version to reconcile in the editor. Posts created offline are added with their id, or a new one if it collides. `--apply` refuses to run while either database is open, and writes a `VACUUM INTO` backup next to the database first. Triage, queue order and deletions made offline are not merged.
+
 ## Checks
 
 ```sh
