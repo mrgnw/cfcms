@@ -209,13 +209,16 @@ try {
 	setPost(columnsOffline, 'both.md', 'editing_order = 5');
 	setPost(columnsOffline, 'offline-only.md', "published_slug = 'from-the-plane'");
 	setPost(columnsOffline, 'round-trip.md', "next_step = 'for a post the mini deleted'");
+	save(columnsOffline, 'published-new.md', 'published offline', 'pu6new');
+	setPost(columnsOffline, 'published-new.md', "published_slug = 'published-offline'");
 	for (const table of ['revisions', 'posts']) columnsMini.prepare(`DELETE FROM ${table} WHERE path = ?`).run('round-trip.md');
 	const columns = { base, offline: columnsOffline, mini: columnsMini };
-	assert.throws(() => runCheckin(columns, { apply: true, checkoutId: 'checkout-5' }), /refused: 3 offline change/,
+	assert.throws(() => runCheckin(columns, { apply: true, checkoutId: 'checkout-5' }), /refused: 4 offline change/,
 		'post metadata the merge cannot carry blocks the apply');
 	const columnsPlan = runCheckin(columns, { apply: true, checkoutId: 'checkout-5', acceptSkips: true });
 	assert.deepEqual(columnsPlan.uncarried.map((note) => note.split(';')[0]).sort(), [
 		'offline-only.md: published_slug changed offline',
+		'published-new.md: publish state changed offline',
 		'round-trip.md: changed offline, deleted on the mini',
 		'untouched.md: next_step changed on both sides'
 	], formatPlan(columnsPlan));

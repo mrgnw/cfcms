@@ -245,13 +245,18 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 		const ancestor = baseRows.get(key);
 		const current = miniRows.get(key);
 		const path = String(row.path);
-		if (created.has(String(row.id))) continue;
+		if (created.has(String(row.id))) {
+			if ([...miniOnlyColumns].some((column) => row[column] !== null)) {
+				uncarried.push(`${path}: publish state changed offline; publish state stays the mini's`);
+			}
+			continue;
+		}
 		if (!ancestor && takenPaths.has(path)) {
 			uncarried.push(`${path}: new offline row without a head; the mini already has this path`);
 		} else if (!ancestor) {
 			takenPaths.add(path);
 			actions.push({ kind: 'row', path });
-			if (row.published_hash !== null) uncarried.push(`${path}: publish state changed offline; publish state stays the mini's`);
+			if ([...miniOnlyColumns].some((column) => row[column] !== null)) uncarried.push(`${path}: publish state changed offline; publish state stays the mini's`);
 		} else if (current) {
 			mergeColumns(ancestor, row, current, actions, uncarried);
 		} else if (offlineColumnChanges(ancestor, row).length) {
