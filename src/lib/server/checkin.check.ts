@@ -26,7 +26,7 @@ const head = (db: DatabaseSync, path: string) => db.prepare(`
 `).get(path) as { id: string; head_rev: number; body: string; hash: string };
 
 try {
-	const { appendRevision, vacuumInto } = await import('./db.ts');
+	const { addToEditing, appendRevision, vacuumInto } = await import('./db.ts');
 	const { formatPlan, runCheckin } = await import('./checkin.ts');
 	for (const path of ['offline-only.md', 'both.md', 'untouched.md', 'round-trip.md', 'gone.md', 'same-both.md', 'already-pending.md', 'offline-back.md', 'mini-back.md']) {
 		appendRevision(path, 'title: T', 'base text', hashPostContent('title: T', 'base text'), 'mini');
@@ -225,6 +225,34 @@ try {
 	assert.equal(post('offline-only.md').published_slug, null, 'publish state is never carried');
 	columnsOffline.close();
 	columnsMini.close();
+
+	addToEditing('queued.md');
+	addToEditing('dropped.md');
+	vacuumInto(join(root, 'headless-offline.db'));
+	vacuumInto(join(root, 'headless-mini.db'));
+	const headlessOffline = new DatabaseSync(join(root, 'headless-offline.db'));
+	const headlessMini = new DatabaseSync(join(root, 'headless-mini.db'));
+	setPost(headlessOffline, 'queued.md', "next_step = 'outline it', triage_rev = 1");
+	headlessOffline.prepare("INSERT INTO posts (path, next_step, triage_rev) VALUES ('idea.md', 'just an idea', 1)").run();
+	headlessOffline.prepare("INSERT INTO posts (path, next_step, triage_rev) VALUES ('taken.md', 'offline note', 1)").run();
+	headlessMini.prepare("INSERT INTO posts (path, next_step, triage_rev) VALUES ('taken.md', 'mini note', 1)").run();
+	headlessOffline.prepare("DELETE FROM posts WHERE path = 'dropped.md'").run();
+	const headless = { base, offline: headlessOffline, mini: headlessMini };
+	assert.throws(() => runCheckin(headless, { apply: true, checkoutId: 'checkout-6' }), /refused: 2 offline change/,
+		'headless rows the merge cannot carry block the apply');
+	const headlessPlan = runCheckin(headless, { apply: true, checkoutId: 'checkout-6', acceptSkips: true });
+	assert.deepEqual(headlessPlan.uncarried.map((note) => note.split(';')[0]).sort(), [
+		'dropped.md: row without a head deleted offline, left as is on the mini',
+		'taken.md: new offline row without a head'
+	], formatPlan(headlessPlan));
+	const nextStep = (path: string) => (headlessMini.prepare('SELECT next_step FROM posts WHERE path = ?').get(path) as
+		{ next_step: string | null } | undefined)?.next_step;
+	assert.equal(nextStep('queued.md'), 'outline it', 'metadata of a post without a head is merged');
+	assert.equal(nextStep('idea.md'), 'just an idea', 'a new row without a head is inserted');
+	assert.equal(nextStep('taken.md'), 'mini note');
+	assert.ok(headlessMini.prepare("SELECT 1 FROM posts WHERE path = 'dropped.md'").get());
+	headlessOffline.close();
+	headlessMini.close();
 
 	copyFileSync(join(root, 'mini.db'), join(root, 'newer.db'));
 	const newer = new DatabaseSync(join(root, 'newer.db'));
