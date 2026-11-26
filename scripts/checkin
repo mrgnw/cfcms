@@ -46,7 +46,7 @@ if (apply) {
 
 const dbs = {
 	base: new DatabaseSync(basePath, { readOnly: true }),
-	offline: new DatabaseSync(offlinePath, { readOnly: true }),
+	offline: new DatabaseSync(offlinePath, { readOnly: !apply, timeout: 5_000 }),
 	mini: new DatabaseSync(miniPath, { readOnly: !apply, timeout: 5_000 })
 };
 

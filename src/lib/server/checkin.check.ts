@@ -81,6 +81,9 @@ try {
 			const daemon = new DatabaseSync(join(root, 'mini.db'));
 			assert.throws(() => daemon.exec('BEGIN IMMEDIATE'), /locked/, 'the mini is write-locked from plan to commit');
 			daemon.close();
+			const air = new DatabaseSync(join(root, 'offline.db'));
+			assert.throws(() => air.exec('BEGIN IMMEDIATE'), /locked/, 'the offline copy is locked during check-in');
+			air.close();
 			backedUp = true;
 		}
 	});

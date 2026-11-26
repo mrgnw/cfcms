@@ -329,8 +329,9 @@ const assertNotCheckedIn = (mini: DatabaseSync, checkoutId: string) => {
 // Plans and applies under one write lock on the mini, so nothing can land between the two.
 // backup runs once the lock is held and before the first write; a second connection can still read.
 export const runCheckin = (dbs: CheckinDatabases, options: CheckinOptions): CheckinPlan => {
-	dbs.mini.exec(options.apply ? 'BEGIN IMMEDIATE' : 'BEGIN');
+	dbs.offline.exec(options.apply ? 'BEGIN IMMEDIATE' : 'BEGIN');
 	try {
+		dbs.mini.exec(options.apply ? 'BEGIN IMMEDIATE' : 'BEGIN');
 		if (!options.checkoutId) throw new Error('checkoutId is required');
 		assertNotCheckedIn(dbs.mini, options.checkoutId);
 		const plan = planCheckin(dbs);
@@ -348,5 +349,7 @@ export const runCheckin = (dbs: CheckinDatabases, options: CheckinOptions): Chec
 	} catch (caught) {
 		if (dbs.mini.isTransaction) dbs.mini.exec('ROLLBACK');
 		throw caught;
+	} finally {
+		if (dbs.offline.isTransaction) dbs.offline.exec('ROLLBACK');
 	}
 };
