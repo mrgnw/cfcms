@@ -13,7 +13,8 @@ export type CheckinAction =
 	| { kind: 'conflict'; id: string; path: string; writer: string }
 	| { kind: 'create'; id: string; path: string; offlineId: string; offlinePath: string; revisions: number }
 	| { kind: 'version'; id: string; path: string; writer: string; offlinePath: string; offlineWriter: string }
-	| { kind: 'columns'; path: string; set: Record<string, SqlValue> };
+	| { kind: 'columns'; path: string; set: Record<string, SqlValue> }
+	| { kind: 'row'; path: string };
 
 type SqlValue = string | number | null;
 type PostRow = Record<string, SqlValue>;
@@ -239,12 +240,28 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 	const baseRows = postsByKey(dbs.base);
 	const miniRows = postsByKey(dbs.mini);
 	const created = new Set(actions.flatMap((action) => (action.kind === 'create' ? [action.offlineId] : [])));
-	for (const [key, row] of postsByKey(dbs.offline)) {
+	const offlineRows = postsByKey(dbs.offline);
+	for (const [key, row] of offlineRows) {
 		const ancestor = baseRows.get(key);
 		const current = miniRows.get(key);
-		if (row.head_rev === null || !ancestor || created.has(String(row.id))) continue;
-		if (current) mergeColumns(ancestor, row, current, actions, uncarried);
-		else if (offlineColumnChanges(ancestor, row).length) uncarried.push(`${row.path}: changed offline, deleted on the mini`);
+		const path = String(row.path);
+		if (created.has(String(row.id))) continue;
+		if (!ancestor && takenPaths.has(path)) {
+			uncarried.push(`${path}: new offline row without a head; the mini already has this path`);
+		} else if (!ancestor) {
+			takenPaths.add(path);
+			actions.push({ kind: 'row', path });
+			if (row.published_hash !== null) uncarried.push(`${path}: publish state changed offline; publish state stays the mini's`);
+		} else if (current) {
+			mergeColumns(ancestor, row, current, actions, uncarried);
+		} else if (offlineColumnChanges(ancestor, row).length) {
+			uncarried.push(`${path}: changed offline, deleted on the mini`);
+		}
+	}
+	for (const [key, ancestor] of baseRows) {
+		if (ancestor.head_rev === null && !offlineRows.has(key) && miniRows.has(key)) {
+			uncarried.push(`${ancestor.path}: row without a head deleted offline, left as is on the mini`);
+		}
 	}
 	for (const [id, ancestor] of base) {
 		if (!offline.has(id) && mini.has(id)) uncarried.push(`${ancestor.path}: deleted offline, left as is on the mini`);
@@ -262,6 +279,7 @@ const describe = (action: CheckinAction) => {
 			const reid = action.id === action.offlineId ? '' : `, id ${action.offlineId} -> ${action.id}`;
 			return `create        ${action.offlinePath}${renamed} (id ${action.id}${reid}, ${action.revisions} revision(s))`;
 		}
+		case 'row': return `row           ${action.path}: offline row without a head (queue or triage only)`;
 		case 'columns': return `columns       ${action.path}: ${Object.keys(action.set).join(', ')} from offline`;
 		case 'version': return `version       ${action.path}: offline pending version "${action.offlineWriter}" kept as "${action.writer}"`;
 	}
@@ -319,17 +337,23 @@ const conflict = (dbs: CheckinDatabases, action: Extract<CheckinAction, { kind: 
 	});
 };
 
+const clearedOnInsert = ['published_hash', 'published_title', 'published_slug', 'published_commit', 'published_at',
+	'exported_hash', 'exported_mtime_ms', 'llm_hash', 'llm_mtime_ms', 'llm_version_revision', 'staged', 'staged_hash'];
+
+const insertPost = (mini: DatabaseSync, row: PostRow) => {
+	const post: PostRow = { ...row };
+	for (const column of clearedOnInsert) post[column] = null;
+	const columns = Object.keys(post);
+	mini.prepare(`INSERT INTO posts (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`)
+		.run(...columns.map((column) => post[column]));
+};
+
 const create = (dbs: CheckinDatabases, action: Extract<CheckinAction, { kind: 'create' }>) => {
 	const row = dbs.offline.prepare('SELECT * FROM posts WHERE path = ?').get(action.offlinePath) as Record<string, unknown>;
 	const { next } = dbs.mini.prepare('SELECT COALESCE(MAX(editing_order), -1) + 1 AS next FROM posts').get() as { next: number };
-	const cleared = ['published_hash', 'published_title', 'published_slug', 'published_commit', 'published_at', 'exported_hash',
-		'exported_mtime_ms', 'llm_hash', 'llm_mtime_ms', 'llm_version_revision', 'staged', 'staged_hash'];
-	const post: Record<string, unknown> = { ...row, path: action.path, id: action.id };
-	for (const column of cleared) post[column] = null;
+	const post: PostRow = { ...(row as PostRow), path: action.path, id: action.id };
 	if (row.editing_order !== null) post.editing_order = next;
-	const columns = Object.keys(post);
-	dbs.mini.prepare(`INSERT INTO posts (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`)
-		.run(...(columns.map((column) => post[column]) as (string | number | null)[]));
+	insertPost(dbs.mini, post);
 
 	const revisions = dbs.offline.prepare('SELECT rev, hash, frontmatter, body, writer, saved_at, label FROM revisions WHERE path = ? ORDER BY rev')
 		.all(action.offlinePath) as (RevisionRow & { rev: number })[];
@@ -363,6 +387,7 @@ const applyPlan = (dbs: CheckinDatabases, plan: CheckinPlan) => {
 		if (action.kind === 'create') create(dbs, action);
 		if (action.kind === 'version') version(dbs, action);
 		if (action.kind === 'columns') setColumns(dbs.mini, action);
+		if (action.kind === 'row') insertPost(dbs.mini, dbs.offline.prepare('SELECT * FROM posts WHERE path = ?').get(action.path) as PostRow);
 	}
 };
 
