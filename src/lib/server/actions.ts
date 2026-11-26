@@ -9,7 +9,6 @@ import {
 	labelRevision,
 	listVersions,
 	removeFromEditing,
-	reorderEditing,
 	setStaged,
 	setTriageField,
 	upsertVersion
@@ -196,28 +195,6 @@ export const actions = {
 		removeFromEditing(path);
 		return { unqueued: path };
 	},
-	queueReorder: async ({ request }) => {
-		const form = await request.formData();
-		const raw = String(form.get('paths') ?? '[]');
-		let paths: unknown;
-
-		try {
-			paths = JSON.parse(raw);
-		} catch {
-			return fail(400, { message: 'paths must be valid JSON' });
-		}
-
-		if (!Array.isArray(paths) || paths.some((path) => typeof path !== 'string')) {
-			return fail(400, { message: 'paths must be a JSON array of strings' });
-		}
-
-		try {
-			reorderEditing(paths as string[]);
-		} catch (caught) {
-			return fail(400, { message: caught instanceof Error ? caught.message : 'Reorder failed' });
-		}
-		return { reordered: paths.length };
-	},
 	triage: async ({ request }) => {
 		const form = await request.formData();
 		const path = String(form.get('path') ?? '');
@@ -245,20 +222,6 @@ export const actions = {
 			return fail(409, { message: 'Changed in another session', field, current: result.current, rev: result.rev });
 		}
 		return { triaged: path, field, value: result.current, rev: result.rev };
-	},
-	trash: async ({ request }) => {
-		const form = await request.formData();
-		const path = String(form.get('path') ?? '');
-
-		if (!path) return fail(400, { message: 'Post path is required' });
-
-		const post = await getPost(path);
-
-		const result = await savePost(path, setDeleteFlag(post.frontmatter, true), post.body, post.contentHash, 'cms');
-		if (result.outcome === 'conflict') return fail(409, { message: 'Post changed while trashing — retry' });
-
-		removeFromEditing(path);
-		return { trashed: path };
 	},
 	restore: async ({ request }) => {
 		const form = await request.formData();
