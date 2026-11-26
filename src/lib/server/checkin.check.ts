@@ -28,7 +28,7 @@ const head = (db: DatabaseSync, path: string) => db.prepare(`
 try {
 	const { appendRevision, vacuumInto } = await import('./db.ts');
 	const { formatPlan, runCheckin } = await import('./checkin.ts');
-	for (const path of ['offline-only.md', 'both.md', 'untouched.md']) {
+	for (const path of ['offline-only.md', 'both.md', 'untouched.md', 'round-trip.md']) {
 		appendRevision(path, 'title: T', 'base text', hashPostContent('title: T', 'base text'), 'mini');
 	}
 	vacuumInto(join(root, 'offline.db'));
@@ -44,7 +44,11 @@ try {
 	save(offline, 'both.md', 'offline edit');
 	save(offline, 'new.md', 'written on the plane', 'p34n7x');
 	save(offline, 'clash.md', 'offline clash', 'c7a4hx');
+	save(offline, 'round-trip.md', 'a detour');
+	save(offline, 'round-trip.md', 'base text');
+	save(offline, 'twin-a.md', 'same words', 'tw7nab');
 	save(mini, 'both.md', 'mini edit');
+	save(mini, 'twin-b.md', 'same words', 'tw7nbc');
 	save(mini, 'clash.md', 'mini clash', 'c7a4hx');
 
 	const dbs = { base, offline, mini };
@@ -62,7 +66,8 @@ try {
 	});
 	assert.ok(backedUp);
 	assert.deepEqual(plan.actions.map((action) => `${action.kind} ${action.path}`).sort(), [
-		'conflict both.md', 'create clash-2.md', 'create new.md', 'fast-forward offline-only.md'
+		'conflict both.md', 'create clash-2.md', 'create new.md', 'create twin-a.md', 'fast-forward offline-only.md',
+		'fast-forward round-trip.md'
 	], formatPlan(plan));
 
 	const forwarded = head(mini, 'offline-only.md');
@@ -88,6 +93,13 @@ try {
 	assert.equal(moved.body, 'offline clash');
 	assert.notEqual(moved.id, 'c7a4hx', 'a colliding id is replaced');
 	assert.equal(head(mini, 'untouched.md').head_rev, 1);
+
+	const roundTrip = head(mini, 'round-trip.md');
+	assert.equal(roundTrip.head_rev, 3, 'edits that return to the base text still bring their history');
+	assert.equal((mini.prepare('SELECT body FROM revisions WHERE path = ? AND rev = 2').get('round-trip.md') as { body: string }).body,
+		'a detour');
+	assert.equal(head(mini, 'twin-a.md').id, 'tw7nab', 'a new post is kept even when another post has the same text');
+	assert.equal(head(mini, 'twin-b.md').id, 'tw7nbc');
 
 	save(offline, 'new.md', 'edited on the plane after the check-in');
 	assert.throws(() => runCheckin(dbs, { apply: true, checkoutId }), /already checked in/, 'a checkout applies once');

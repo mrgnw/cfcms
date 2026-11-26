@@ -47,10 +47,19 @@ const headsById = (db: DatabaseSync): Map<string, Head> => {
 	return new Map(rows.map((row) => [row.id, row]));
 };
 
-const assertDescendsFrom = (side: string, heads: Map<string, Head>, baseHeads: Map<string, Head>) => {
+// Revisions are append-only, so a side changed a post exactly when its head is no longer the base's head
+// revision. Comparing text instead misses edits that return to the base text and drops their history.
+const changedSince = (head: Head, base: Head) => head.headRev !== base.headRev || head.savedAt !== base.savedAt;
+
+const assertDescendsFrom = (side: string, db: DatabaseSync, heads: Map<string, Head>, baseHeads: Map<string, Head>) => {
+	const revisionAt = db.prepare('SELECT hash, saved_at AS savedAt FROM revisions WHERE path = ? AND rev = ?');
 	for (const [id, base] of baseHeads) {
 		const head = heads.get(id);
-		if (head && (head.headRev < base.headRev || head.path !== base.path)) {
+		if (!head) continue;
+		// a base head pruned since (200 newer autosaves) cannot be compared; rev order still holds
+		const kept = revisionAt.get(base.path, base.headRev) as { hash: string; savedAt: string } | undefined;
+		const diverged = kept !== undefined && (kept.hash !== base.hash || kept.savedAt !== base.savedAt);
+		if (head.headRev < base.headRev || head.path !== base.path || diverged) {
 			throw new Error(`${side} does not descend from checkout-base.db: ${base.path} is at rev ${head.headRev}, base at ${base.headRev}`);
 		}
 	}
@@ -107,15 +116,14 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 	const base = headsById(dbs.base);
 	const offline = headsById(dbs.offline);
 	const mini = headsById(dbs.mini);
-	assertDescendsFrom('offline', offline, base);
-	assertDescendsFrom('mini', mini, base);
+	assertDescendsFrom('offline', dbs.offline, offline, base);
+	assertDescendsFrom('mini', dbs.mini, mini, base);
 
 	const takenPaths = new Set((dbs.mini.prepare('SELECT path FROM posts').all() as { path: string }[]).map((row) => row.path));
 	const takenIds = new Set([...mini.keys()]);
 	const takenWriters = new Set((dbs.mini.prepare('SELECT path, writer FROM versions').all() as {
 		path: string; writer: string;
 	}[]).map((row) => `${row.path}\n${row.writer}`));
-	const miniHashes = new Map([...mini.values()].map((head) => [head.hash, head.path]));
 	const miniPathFor = new Map<string, string>();
 	const actions: CheckinAction[] = [];
 	const skipped: string[] = [];
@@ -123,13 +131,8 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 	for (const head of offline.values()) {
 		const ancestor = base.get(head.id);
 		const current = mini.get(head.id);
-		if (ancestor && head.hash === ancestor.hash) continue;
+		if (ancestor && !changedSince(head, ancestor)) continue;
 
-		const twin = ancestor ? undefined : miniHashes.get(head.hash);
-		if (twin) {
-			skipped.push(`${head.path}: already checked in as ${twin}`);
-			continue;
-		}
 		if (!ancestor || !current) {
 			const id = freeId(takenIds, head.id);
 			takenIds.add(id);
@@ -139,13 +142,13 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 			continue;
 		}
 		miniPathFor.set(head.path, current.path);
-		if (current.hash === head.hash) {
-			skipped.push(`${current.path}: same text on both sides`);
-		} else if (current.hash === ancestor.hash) {
+		if (!changedSince(current, ancestor)) {
 			actions.push({
 				kind: 'fast-forward', id: head.id, path: current.path, fromRev: ancestor.headRev,
 				revisions: revisionCount(dbs.offline, head.path, ancestor.headRev)
 			});
+		} else if (current.hash === head.hash) {
+			skipped.push(`${current.path}: same text on both sides`);
 		} else if (hasVersionText(dbs, head.id, current.path)) {
 			skipped.push(`${current.path}: offline head is already a pending version`);
 		} else {
