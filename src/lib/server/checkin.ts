@@ -154,13 +154,20 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 	const miniPostFor = new Map<string, { id: string; path: string }>();
 	const actions: CheckinAction[] = [];
 	const skipped: string[] = [];
+	const knownRevisions = new Set([dbs.base, dbs.mini].flatMap((db) =>
+		(db.prepare('SELECT revision FROM versions').all() as { revision: string }[]).map((row) => row.revision)));
+	const pendingAt = dbs.offline.prepare('SELECT revision FROM versions WHERE path = ?');
 
 	for (const head of offline.values()) {
 		const ancestor = base.get(head.id);
 		const current = mini.get(head.id);
 		if (ancestor && !changedSince(head, ancestor)) {
-			if (current) miniPostFor.set(head.id, { id: current.id, path: current.path });
-			continue;
+			if (current) {
+				miniPostFor.set(head.id, { id: current.id, path: current.path });
+				continue;
+			}
+			const pending = pendingAt.all(head.path) as { revision: string }[];
+			if (!pending.some((version) => !knownRevisions.has(version.revision))) continue;
 		}
 
 		if (!ancestor || !current) {
@@ -182,8 +189,6 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 		}
 	}
 
-	const knownRevisions = new Set([dbs.base, dbs.mini].flatMap((db) =>
-		(db.prepare('SELECT revision FROM versions').all() as { revision: string }[]).map((row) => row.revision)));
 	const offlineVersions = dbs.offline.prepare(`
 		SELECT versions.path, versions.writer, versions.revision, posts.id FROM versions
 		LEFT JOIN posts ON posts.path = versions.path ORDER BY versions.path, versions.writer
