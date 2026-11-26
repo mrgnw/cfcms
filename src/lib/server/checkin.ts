@@ -261,6 +261,17 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 		SELECT versions.path, versions.writer, versions.revision, posts.id FROM versions
 		LEFT JOIN posts ON posts.path = versions.path ORDER BY versions.path, versions.writer
 	`).all() as { path: string; writer: string; revision: string; id: string | null }[];
+	const offlineVersionIds = new Set(offlineVersions.map((version) => version.revision));
+	const liveVersionIds = new Set((dbs.mini.prepare('SELECT revision FROM versions').all() as { revision: string }[])
+		.map((version) => version.revision));
+	const baseVersions = dbs.base.prepare('SELECT path, writer, revision FROM versions').all() as {
+		path: string; writer: string; revision: string;
+	}[];
+	for (const version of baseVersions) {
+		if (!offlineVersionIds.has(version.revision) && liveVersionIds.has(version.revision)) {
+			uncarried.push(`${version.path} (${version.writer}): pending version deleted offline, left on the mini`);
+		}
+	}
 	for (const version of offlineVersions) {
 		if (knownRevisions.has(version.revision)) continue;
 		const target = version.id ? miniPostFor.get(version.id) : undefined;

@@ -215,6 +215,20 @@ try {
 	publishedOffline.close();
 	publishedMini.close();
 
+	vacuumInto(join(root, 'version-base.db'));
+	const versionBase = new DatabaseSync(join(root, 'version-base.db'));
+	pend(versionBase, 'both.md', 'air', 'pending at checkout');
+	versionBase.exec(`VACUUM INTO '${join(root, 'version-offline.db')}'`);
+	versionBase.exec(`VACUUM INTO '${join(root, 'version-mini.db')}'`);
+	const versionOffline = new DatabaseSync(join(root, 'version-offline.db'));
+	const versionMini = new DatabaseSync(join(root, 'version-mini.db'));
+	versionOffline.prepare("DELETE FROM versions WHERE path = 'both.md'").run();
+	assert.throws(() => runCheckin({ base: versionBase, offline: versionOffline, mini: versionMini },
+		{ apply: true, checkoutId: 'version-deleted' }), /pending version deleted offline/);
+	versionBase.close();
+	versionOffline.close();
+	versionMini.close();
+
 	vacuumInto(join(root, 'columns-offline.db'));
 	vacuumInto(join(root, 'columns-mini.db'));
 	const columnsOffline = new DatabaseSync(join(root, 'columns-offline.db'));
