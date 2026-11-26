@@ -275,13 +275,23 @@ const applyPlan = (dbs: CheckinDatabases, plan: CheckinPlan) => {
 	}
 };
 
-export type CheckinOptions = { apply: boolean; backup?: () => void };
+// checkoutId names one checkout (the scripts use the sha256 of checkout-base.db); applying it twice is refused.
+export type CheckinOptions = { apply: boolean; checkoutId: string; backup?: () => void };
+
+const checkinKey = (checkoutId: string) => `checkin:${checkoutId}`;
+
+const assertNotCheckedIn = (mini: DatabaseSync, checkoutId: string) => {
+	const row = mini.prepare('SELECT value FROM meta WHERE key = ?').get(checkinKey(checkoutId)) as { value: string } | undefined;
+	if (row) throw new Error(`This checkout was already checked in (${row.value}). Make a new copy with scripts/checkout.`);
+};
 
 // Plans and applies under one write lock on the mini, so nothing can land between the two.
 // backup runs once the lock is held and before the first write; a second connection can still read.
 export const runCheckin = (dbs: CheckinDatabases, options: CheckinOptions): CheckinPlan => {
 	dbs.mini.exec(options.apply ? 'BEGIN IMMEDIATE' : 'BEGIN');
 	try {
+		if (!options.checkoutId) throw new Error('checkoutId is required');
+		assertNotCheckedIn(dbs.mini, options.checkoutId);
 		const plan = planCheckin(dbs);
 		if (!options.apply) {
 			dbs.mini.exec('ROLLBACK');
@@ -289,6 +299,8 @@ export const runCheckin = (dbs: CheckinDatabases, options: CheckinOptions): Chec
 		}
 		options.backup?.();
 		applyPlan(dbs, plan);
+		dbs.mini.prepare('INSERT INTO meta (key, value) VALUES (?, ?)')
+			.run(checkinKey(options.checkoutId), `${new Date().toISOString()}, ${plan.actions.length} action(s)`);
 		dbs.mini.exec('COMMIT');
 		return plan;
 	} catch (caught) {

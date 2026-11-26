@@ -48,9 +48,11 @@ try {
 	save(mini, 'clash.md', 'mini clash', 'c7a4hx');
 
 	const dbs = { base, offline, mini };
+	const checkoutId = 'checkout-1';
 	let backedUp = false;
 	const plan = runCheckin(dbs, {
 		apply: true,
+		checkoutId,
 		backup: () => {
 			const daemon = new DatabaseSync(join(root, 'mini.db'));
 			assert.throws(() => daemon.exec('BEGIN IMMEDIATE'), /locked/, 'the mini is write-locked from plan to commit');
@@ -87,14 +89,15 @@ try {
 	assert.notEqual(moved.id, 'c7a4hx', 'a colliding id is replaced');
 	assert.equal(head(mini, 'untouched.md').head_rev, 1);
 
-	const again = runCheckin(dbs, { apply: false });
-	assert.deepEqual(again.actions, [],
-		`a second run finds nothing new: ${formatPlan(again)}`);
+	save(offline, 'new.md', 'edited on the plane after the check-in');
+	assert.throws(() => runCheckin(dbs, { apply: true, checkoutId }), /already checked in/, 'a checkout applies once');
+	assert.throws(() => runCheckin(dbs, { apply: false, checkoutId }), /already checked in/);
+	assert.equal(head(mini, 'new.md').body, 'written on the plane');
 
 	copyFileSync(join(root, 'mini.db'), join(root, 'newer.db'));
 	const newer = new DatabaseSync(join(root, 'newer.db'));
 	newer.exec('ALTER TABLE posts ADD COLUMN pinned INTEGER');
-	assert.throws(() => runCheckin({ base, offline, mini: newer }, { apply: true }), /Schema mismatch in posts/);
+	assert.throws(() => runCheckin({ base, offline, mini: newer }, { apply: true, checkoutId: 'other' }), /Schema mismatch in posts/);
 	assert.equal(newer.isTransaction, false, 'a failed check-in releases the lock');
 	for (const db of [base, offline, mini, newer]) db.close();
 } finally {
