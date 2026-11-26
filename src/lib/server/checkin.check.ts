@@ -175,8 +175,13 @@ try {
 	const deletedMini = new DatabaseSync(join(root, 'deleted-mini.db'));
 	for (const table of ['revisions', 'posts']) deletedOffline.prepare(`DELETE FROM ${table} WHERE path = ?`).run('gone.md');
 	const deleted = { base, offline: deletedOffline, mini: deletedMini };
-	const deletedPlan = runCheckin(deleted, { apply: true, checkoutId: 'checkout-3' });
+	assert.throws(() => runCheckin(deleted, { apply: true, checkoutId: 'checkout-3' }), /refused: 1 offline change/,
+		'an offline deletion is never dropped silently');
+	assert.equal(deletedMini.prepare("SELECT count(*) AS count FROM meta WHERE key = 'checkin:checkout-3'").get()?.count, 0,
+		'a refused apply does not mark the checkout done');
+	const deletedPlan = runCheckin(deleted, { apply: true, checkoutId: 'checkout-3', acceptSkips: true });
 	assert.equal(deletedPlan.fastPath, false, 'offline deletion cannot replace live content');
+	assert.deepEqual(deletedPlan.uncarried, ['gone.md: deleted offline, left as is on the mini']);
 	assert.equal(head(deletedMini, 'gone.md').body, 'base text');
 	deletedOffline.close();
 	deletedMini.close();
