@@ -75,9 +75,12 @@ try {
 	const dbs = { base, offline, mini };
 	const checkoutId = 'checkout-1';
 	let backedUp = false;
+	assert.throws(() => runCheckin(dbs, { apply: true, checkoutId }), /offline revision history/,
+		'conflicting intermediate revisions cannot be silently dropped');
 	const plan = runCheckin(dbs, {
 		apply: true,
 		checkoutId,
+		acceptSkips: true,
 		backup: () => {
 			const daemon = new DatabaseSync(join(root, 'mini.db'));
 			assert.throws(() => daemon.exec('BEGIN IMMEDIATE'), /locked/, 'the mini is write-locked from plan to commit');

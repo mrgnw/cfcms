@@ -229,6 +229,9 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 			});
 		} else {
 			actions.push({ kind: 'conflict', id: head.id, path: current.path, writer: freeWriter(takenWriters, current.path, 'offline') });
+			if (revisionCount(dbs.offline, head.path, ancestor.headRev) > 1) {
+				uncarried.push(`${head.path}: offline revision history beyond the pending head is not carried`);
+			}
 		}
 	}
 
