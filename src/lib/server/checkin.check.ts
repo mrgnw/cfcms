@@ -31,6 +31,7 @@ try {
 	for (const path of ['offline-only.md', 'both.md', 'untouched.md', 'round-trip.md', 'gone.md', 'same-both.md', 'already-pending.md', 'offline-back.md', 'mini-back.md']) {
 		appendRevision(path, 'title: T', 'base text', hashPostContent('title: T', 'base text'), 'mini');
 	}
+	appendRevision('untouched.md', 'title: T', 'second base', hashPostContent('title: T', 'second base'), 'mini');
 	vacuumInto(join(root, 'offline.db'));
 	vacuumInto(join(root, 'mini.db'));
 
@@ -117,7 +118,7 @@ try {
 	assert.deepEqual(versionsOf('clash-2.md'), ['second tab on the clashing post'], 'versions follow a remapped post');
 	assert.deepEqual(versionsOf('clash.md'), []);
 	assert.deepEqual(versionsOf('gone.md'), [], 'a version never attaches to another post at the same path');
-	assert.equal(head(mini, 'untouched.md').head_rev, 1);
+	assert.equal(head(mini, 'untouched.md').head_rev, 2);
 
 	const pendingOf = (path: string) => mini.prepare('SELECT writer, body FROM versions WHERE path = ? ORDER BY writer').all(path)
 		.map((row) => `${row.writer}: ${row.body}`);
@@ -152,7 +153,6 @@ try {
 	save(fastOffline, 'both.md', 'edited on the plane');
 	save(fastOffline, 'fresh.md', 'new on the plane', 'fr3shx');
 	fastOffline.prepare("UPDATE posts SET next_step = 'tighten intro', triage_rev = 1 WHERE path = 'untouched.md'").run();
-	for (const table of ['revisions', 'posts']) fastOffline.prepare(`DELETE FROM ${table} WHERE path = ?`).run('gone.md');
 	const fast = { base, offline: fastOffline, mini: fastMini };
 	const preview = runCheckin(fast, { apply: false, checkoutId: 'checkout-2' });
 	assert.equal(preview.fastPath, true, formatPlan(preview));
@@ -165,6 +165,29 @@ try {
 	assert.throws(() => runCheckin(fast, { apply: true, checkoutId: 'checkout-2' }), /already checked in/);
 	fastOffline.close();
 	fastMini.close();
+
+	vacuumInto(join(root, 'deleted-offline.db'));
+	vacuumInto(join(root, 'deleted-mini.db'));
+	const deletedOffline = new DatabaseSync(join(root, 'deleted-offline.db'));
+	const deletedMini = new DatabaseSync(join(root, 'deleted-mini.db'));
+	for (const table of ['revisions', 'posts']) deletedOffline.prepare(`DELETE FROM ${table} WHERE path = ?`).run('gone.md');
+	const deleted = { base, offline: deletedOffline, mini: deletedMini };
+	const deletedPlan = runCheckin(deleted, { apply: true, checkoutId: 'checkout-3' });
+	assert.equal(deletedPlan.fastPath, false, 'offline deletion cannot replace live content');
+	assert.equal(head(deletedMini, 'gone.md').body, 'base text');
+	deletedOffline.close();
+	deletedMini.close();
+
+	vacuumInto(join(root, 'pruned-offline.db'));
+	vacuumInto(join(root, 'pruned-mini.db'));
+	const prunedOffline = new DatabaseSync(join(root, 'pruned-offline.db'));
+	const prunedMini = new DatabaseSync(join(root, 'pruned-mini.db'));
+	prunedOffline.prepare("DELETE FROM revisions WHERE path = 'untouched.md' AND rev = 1").run();
+	const prunedPlan = runCheckin({ base, offline: prunedOffline, mini: prunedMini }, { apply: true, checkoutId: 'checkout-4' });
+	assert.equal(prunedPlan.fastPath, false, 'offline pruning cannot delete live history');
+	assert.ok(prunedMini.prepare("SELECT 1 FROM revisions WHERE path = 'untouched.md' AND rev = 1").get());
+	prunedOffline.close();
+	prunedMini.close();
 
 	copyFileSync(join(root, 'mini.db'), join(root, 'newer.db'));
 	const newer = new DatabaseSync(join(root, 'newer.db'));

@@ -116,6 +116,16 @@ const contentRows = (db: DatabaseSync, table: string, order: string) =>
 const unchangedSince = (db: DatabaseSync, base: DatabaseSync) => contentTables.every(([table, order]) =>
 	JSON.stringify(contentRows(db, table, order)) === JSON.stringify(contentRows(base, table, order)));
 
+const preservesBase = (offline: DatabaseSync, base: DatabaseSync) => contentTables.every(([table, order]) => {
+	const keys = order.split(', ');
+	const key = (row: Record<string, string | number | null>) => JSON.stringify(keys.map((column) => row[column]));
+	const rows = new Map(contentRows(offline, table, order).map((row) => [key(row), row]));
+	return contentRows(base, table, order).every((row) => {
+		const other = rows.get(key(row));
+		return other !== undefined && (table === 'posts' || JSON.stringify(row) === JSON.stringify(other));
+	});
+});
+
 const replaceContent = (dbs: CheckinDatabases) => {
 	for (const [table, order] of contentTables) {
 		dbs.mini.exec(`DELETE FROM ${table}`);
@@ -193,7 +203,7 @@ const planCheckin = (dbs: CheckinDatabases): CheckinPlan => {
 	for (const [id, ancestor] of base) {
 		if (!offline.has(id)) skipped.push(`${ancestor.path}: deleted offline, left as is on the mini`);
 	}
-	return { fastPath: unchangedSince(dbs.mini, dbs.base), actions, skipped };
+	return { fastPath: unchangedSince(dbs.mini, dbs.base) && preservesBase(dbs.offline, dbs.base), actions, skipped };
 };
 
 const describe = (action: CheckinAction) => {
