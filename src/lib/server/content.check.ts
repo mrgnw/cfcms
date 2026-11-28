@@ -23,8 +23,11 @@ process.env.BLOG_CMS_DB = join(root, 'cms.db');
 // import reports land in cwd/.data, not next to BLOG_CMS_DB
 process.chdir(root);
 
-const { createPost, getPost, getPostFilePath, importAllLlmDrafts, importLlmDraft, listLlmDrafts, listPosts, postsRev, purgePost, savePost } =
-	await import('./content.ts');
+const {
+	createPost, findPosts, getPost, getPostFilePath, importAllLlmDrafts, importLlmDraft, listLlmDrafts, listPosts, listPostsFromStore,
+	postsRev, purgePost, savePost
+} = await import('./content.ts');
+const { withCheckoutLock } = await import('./checkout-lock.ts');
 const { changeAssistantDraft, getAssistantDraft, listVersions, upsertVersion, getStoredPost } = await import('./db.ts');
 const { setDeleteFlag } = await import('../frontmatter.ts');
 
@@ -234,6 +237,44 @@ try {
 	const listed = await listPosts();
 	const rehashed = listed.map((post, index) => (index === 0 ? { ...post, contentHash: `${post.contentHash}x` } : post));
 	assert.notEqual(postsRev(rehashed), postsRev(listed), 'postsRev depends on each post content hash');
+
+	// the store read lists a standalone .llm.md from the last scan, with no lock and no disk read
+	const soloFile = join(root, 'content', 'solo.llm.md');
+	writeFileSync(soloFile, '---\ntitle: Solo\ndate: 2026-03-03\n---\n\nSolo draft.\n');
+	utimesSync(soloFile, 1_000_000_000, 1_000_000_000);
+	assert.equal(await listPostsFromStore().then((posts) => posts.some((post) => post.path === 'solo.llm.md')), false,
+		'a draft no scan has seen is not listed yet');
+	await listPosts();
+	const diskReads = [
+		mock.method(fsPromises, 'readdir', async () => assert.fail('the store read must not scan the content directory')),
+		mock.method(fsPromises, 'readFile', async () => assert.fail('the store read must not read files'))
+	];
+	syncBuiltinESMExports();
+	try {
+		await withCheckoutLock(async () => {
+			const solo = (await listPostsFromStore()).find((post) => post.path === 'solo.llm.md');
+			assert.equal(solo?.title, 'Solo', 'the store read lists a standalone draft while the checkout is busy');
+			assert.equal(solo?.excerpt, 'Solo draft.');
+			assert.deepEqual(await listPostsFromStore(), await listPosts(), 'a busy scan falls back to the same store read');
+			assert.deepEqual((await findPosts((post) => post.slug === solo?.slug)).map((post) => post.path), ['solo.llm.md'],
+				'a store hit needs no scan');
+		});
+	} finally {
+		for (const read of diskReads) read.mock.restore();
+		syncBuiltinESMExports();
+	}
+	assert.deepEqual(await listPostsFromStore(), await listPosts(), 'the store read matches a fresh scan');
+
+	await importLlmDraft('solo.llm.md');
+	const afterImport = (await listPostsFromStore()).map((post) => post.path);
+	assert.equal(afterImport.includes('solo.llm.md'), false, 'an imported draft leaves the store read at once');
+	assert.equal(afterImport.includes('solo.md'), true);
+	await purgePost('solo.md');
+	unlinkSync(soloFile);
+
+	writeFileSync(join(root, 'content', 'unscanned.md'), `---\n${draftFm('Unscanned')}\n---\n\nNot ingested yet.\n`);
+	assert.deepEqual((await findPosts((post) => post.path === 'unscanned.md')).map((post) => post.path), ['unscanned.md'],
+		'a store miss scans once and finds a new file');
 
 	console.log('content.check: ok');
 } finally {

@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { getPost } from '#lib/server/content.js';
+import { findPosts, getPost } from '#lib/server/content.js';
 import { getRevision, getStoredPost, listRevisions } from '#lib/server/db.js';
 import { splitBlocks } from '#lib/blocks.js';
 import { diffSegments, lineDiffCounts } from '#lib/segment-diff.js';
@@ -7,8 +7,8 @@ import { parseFrontmatter } from '#lib/frontmatter.js';
 
 export { actions } from '#lib/server/actions.js';
 
-export const load = async ({ params, parent, url }) => {
-	const matches = (await parent()).posts.filter((item) => item.slug === params.slug);
+export const load = async ({ params, url }) => {
+	const matches = await findPosts((item) => item.slug === params.slug);
 	if (matches.length !== 1) throw error(404, `No single post with slug ${params.slug}`);
 
 	const post = await getPost(matches[0].path);
