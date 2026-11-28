@@ -6,6 +6,7 @@
 	import { startPoll } from '#lib/poll.js';
 	import { startLagRecorder } from '#lib/lag-recorder.js';
 	import Sidebar from '#lib/components/Sidebar.svelte';
+	import { getPosts } from '#lib/posts.remote.js';
 	import { countPosts } from '#lib/types.js';
 	import { setUiState, type UiState } from '#lib/ui-state.js';
 
@@ -16,7 +17,8 @@
 	setUiState(ui);
 
 	let fillsWorkbench = $derived(page.route.id === '/new' || page.route.id === '/[[stage=stage]]/posts/[slug]');
-	let counts = $derived(countPosts(data.posts));
+	const postList = $derived(await getPosts());
+	let counts = $derived(countPosts(postList.posts));
 
 	if (browser) {
 		onDestroy(
@@ -24,7 +26,7 @@
 				const res = await fetch('/api/posts').catch(() => null);
 				if (!res?.ok) return;
 				const latest = await res.json() as { rev: string };
-				if (latest.rev !== data.postsRev) refreshAll();
+				if (latest.rev !== postList.rev) refreshAll();
 			}, 5000)
 		);
 		onDestroy(startLagRecorder());
@@ -33,7 +35,7 @@
 
 <main class="shell" class:sidebar-closed={!ui.sidebarOpen} class:has-post={page.route.id !== '/[[stage=stage]]'}>
 	<Sidebar
-		posts={data.posts}
+		posts={postList.posts}
 		selectedPath={page.data.post?.path ?? page.state.createdPath}
 		counts={counts}
 		bind:open={ui.sidebarOpen}

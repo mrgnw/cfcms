@@ -5,6 +5,7 @@
 	import { MediaQuery } from 'svelte/reactivity';
 	import { dndzone, type DndEvent } from 'svelte-dnd-action';
 	import { swipeable, type SwipeEndEventDetail } from '@svelte-put/swipeable';
+	import { getPosts } from '#lib/posts.remote.js';
 	import { getQueue, queueAdd, queueRemove, queueReorder, trash } from '#lib/queue.remote.js';
 	import { shortDate } from '#lib/short-date.js';
 	import StatusDot from './StatusDot.svelte';
@@ -81,7 +82,7 @@
 
 	async function run(pending: Promise<unknown>) {
 		const ok = await pending.then(() => true, () => false);
-		await invalidate(postsDependency);
+		await Promise.all([invalidate(postsDependency), getPosts().refresh()]);
 		return ok;
 	}
 

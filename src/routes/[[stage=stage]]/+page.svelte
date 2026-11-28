@@ -1,10 +1,11 @@
 <script lang="ts">
 	import HomePanel from '#lib/components/HomePanel.svelte';
+	import { getPosts } from '#lib/posts.remote.js';
 	import { countPosts } from '#lib/types.js';
 
-	let { data } = $props();
+	const { posts } = $derived(await getPosts());
 
-	let recentPosts = $derived(data.posts.filter((post) => !post.deleteRequested).slice(0, 8));
+	let recentPosts = $derived(posts.filter((post) => !post.deleteRequested).slice(0, 8));
 </script>
 
 <svelte:head>
@@ -13,7 +14,6 @@
 
 <HomePanel
 	{recentPosts}
-	counts={countPosts(data.posts)}
-	llmDrafts={data.posts.filter((post) => post.path.endsWith('.llm.md')).length}
+	counts={countPosts(posts)}
+	llmDrafts={posts.filter((post) => post.path.endsWith('.llm.md')).length}
 />
-

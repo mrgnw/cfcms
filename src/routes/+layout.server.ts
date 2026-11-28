@@ -1,14 +1,10 @@
-import { listPosts, postsRev } from '#lib/server/content.js';
+import { listPosts } from '#lib/server/content.js';
 import { getLastPublishedAt } from '#lib/server/db.js';
-import { postsDependency } from '#lib/types.js';
 
-export const load = async ({ cookies, depends }) => {
-	depends(postsDependency);
-	const posts = await listPosts();
-
+// The scan runs here on a full load and in the /api/posts poll; getPosts() only reads what it ingested.
+export const load = async ({ cookies }) => {
+	await listPosts();
 	return {
-		posts: posts.map(({ frontmatter, body, ...summary }) => summary),
-		postsRev: postsRev(posts),
 		lastPublishedAt: getLastPublishedAt(),
 		sidebarOpen: cookies.get('sidebar') !== 'closed'
 	};
