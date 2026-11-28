@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
 	import { startPoll } from '#lib/poll.js';
+	import { getPosts } from '#lib/posts.remote.js';
 	import { isValidWriter } from '#lib/save-rules.js';
 	import { browser } from '$app/env';
 	import { deserialize } from '$app/forms';
@@ -28,6 +29,10 @@
 		onSaved?: (frontmatter?: string) => void;
 		onCreated?: (created: { path: string; slug: string; id: string | null; contentHash: string }) => void;
 	} = $props();
+
+	// the sidebar changes the queue without refetching page data, so the post list is the source
+	const postList = getPosts();
+	let queued = $derived((postList.current?.posts.find((item) => item.path === post.path) ?? post).editingOrder != null);
 
 	const initial = untrack(() => parseFrontmatter(post.frontmatter));
 
@@ -725,12 +730,12 @@
 					</svg>
 				</label>
 
-		<form class="queue-form" method="POST" action={post.editingOrder != null ? '?/queueRemove' : '?/queueAdd'}>
+		<form class="queue-form" method="POST" action={queued ? '?/queueRemove' : '?/queueAdd'}>
 					<input type="hidden" name="path" value={post.path} />
 					<button
 						class="icon-toggle edit-toggle"
-						class:queued={post.editingOrder != null}
-						title={post.editingOrder != null ? 'Remove from editing queue' : 'Add to editing queue'}
+						class:queued
+						title={queued ? 'Remove from editing queue' : 'Add to editing queue'}
 					>
 						<svg
 							width="17"
