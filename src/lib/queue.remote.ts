@@ -1,15 +1,13 @@
 import { error } from '@sveltejs/kit';
-import { command, query, requested } from '$app/server';
+import { command, requested } from '$app/server';
 import * as v from 'valibot';
-import { getEditingOrder } from '#lib/server/db.js';
+import { getPosts } from '#lib/posts.remote.js';
 import * as queue from '#lib/server/queue.js';
 
 const postPath = v.pipe(v.string(), v.nonEmpty(), v.maxLength(queue.maxPostPathLength));
 const queuePaths = v.pipe(v.array(postPath), v.maxLength(queue.maxQueueLength));
 
-export const getQueue = query(async () => [...getEditingOrder().keys()]);
-
-const refreshed = () => requested(getQueue, 1).refreshAll();
+const refreshed = () => requested(getPosts, 1).refreshAll();
 
 async function mutate(work: () => unknown) {
 	try {

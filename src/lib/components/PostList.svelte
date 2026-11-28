@@ -6,7 +6,7 @@
 	import { dndzone, type DndEvent } from 'svelte-dnd-action';
 	import { swipeable, type SwipeEndEventDetail } from '@svelte-put/swipeable';
 	import { getPosts } from '#lib/posts.remote.js';
-	import { getQueue, queueAdd, queueRemove, queueReorder, trash } from '#lib/queue.remote.js';
+	import { queueAdd, queueRemove, queueReorder, trash } from '#lib/queue.remote.js';
 	import { shortDate } from '#lib/short-date.js';
 	import StatusDot from './StatusDot.svelte';
 	import { effortLabels, efforts, editingQueue, postsDependency, inStage, isEditing, statusOf, type Effort, type PostFilter, type PostListItem } from '#lib/types.js';
@@ -80,15 +80,22 @@
 		};
 	}
 
+	// a command refreshes getPosts in its own response; a failed one resyncs the list
 	async function run(pending: Promise<unknown>) {
 		const ok = await pending.then(() => true, () => false);
-		await Promise.all([invalidate(postsDependency), getPosts().refresh()]);
+		if (!ok) await getPosts().refresh();
 		return ok;
 	}
 
-	const addToQueue = (path: string) => run(queueAdd(path).updates(getQueue()));
-	const removeFromQueue = (path: string) => run(queueRemove(path).updates(getQueue()));
-	const trashPost = (path: string) => run(trash(path).updates(getQueue()));
+	const addToQueue = (path: string) => run(queueAdd(path).updates(getPosts()));
+	const removeFromQueue = (path: string) => run(queueRemove(path).updates(getPosts()));
+
+	// trashing the open post rewrites its frontmatter, so that page's data refetches too
+	async function trashPost(path: string) {
+		const ok = await run(trash(path).updates(getPosts()));
+		if (ok && path === selectedPath) await invalidate(postsDependency);
+		return ok;
+	}
 
 	function cancelSwipe(event: PointerEvent) {
 		swipedPath = null;
@@ -115,7 +122,7 @@
 
 	async function handleDndFinalize(event: CustomEvent<DndEvent<QueueItem>>) {
 		dragItems = event.detail.items;
-		await run(queueReorder(event.detail.items.map((item) => item.id)).updates(getQueue()));
+		await run(queueReorder(event.detail.items.map((item) => item.id)).updates(getPosts()));
 		dragItems = null;
 	}
 </script>
