@@ -1,6 +1,6 @@
 import { error, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
-import { getPost, importLlmDraft } from '#lib/server/content.js';
+import { findPosts, getPost, importLlmDraft } from '#lib/server/content.js';
 import { getRevisionByHash, listVersions } from '#lib/server/db.js';
 import { parseFrontmatter } from '#lib/frontmatter.js';
 import { diffSegments } from '#lib/segment-diff.js';
@@ -34,8 +34,8 @@ const versionsFor = async (post: Awaited<ReturnType<typeof getPost>>) =>
 		})
 	);
 
-export const load = async ({ params, parent }) => {
-	const matches = (await parent()).posts.filter((item) => item.slug === params.slug);
+export const load = async ({ params }) => {
+	const matches = await findPosts((item) => item.slug === params.slug);
 	if (matches.length === 0) throw error(404, `No post with slug ${params.slug}`);
 	if (matches.length > 1) {
 		throw error(409, `Slug ${params.slug} is used by ${matches.map((item) => item.path).join(', ')}`);

@@ -107,7 +107,7 @@ const getExcerpt = (body: string) =>
 		?.slice(0, 160) ?? '';
 
 const postFromStored = (
-	stored: StoredPost,
+	stored: PostSource,
 	deployState: DeployState,
 	editingOrder: Map<string, number>,
 	triage: Map<string, Triage>
@@ -143,44 +143,13 @@ const postFromStored = (
 	};
 };
 
-const parseFilePost = async (
-	filePath: string,
-	deployState: DeployState,
-	editingOrder: Map<string, number>,
-	triage: Map<string, Triage>
-): Promise<Post> => {
-	const raw = await readFile(filePath, 'utf8');
-	const { frontmatter, body } = splitRawPost(raw);
-	const metadata = await stat(filePath);
-	const postPath = normalizePostPath(relative(contentDirectory, filePath));
-	const fallbackTitle = postPath.replace(/\.md$/, '').split('/').at(-1)?.replaceAll('-', ' ') ?? 'Untitled';
-	const contentHash = hashPostContent(frontmatter, body);
-	const publish = readBoolean(frontmatter, 'publish');
-	const deleteRequested = readBoolean(frontmatter, 'delete') || readBoolean(frontmatter, 'deleted');
-	const deployed = deployState.posts[postPath];
+type PostSource = Pick<StoredPost, 'path' | 'frontmatter' | 'body' | 'savedAt' | 'hash'> & { id?: string };
 
-	return {
-		path: postPath,
-		title: readFrontmatterValue(frontmatter, 'title') || fallbackTitle,
-		date: readFrontmatterValue(frontmatter, 'date'),
-		tags: readTags(frontmatter),
-		publish,
-		pin: readBoolean(frontmatter, 'pin') || readBoolean(frontmatter, 'pinned'),
-		editingOrder: editingOrder.get(postPath) ?? null,
-		nextStep: triage.get(postPath)?.nextStep ?? null,
-		effort: triage.get(postPath)?.effort ?? null,
-		triageRev: triage.get(postPath)?.rev ?? 0,
-		deleteRequested,
-		slug: svxSlug(postPath, frontmatter),
-		excerpt: getExcerpt(body),
-		updatedAt: metadata.mtime.toISOString(),
-		contentHash,
-		deployStatus: getDeployStatus({ publish, deleteRequested, contentHash }, deployed),
-		deployedAt: deployed?.deployedAt,
-		baselineCommit: deployed?.commit ?? null,
-		frontmatter,
-		body
-	};
+const readLlmFile = async (postPath: string): Promise<PostSource> => {
+	const filePath = getPostFilePath(postPath);
+	const { frontmatter, body } = splitRawPost(await readFile(filePath, 'utf8'));
+	const metadata = await stat(filePath);
+	return { path: postPath, frontmatter, body, savedAt: metadata.mtime.toISOString(), hash: hashPostContent(frontmatter, body) };
 };
 
 export const listContentFiles = () => listMarkdownFiles(contentDirectory);
@@ -299,34 +268,41 @@ const sortPosts = (posts: Post[]) => posts.sort((first, second) => {
 	return secondDate.localeCompare(firstDate);
 });
 
+// The last scan's llm files and the parsed standalone ones, so a store read lists them without touching disk.
+let scannedLlm: { files: LlmFile[]; standalone: Map<string, PostSource> } = { files: [], standalone: new Map() };
+
+const rememberLlmFiles = async (files: string[]) => {
+	const llmFiles = await listLlmFiles(files);
+	const standalone = standaloneLlmFiles(llmFiles, listStoredPosts().map((post) => post.path));
+	const parsed = await Promise.all(standalone.map((file) => readLlmFile(file.path)));
+	scannedLlm = { files: llmFiles, standalone: new Map(parsed.map((post) => [post.path, post])) };
+};
+
+// No lock and no disk read: it serves while the checkout is busy, and it is as fresh as the last scan.
 export const listPostsFromStore = async () => {
 	const deployState = await readDeployState();
 	const order = getEditingOrder();
 	const triage = getTriage();
-	return sortPosts(listStoredPosts().map((stored) => postFromStored(stored, deployState, order, triage)));
+	const stored: PostSource[] = listStoredPosts();
+	const standalone = standaloneLlmFiles(scannedLlm.files, stored.map((post) => post.path))
+		.flatMap((file) => scannedLlm.standalone.get(file.path) ?? []);
+	return sortPosts(stored.concat(standalone).map((post) => postFromStored(post, deployState, order, triage)));
 };
 
 export const listPostsLocked = async () => {
 	assertCheckoutReadLock();
 	const files = await scanContentDir();
 	await autoImportLlmDrafts(files);
-	const deployState = await readDeployState();
-	let order = getEditingOrder();
-	const triage = getTriage();
-	let posts = listStoredPosts().map((stored) => postFromStored(stored, deployState, order, triage));
-
-	const standaloneLlm = standaloneLlmFiles(await listLlmFiles(files), listStoredPosts().map((post) => post.path));
-	posts = posts.concat(
-		await Promise.all(standaloneLlm.map((file) => parseFilePost(getPostFilePath(file.path), deployState, order, triage)))
-	);
-
+	await rememberLlmFiles(files);
+	const posts = await listPostsFromStore();
 	const legacyEditPaths = posts.filter((post) => readBoolean(post.frontmatter, 'edit')).map((post) => post.path);
-	if (seedEditingQueue(legacyEditPaths)) {
-		order = getEditingOrder();
-		posts = posts.map((post) => ({ ...post, editingOrder: order.get(post.path) ?? null }));
-	}
+	return seedEditingQueue(legacyEditPaths) ? listPostsFromStore() : posts;
+};
 
-	return sortPosts(posts);
+// A miss may be a file the last scan has not ingested yet, so only a miss pays for a scan.
+export const findPosts = async (matches: (post: PostSummary) => boolean) => {
+	const found = (await listPostsFromStore()).filter(matches);
+	return found.length > 0 ? found : (await listPosts()).filter(matches);
 };
 
 export const postsRev = (posts: PostSummary[]) =>
@@ -356,7 +332,7 @@ export class UnknownPostError extends Error {
 export const getPost = async (postPath: string): Promise<Post> => {
 	if (postPath.endsWith('.llm.md')) {
 		try {
-			return await parseFilePost(getPostFilePath(postPath), await readDeployState(), getEditingOrder(), getTriage());
+			return postFromStored(await readLlmFile(postPath), await readDeployState(), getEditingOrder(), getTriage());
 		} catch (caught) {
 			if ((caught as NodeJS.ErrnoException).code === 'ENOENT') throw new UnknownPostError(postPath);
 			throw caught;
