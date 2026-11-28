@@ -4,6 +4,7 @@ import { findPosts, getPost, importLlmDraft } from '#lib/server/content.js';
 import { getRevisionByHash, listVersions } from '#lib/server/db.js';
 import { parseFrontmatter } from '#lib/frontmatter.js';
 import { diffSegments } from '#lib/segment-diff.js';
+import { postsDependency } from '#lib/types.js';
 
 export { actions } from '#lib/server/actions.js';
 
@@ -34,7 +35,8 @@ const versionsFor = async (post: Awaited<ReturnType<typeof getPost>>) =>
 		})
 	);
 
-export const load = async ({ params }) => {
+export const load = async ({ params, depends }) => {
+	depends(postsDependency);
 	const matches = await findPosts((item) => item.slug === params.slug);
 	if (matches.length === 0) throw error(404, `No post with slug ${params.slug}`);
 	if (matches.length > 1) {

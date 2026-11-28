@@ -4,10 +4,12 @@ import { getRevision, getStoredPost, listRevisions } from '#lib/server/db.js';
 import { splitBlocks } from '#lib/blocks.js';
 import { diffSegments, lineDiffCounts } from '#lib/segment-diff.js';
 import { parseFrontmatter } from '#lib/frontmatter.js';
+import { postsDependency } from '#lib/types.js';
 
 export { actions } from '#lib/server/actions.js';
 
-export const load = async ({ params, url }) => {
+export const load = async ({ params, url, depends }) => {
+	depends(postsDependency);
 	const matches = await findPosts((item) => item.slug === params.slug);
 	if (matches.length !== 1) throw error(404, `No single post with slug ${params.slug}`);
 
