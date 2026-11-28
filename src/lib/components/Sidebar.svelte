@@ -2,7 +2,6 @@
 	import { goto, replaceState } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { getQueue } from '#lib/queue.remote.js';
 	import PostList from './PostList.svelte';
 	import StagePipeline from './StagePipeline.svelte';
 	import StatusDot from './StatusDot.svelte';
@@ -25,13 +24,7 @@
 	let query = $state('');
 	let filter = $derived<PostFilter>(page.params.stage ?? 'all');
 
-	const queue = getQueue();
-
-	let visiblePosts = $derived.by(() => {
-		const order = queue.current && new Map(queue.current.map((path, index) => [path, index]));
-		const live = order ? posts.map((post) => ({ ...post, editingOrder: order.get(post.path) ?? null })) : posts;
-		return live.filter((post) => !post.deleteRequested);
-	});
+	let visiblePosts = $derived(posts.filter((post) => !post.deleteRequested));
 
 	type Section = 'drafts' | 'editing' | 'recent' | 'ready' | 'live';
 
