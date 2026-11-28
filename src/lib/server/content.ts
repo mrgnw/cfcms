@@ -271,11 +271,24 @@ const sortPosts = (posts: Post[]) => posts.sort((first, second) => {
 // The last scan's llm files and the parsed standalone ones, so a store read lists them without touching disk.
 let scannedLlm: { files: LlmFile[]; standalone: Map<string, PostSource> } = { files: [], standalone: new Map() };
 
+const isMissingFile = (caught: unknown) => (caught as NodeJS.ErrnoException).code === 'ENOENT';
+
+// A draft deleted between the directory listing and its read is gone, not an error.
+const readLlmFileIfPresent = (postPath: string) =>
+	readLlmFile(postPath).catch((caught) => {
+		if (isMissingFile(caught)) return null;
+		throw caught;
+	});
+
 const rememberLlmFiles = async (files: string[]) => {
 	const llmFiles = await listLlmFiles(files);
 	const standalone = standaloneLlmFiles(llmFiles, listStoredPosts().map((post) => post.path));
-	const parsed = await Promise.all(standalone.map((file) => readLlmFile(file.path)));
-	scannedLlm = { files: llmFiles, standalone: new Map(parsed.map((post) => [post.path, post])) };
+	const parsed = (await Promise.all(standalone.map((file) => readLlmFileIfPresent(file.path)))).filter((post) => post !== null);
+	const vanished = new Set(standalone.map((file) => file.path).filter((path) => !parsed.some((post) => post.path === path)));
+	scannedLlm = {
+		files: llmFiles.filter((file) => !vanished.has(file.path)),
+		standalone: new Map(parsed.map((post) => [post.path, post]))
+	};
 };
 
 // No lock and no disk read: it serves while the checkout is busy, and it is as fresh as the last scan.
@@ -289,8 +302,11 @@ export const listPostsFromStore = async () => {
 	return sortPosts(stored.concat(standalone).map((post) => postFromStored(post, deployState, order, triage)));
 };
 
+let lastScanAt = 0;
+
 export const listPostsLocked = async () => {
 	assertCheckoutReadLock();
+	lastScanAt = Date.now();
 	const files = await scanContentDir();
 	await autoImportLlmDrafts(files);
 	await rememberLlmFiles(files);
@@ -299,10 +315,28 @@ export const listPostsLocked = async () => {
 	return seedEditingQueue(legacyEditPaths) ? listPostsFromStore() : posts;
 };
 
-// A miss may be a file the last scan has not ingested yet, so only a miss pays for a scan.
+export const missScanCooldownMs = 3000;
+let missScan: Promise<unknown> | null = null;
+
+// One scan at a time, and none within the cooldown of the last scan, so a burst of misses costs one scan.
+const scanOnMiss = async () => {
+	if (!missScan && Date.now() - lastScanAt < missScanCooldownMs) return;
+	missScan ??= listPosts().finally(() => {
+		missScan = null;
+	});
+	await missScan;
+};
+
+// A cached draft whose file was deleted since the last scan is a stale hit, not a post.
+const presentPosts = (posts: Post[]) => posts.filter((post) => !post.path.endsWith('.llm.md') || existsSync(getPostFilePath(post.path)));
+
+// A miss may be a file the last scan has not ingested yet, or a draft it no longer finds, so only a miss pays for a scan.
 export const findPosts = async (matches: (post: PostSummary) => boolean) => {
 	const found = (await listPostsFromStore()).filter(matches);
-	return found.length > 0 ? found : (await listPosts()).filter(matches);
+	const present = presentPosts(found);
+	if (present.length > 0 && present.length === found.length) return present;
+	await scanOnMiss();
+	return presentPosts((await listPostsFromStore()).filter(matches));
 };
 
 export const postsRev = (posts: PostSummary[]) =>
@@ -334,7 +368,7 @@ export const getPost = async (postPath: string): Promise<Post> => {
 		try {
 			return postFromStored(await readLlmFile(postPath), await readDeployState(), getEditingOrder(), getTriage());
 		} catch (caught) {
-			if ((caught as NodeJS.ErrnoException).code === 'ENOENT') throw new UnknownPostError(postPath);
+			if (isMissingFile(caught)) throw new UnknownPostError(postPath);
 			throw caught;
 		}
 	}

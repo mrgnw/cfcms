@@ -25,7 +25,7 @@ process.chdir(root);
 
 const {
 	createPost, findPosts, getPost, getPostFilePath, importAllLlmDrafts, importLlmDraft, listLlmDrafts, listPosts, listPostsFromStore,
-	postsRev, purgePost, savePost
+	missScanCooldownMs, postsRev, purgePost, savePost
 } = await import('./content.ts');
 const { withCheckoutLock } = await import('./checkout-lock.ts');
 const { changeAssistantDraft, getAssistantDraft, listVersions, upsertVersion, getStoredPost } = await import('./db.ts');
@@ -272,9 +272,69 @@ try {
 	await purgePost('solo.md');
 	unlinkSync(soloFile);
 
-	writeFileSync(join(root, 'content', 'unscanned.md'), `---\n${draftFm('Unscanned')}\n---\n\nNot ingested yet.\n`);
-	assert.deepEqual((await findPosts((post) => post.path === 'unscanned.md')).map((post) => post.path), ['unscanned.md'],
-		'a store miss scans once and finds a new file');
+	const contentDir = join(root, 'content');
+	let scans = 0;
+	const originalReaddir = fsPromises.readdir;
+	const readdirCount = mock.method(fsPromises, 'readdir', (...args: Parameters<typeof fsPromises.readdir>) => {
+		if (args[0] === contentDir) scans += 1;
+		return originalReaddir(...args);
+	});
+	syncBuiltinESMExports();
+	mock.timers.enable({ apis: ['Date'], now: Date.now() + 60_000 });
+	const pastCooldown = () => mock.timers.tick(missScanCooldownMs);
+	const unknownSlug = () => findPosts((post) => post.slug === 'no-such-slug');
+	try {
+		writeFileSync(join(contentDir, 'unscanned.md'), `---\n${draftFm('Unscanned')}\n---\n\nNot ingested yet.\n`);
+		assert.deepEqual((await findPosts((post) => post.path === 'unscanned.md')).map((post) => post.path), ['unscanned.md'],
+			'a store miss scans once and finds a new file');
+		assert.equal(scans, 1);
+
+		pastCooldown();
+		scans = 0;
+		assert.deepEqual(await Promise.all(Array.from({ length: 10 }, unknownSlug)), Array.from({ length: 10 }, () => []));
+		assert.equal(scans, 1, 'a burst of misses shares one scan');
+		await unknownSlug();
+		assert.equal(scans, 1, 'a miss within the cooldown does not rescan');
+		pastCooldown();
+		await unknownSlug();
+		assert.equal(scans, 2, 'a miss after the cooldown scans again');
+
+		const goneFile = join(contentDir, 'gone.llm.md');
+		writeFileSync(goneFile, '---\ntitle: Gone\n---\n\nSoon deleted.\n');
+		utimesSync(goneFile, 1_000_000_000, 1_000_000_000);
+		await listPosts();
+		assert.equal((await listPostsFromStore()).some((post) => post.path === 'gone.llm.md'), true);
+		unlinkSync(goneFile);
+		assert.deepEqual(await findPosts((post) => post.path === 'gone.llm.md'), [],
+			'a draft deleted since the last scan is a miss even within the cooldown');
+		pastCooldown();
+		scans = 0;
+		assert.deepEqual(await findPosts((post) => post.path === 'gone.llm.md'), [], 'and a miss after one rescan');
+		assert.equal(scans, 1);
+		assert.equal((await listPostsFromStore()).some((post) => post.path === 'gone.llm.md'), false, 'the rescan drops it');
+
+		const vanishFile = join(contentDir, 'vanish.llm.md');
+		writeFileSync(vanishFile, '---\ntitle: Vanish\n---\n\nDeleted mid-scan.\n');
+		utimesSync(vanishFile, 1_000_000_000, 1_000_000_000);
+		const originalReadFile = fsPromises.readFile;
+		const vanishRead = mock.method(fsPromises, 'readFile', async (...args: Parameters<typeof fsPromises.readFile>) => {
+			if (args[0] === vanishFile) throw Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' });
+			return originalReadFile(...args);
+		});
+		syncBuiltinESMExports();
+		try {
+			const listed = await listPosts();
+			assert.equal(listed.some((post) => post.path === 'vanish.llm.md'), false, 'a draft deleted mid-scan is skipped, not an error');
+			assert.equal(listed.some((post) => post.path === 'unscanned.md'), true, 'and the rest of the scan survives');
+		} finally {
+			vanishRead.mock.restore();
+			syncBuiltinESMExports();
+		}
+	} finally {
+		mock.timers.reset();
+		readdirCount.mock.restore();
+		syncBuiltinESMExports();
+	}
 
 	console.log('content.check: ok');
 } finally {
